@@ -70,4 +70,4 @@ Custom remark/rehype plugins in `src/utils/frontmatter.ts`: reading time estimat
 
 ## Deployment
 
-Static output to `dist/`. Configured for Netlify (`netlify.toml`), Vercel (`vercel.json`), and Docker (nginx). Astro assets under `/_astro/` get 1-year immutable cache headers. CI runs build validation across Node 18/20/22 and lint checks on Node 22 via GitHub Actions.
+Static output to `dist/`. Configured for Netlify (`netlify.toml`), Vercel (`vercel.json`), and Docker (nginx). Astro assets under `/_astro/` get 1-year immutable cache headers. CI runs build and lint checks on Node 22 via GitHub Actions.
