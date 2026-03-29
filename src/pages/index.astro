@@ -1,0 +1,394 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+
+import Features from '~/components/widgets/Features.astro';
+import FAQs from '~/components/widgets/FAQs.astro';
+import Button from '~/components/ui/Button.astro';
+import ContactModal from '~/components/widgets/ContactModal.astro';
+
+const metadata = {
+  title: 'FlexPick — Affordable Partnership to Boost Your Business',
+  ignoreTitleTemplate: true,
+};
+---
+
+<Layout metadata={metadata}>
+  <!-- Grain Overlay -->
+  <div class="fixed inset-0 pointer-events-none z-[100]" aria-hidden="true">
+    <svg class="w-full h-full opacity-[0.022]" xmlns="http://www.w3.org/2000/svg">
+      <filter id="grain-filter">
+        <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"></feTurbulence>
+      </filter>
+      <rect width="100%" height="100%" filter="url(#grain-filter)"></rect>
+    </svg>
+  </div>
+
+  <!-- ======== HERO ======== -->
+  <section class="relative md:-mt-[76px] not-prose overflow-hidden" id="hero">
+    <!-- Grid background -->
+    <div
+      class="absolute inset-0 opacity-100"
+      style="background-image: linear-gradient(rgba(212,168,83,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(212,168,83,0.04) 1px, transparent 1px); background-size: 72px 72px;"
+      aria-hidden="true"
+    >
+    </div>
+    <!-- Radial fade at edges -->
+    <div
+      class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_30%,_rgb(10,10,10)_80%)]"
+      aria-hidden="true"
+    >
+    </div>
+
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="pt-0 md:pt-[76px]"></div>
+      <div class="py-16 md:py-24 lg:py-32">
+        <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          <!-- Left: Text content -->
+          <div
+            class="max-w-2xl intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
+          >
+            <div class="w-10 h-[2px] bg-primary mb-8"></div>
+            <h1
+              class="text-4xl sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-[4rem] font-heading font-bold leading-[1.08] tracking-tight mb-6"
+            >
+              Affordable partnership to
+              <span class="text-primary"> boost</span> your business needs
+            </h1>
+            <p class="text-lg md:text-xl text-muted max-w-lg mb-10 leading-relaxed">
+              A dedicated team with all the skills you need — from kickoff to launch and beyond. Stop searching the
+              market. Start building.
+            </p>
+            <div class="flex flex-wrap gap-4">
+              <Button variant="primary" text="State your intention" href="#contact" icon="tabler:arrow-right" />
+              <Button variant="secondary" text="Services" href="#services" />
+            </div>
+          </div>
+
+          <!-- Right: Geometric composition -->
+          <div class="hidden lg:flex justify-center items-center" aria-hidden="true">
+            <div class="relative w-full max-w-md">
+              <!-- Subtle glow -->
+              <div
+                class="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(212,168,83,0.06)_0%,_transparent_65%)]"
+              >
+              </div>
+              <svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full text-primary">
+                <!-- Outer circle -->
+                <circle cx="250" cy="250" r="230" stroke="currentColor" stroke-width="0.4" opacity="0.1"></circle>
+                <circle cx="250" cy="250" r="180" stroke="currentColor" stroke-width="0.4" opacity="0.07"></circle>
+
+                <!-- Diamond (rotated square) -->
+                <rect
+                  x="105"
+                  y="105"
+                  width="290"
+                  height="290"
+                  transform="rotate(45 250 250)"
+                  stroke="currentColor"
+                  stroke-width="0.8"
+                  opacity="0.18"></rect>
+
+                <!-- Inner square -->
+                <rect x="175" y="175" width="150" height="150" stroke="currentColor" stroke-width="0.6" opacity="0.12"
+                ></rect>
+
+                <!-- Cross-hairs -->
+                <line x1="250" y1="20" x2="250" y2="480" stroke="currentColor" stroke-width="0.4" opacity="0.08"></line>
+                <line x1="20" y1="250" x2="480" y2="250" stroke="currentColor" stroke-width="0.4" opacity="0.08"></line>
+
+                <!-- Accent arcs -->
+                <path
+                  d="M 345 95 A 205 205 0 0 1 405 250"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  opacity="0.35"
+                  stroke-linecap="round"></path>
+                <path
+                  d="M 95 355 A 205 205 0 0 0 250 410"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  opacity="0.2"
+                  stroke-linecap="round"></path>
+
+                <!-- Corner brackets of inner square -->
+                <path d="M 175 188 L 175 175 L 188 175" stroke="currentColor" stroke-width="1.5" opacity="0.35"></path>
+                <path d="M 312 175 L 325 175 L 325 188" stroke="currentColor" stroke-width="1.5" opacity="0.35"></path>
+                <path d="M 325 312 L 325 325 L 312 325" stroke="currentColor" stroke-width="1.5" opacity="0.35"></path>
+                <path d="M 188 325 L 175 325 L 175 312" stroke="currentColor" stroke-width="1.5" opacity="0.35"></path>
+
+                <!-- Dashed circle -->
+                <circle
+                  cx="250"
+                  cy="250"
+                  r="100"
+                  stroke="currentColor"
+                  stroke-width="0.4"
+                  opacity="0.1"
+                  stroke-dasharray="6 6"></circle>
+
+                <!-- Dots at intersections -->
+                <circle cx="250" cy="250" r="3.5" fill="currentColor" opacity="0.5"></circle>
+                <circle cx="250" cy="175" r="2" fill="currentColor" opacity="0.35"></circle>
+                <circle cx="250" cy="325" r="2" fill="currentColor" opacity="0.35"></circle>
+                <circle cx="175" cy="250" r="2" fill="currentColor" opacity="0.35"></circle>
+                <circle cx="325" cy="250" r="2" fill="currentColor" opacity="0.35"></circle>
+
+                <!-- Diamond corner dots -->
+                <circle cx="250" cy="45" r="2.5" fill="currentColor" opacity="0.2"></circle>
+                <circle cx="455" cy="250" r="2.5" fill="currentColor" opacity="0.2"></circle>
+                <circle cx="250" cy="455" r="2.5" fill="currentColor" opacity="0.2"></circle>
+                <circle cx="45" cy="250" r="2.5" fill="currentColor" opacity="0.2"></circle>
+
+                <!-- Small satellite dots -->
+                <circle cx="350" cy="140" r="1.5" fill="currentColor" opacity="0.25"></circle>
+                <circle cx="140" cy="350" r="1.5" fill="currentColor" opacity="0.25"></circle>
+                <circle cx="360" cy="360" r="1.5" fill="currentColor" opacity="0.15"></circle>
+                <circle cx="140" cy="140" r="1.5" fill="currentColor" opacity="0.15"></circle>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== WHAT WE OFFER ======== -->
+  <Features
+    id="services"
+    tagline="Services"
+    title="What working with us actually looks like"
+    subtitle=""
+    columns={3}
+    items={[
+      {
+        title: 'Free consultation & estimation',
+        description:
+          'We turn your ideas into a tech spec and a realistic budget. No fluff, no surprises — just a clear picture of what it takes.',
+        icon: 'tabler:message-circle',
+      },
+      {
+        title: 'Continuous project maintenance',
+        description:
+          "Book any slot during or after development. We don't disappear after launch — we're always a message away.",
+        icon: 'tabler:refresh',
+      },
+      {
+        title: 'Greenfield or legacy — either way',
+        description:
+          "We start with an analysis and find the most effective path forward, whether you're building from scratch or rescuing an existing codebase.",
+        icon: 'tabler:git-merge',
+      },
+      {
+        title: 'Monthly support packages',
+        description:
+          'Fixed-price packages for small businesses that need steady, affordable help without committing to a full engagement.',
+        icon: 'tabler:calendar-check',
+      },
+      {
+        title: 'Long-term cooperation discounts',
+        description:
+          'Trust compounds. The longer we work together, the better we understand your product — and the more you save.',
+        icon: 'tabler:heart-handshake',
+      },
+      {
+        title: 'Hosting & server setup',
+        description:
+          'We recommend and configure the right infrastructure for your project type and budget. No over-engineering, no under-provisioning.',
+        icon: 'tabler:server',
+      },
+    ]}
+    classes={{
+      container: 'max-w-6xl',
+      headline: {
+        container: 'mb-12 md:mb-16',
+        tagline: 'text-primary',
+      },
+      items: {
+        panel:
+          'border border-white/[0.06] rounded-lg p-6 bg-white/[0.015] hover:bg-white/[0.04] hover:-translate-y-1 transition-all duration-300 max-w-none',
+        icon: 'text-primary bg-primary/10 rounded-lg w-10 h-10 p-2 md:w-11 md:h-11 md:p-2.5 mr-4',
+        title: 'text-base font-semibold',
+        description: 'text-sm leading-relaxed',
+      },
+    }}
+  />
+
+  <!-- ======== HOW IT WORKS ======== -->
+  <section id="how-it-works" class="relative py-16 md:py-20 scroll-mt-[72px] not-prose">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <!-- Section header -->
+      <div
+        class="text-center mb-14 md:mb-20 intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
+      >
+        <p class="text-base text-primary font-bold tracking-wide uppercase mb-2">Process</p>
+        <h2 class="text-3xl md:text-4xl font-heading font-bold tracking-tight">Simple process. No agency fluff.</h2>
+      </div>
+
+      <!-- Steps grid -->
+      <div class="grid md:grid-cols-3 gap-10 md:gap-8 lg:gap-12 relative">
+        <!-- Connecting line (desktop) -->
+        <div
+          class="hidden md:block absolute top-[2.2rem] left-[20%] right-[20%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"
+          aria-hidden="true"
+        >
+        </div>
+
+        <!-- Step 1 -->
+        <div
+          class="relative intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
+        >
+          <div class="mb-5">
+            <span class="text-6xl font-heading font-bold text-primary/15 leading-none">01</span>
+          </div>
+          <h3 class="text-lg font-bold mb-3">You reach out</h3>
+          <p class="text-muted text-[0.925rem] leading-relaxed">
+            We schedule a free 30-minute discovery call to understand your vision, goals, and constraints. No pressure,
+            no pitch deck.
+          </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div
+          class="relative intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
+          style="--tw-animation-delay: 0.15s; animation-delay: 0.15s;"
+        >
+          <div class="mb-5">
+            <span class="text-6xl font-heading font-bold text-primary/15 leading-none">02</span>
+          </div>
+          <h3 class="text-lg font-bold mb-3">We scope it together</h3>
+          <p class="text-muted text-[0.925rem] leading-relaxed">
+            Clear estimate, realistic timeline, and team assignment. No surprises, no bloated quotes — just an honest
+            plan.
+          </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div
+          class="relative intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
+          style="--tw-animation-delay: 0.3s; animation-delay: 0.3s;"
+        >
+          <div class="mb-5">
+            <span class="text-6xl font-heading font-bold text-primary/15 leading-none">03</span>
+          </div>
+          <h3 class="text-lg font-bold mb-3">We build</h3>
+          <p class="text-muted text-[0.925rem] leading-relaxed">
+            With full transparency, regular check-ins, and zero ghosting. You're never left wondering what's happening
+            with your project.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== WHY FLEXPICK ======== -->
+  <section class="relative py-16 md:py-20 scroll-mt-[72px] not-prose">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <!-- Section header -->
+      <div
+        class="text-center mb-14 md:mb-20 intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
+      >
+        <p class="text-base text-primary font-bold tracking-wide uppercase mb-2">Trust</p>
+        <h2 class="text-3xl md:text-4xl font-heading font-bold tracking-tight">Why teams choose us</h2>
+      </div>
+
+      <!-- Trust signals -->
+      <div
+        class="grid md:grid-cols-3 gap-10 md:gap-0 intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
+      >
+        <div class="md:px-8 md:first:pl-0 md:border-r md:border-white/[0.06]">
+          <div class="w-8 h-[2px] bg-primary mb-6"></div>
+          <p class="text-lg font-semibold leading-snug mb-3">Referral-only client base</p>
+          <p class="text-muted text-[0.925rem] leading-relaxed">
+            Our reputation is our pipeline. Every client comes through a trusted recommendation — that's how we know
+            we're doing it right.
+          </p>
+        </div>
+        <div class="md:px-8 md:border-r md:border-white/[0.06]">
+          <div class="w-8 h-[2px] bg-primary mb-6"></div>
+          <p class="text-lg font-semibold leading-snug mb-3">9+ years of combined experience</p>
+          <p class="text-muted text-[0.925rem] leading-relaxed">
+            Engineering expertise across web, mobile, and integrations — built on real-world delivery, not
+            certifications on a wall.
+          </p>
+        </div>
+        <div class="md:px-8 md:last:pr-0">
+          <div class="w-8 h-[2px] bg-primary mb-6"></div>
+          <p class="text-lg font-semibold leading-snug mb-3">Fixed-price options available</p>
+          <p class="text-muted text-[0.925rem] leading-relaxed">
+            For teams that need predictable budgets. Transparent pricing with no hidden fees — you know exactly what
+            you're paying for.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== FAQ ======== -->
+  <FAQs
+    id="faq"
+    title="There are no awkward questions."
+    tagline="FAQ"
+    columns={1}
+    classes={{
+      container: 'max-w-3xl',
+      headline: {
+        tagline: 'text-primary',
+        container: 'mb-12 md:mb-16',
+      },
+    }}
+    items={[
+      {
+        title: 'Why hourly pricing?',
+        description:
+          'Transparent, no hidden fees. You pay for time directly applied toward your goal — not for overhead, not for "project management surcharges." Every hour is accounted for.',
+      },
+      {
+        title: 'How do I get started?',
+        description:
+          'Reach out via the contact button on this page. We typically respond within 24 hours and schedule a free discovery call to understand your needs before anything else.',
+      },
+      {
+        title: 'What do I need to bring?',
+        description:
+          "An idea, business goals, and an initial investment mindset. You don't need a detailed spec — that's what we help you build. But the clearer your vision, the faster we move.",
+      },
+      {
+        title: 'Do you work with non-technical founders?',
+        description:
+          'Absolutely. Many of our clients come from non-technical backgrounds. We translate business problems into technical solutions and keep you informed in plain language throughout.',
+      },
+      {
+        title: 'What technologies do you use?',
+        description:
+          "We're stack-agnostic but specialize in modern web and mobile: Laravel, React, Node.js, Flutter, and more. We pick the right tool for the job — not the trendiest one.",
+      },
+    ]}
+  />
+
+  <!-- ======== CTA ======== -->
+  <section id="contact" class="relative py-20 md:py-28 not-prose scroll-mt-[72px]">
+    <!-- Amber tinted background -->
+    <div class="absolute inset-0 bg-primary/[0.03] border-t border-b border-primary/[0.08]" aria-hidden="true"></div>
+
+    <div
+      class="relative max-w-3xl mx-auto px-4 sm:px-6 text-center intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
+    >
+      <h2 class="text-3xl md:text-4xl lg:text-5xl font-heading font-bold tracking-tight mb-6">
+        Let's build something<br class="hidden sm:block" /> worth building.
+      </h2>
+      <p class="text-lg text-muted mb-10 max-w-xl mx-auto leading-relaxed">
+        Tell us about your project. We'll tell you how we can help.
+      </p>
+      <Button
+        variant="primary"
+        text="Get Started"
+        href="#contact"
+        icon="tabler:arrow-right"
+        class="text-lg py-4 px-10"
+      />
+    </div>
+  </section>
+
+  <!-- Contact Modal -->
+  <ContactModal />
+</Layout>

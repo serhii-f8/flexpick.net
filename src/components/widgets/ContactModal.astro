@@ -1,0 +1,410 @@
+---
+const HONEYPOT_NAME = 'b_ca89f22b0bfd3bb9995c313cf_2a5e3f1293';
+---
+
+<!-- Contact Modal -->
+<div
+  id="contact-modal"
+  class="fixed inset-0 z-[200] flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300"
+  aria-hidden="true"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="modal-title"
+>
+  <!-- Backdrop -->
+  <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" data-modal-backdrop></div>
+
+  <!-- Modal -->
+  <div
+    class="relative w-full max-w-lg bg-[#111111] border border-white/[0.08] rounded-lg shadow-2xl transform scale-95 transition-transform duration-300 max-h-[90vh] overflow-y-auto"
+    data-modal-content
+  >
+    <!-- Close button -->
+    <button
+      type="button"
+      class="absolute top-4 right-4 z-10 text-white/40 hover:text-white transition-colors"
+      data-modal-close
+      aria-label="Close modal"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+
+    <div class="p-8 md:p-10">
+      <!-- Header -->
+      <div class="mb-8" data-form-header>
+        <div class="w-8 h-[2px] bg-primary mb-5"></div>
+        <h2 id="modal-title" class="text-2xl md:text-3xl font-heading font-bold tracking-tight mb-2">
+          State your intention
+        </h2>
+        <p class="text-muted text-sm">Tell us what you're building. We'll get back to you within 24 hours.</p>
+      </div>
+
+      <!-- Success message (hidden by default) -->
+      <div class="hidden" data-form-success>
+        <div class="text-center py-8">
+          <div class="w-14 h-14 mx-auto mb-5 rounded-full bg-primary/10 flex items-center justify-center">
+            <svg class="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+          </div>
+          <h3 class="text-xl font-heading font-bold mb-2">Message sent</h3>
+          <p class="text-muted text-sm mb-6">We'll be in touch shortly. Thanks for reaching out.</p>
+          <button type="button" class="btn btn-primary px-8 py-2.5 text-sm" data-modal-close>Close</button>
+        </div>
+      </div>
+
+      <!-- Form -->
+      <form novalidate class="space-y-5" id="contact-form" data-form-element>
+        <!-- Full Name -->
+        <div>
+          <label for="mce-FULLNAME" class="block text-sm font-medium text-white/70 mb-1.5">
+            Full Name <span class="text-primary">*</span>
+          </label>
+          <input
+            type="text"
+            name="FULLNAME"
+            id="mce-FULLNAME"
+            required
+            autocomplete="name"
+            placeholder="Your full name"
+            class="w-full bg-white/[0.04] border border-white/[0.1] rounded-md px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
+            data-validate
+          />
+          <p class="hidden mt-1.5 text-xs text-red-400" data-error="FULLNAME">Please enter your name.</p>
+        </div>
+
+        <!-- Email -->
+        <div>
+          <label for="mce-EMAIL" class="block text-sm font-medium text-white/70 mb-1.5">
+            Email <span class="text-primary">*</span>
+          </label>
+          <input
+            type="email"
+            name="EMAIL"
+            id="mce-EMAIL"
+            required
+            autocomplete="email"
+            placeholder="you@company.com"
+            class="w-full bg-white/[0.04] border border-white/[0.1] rounded-md px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
+            data-validate
+          />
+          <p class="hidden mt-1.5 text-xs text-red-400" data-error="EMAIL">Please enter a valid email address.</p>
+        </div>
+
+        <!-- Subject -->
+        <div>
+          <label for="mce-SUBJECT" class="block text-sm font-medium text-white/70 mb-1.5">
+            Subject <span class="text-primary">*</span>
+          </label>
+          <input
+            type="text"
+            name="SUBJECT"
+            id="mce-SUBJECT"
+            required
+            placeholder="What's this about?"
+            class="w-full bg-white/[0.04] border border-white/[0.1] rounded-md px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
+            data-validate
+          />
+          <p class="hidden mt-1.5 text-xs text-red-400" data-error="SUBJECT">Please enter a subject.</p>
+        </div>
+
+        <!-- Message -->
+        <div>
+          <label for="mce-MESSAGE" class="block text-sm font-medium text-white/70 mb-1.5">
+            Message <span class="text-primary">*</span>
+          </label>
+          <textarea
+            name="MESSAGE"
+            id="mce-MESSAGE"
+            required
+            rows="3"
+            placeholder="Tell us about your project or idea..."
+            class="w-full bg-white/[0.04] border border-white/[0.1] rounded-md px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors resize-none"
+            data-validate></textarea>
+          <p class="hidden mt-1.5 text-xs text-red-400" data-error="MESSAGE">Please enter a message.</p>
+        </div>
+
+        <!-- Hidden fields -->
+        <input type="hidden" name="form-name" value="Contact" />
+        <input type="hidden" name="mc_signupsource" value="hosted" />
+
+        <!-- Honeypot (anti-bot) -->
+        <div style="position: absolute; left: -5000px;" aria-hidden="true">
+          <input type="text" name={HONEYPOT_NAME} tabindex="-1" value="" autocomplete="off" />
+        </div>
+
+        <!-- Server error -->
+        <p class="hidden text-xs text-red-400 text-center" data-form-error></p>
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          class="btn btn-primary w-full justify-center py-3.5 text-sm font-semibold tracking-wide"
+          data-submit-btn
+        >
+          <span data-submit-text>Send Message</span>
+          <span class="hidden" data-submit-loading>
+            <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+          </span>
+          <svg class="w-4 h-4 ml-2" data-submit-arrow fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+          </svg>
+        </button>
+
+        <p class="text-[0.7rem] text-white/25 text-center leading-relaxed">
+          We'll only use your email to follow up on your inquiry. No spam.
+        </p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  const MC_BASE =
+    'https://flexpick.us21.list-manage.com/subscribe/post-json?u=ca89f22b0bfd3bb9995c313cf&id=2a5e3f1293&f_id=006659e1f0';
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const ERR_BORDER = 'border-red-500/60';
+  const OK_BORDER = 'border-white/[0.1]';
+
+  function initContactModal() {
+    const modalEl = document.getElementById('contact-modal');
+    if (!modalEl || modalEl.hasAttribute('data-init')) return;
+    const modal = modalEl;
+    modal.setAttribute('data-init', '');
+
+    const content = modal.querySelector('[data-modal-content]') as HTMLElement;
+    const form = modal.querySelector('[data-form-element]') as HTMLFormElement;
+    const formHeader = modal.querySelector('[data-form-header]') as HTMLElement;
+    const successEl = modal.querySelector('[data-form-success]') as HTMLElement;
+    const formErrorEl = modal.querySelector('[data-form-error]') as HTMLElement;
+    const submitBtn = modal.querySelector('[data-submit-btn]') as HTMLButtonElement;
+    const submitText = modal.querySelector('[data-submit-text]') as HTMLElement;
+    const submitLoading = modal.querySelector('[data-submit-loading]') as HTMLElement;
+    const submitArrow = modal.querySelector('[data-submit-arrow]') as HTMLElement;
+
+    // --- Modal open / close ---
+    function open() {
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      modal.classList.add('opacity-100', 'pointer-events-auto');
+      content?.classList.remove('scale-95');
+      content?.classList.add('scale-100');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => {
+        const first = modal.querySelector('input:not([type="hidden"]):not([tabindex="-1"])') as HTMLElement;
+        first?.focus();
+      }, 200);
+    }
+
+    function close() {
+      modal.classList.remove('opacity-100', 'pointer-events-auto');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      content?.classList.remove('scale-100');
+      content?.classList.add('scale-95');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+
+    function resetForm() {
+      form.reset();
+      formHeader.classList.remove('hidden');
+      form.classList.remove('hidden');
+      successEl.classList.add('hidden');
+      formErrorEl.classList.add('hidden');
+      clearAllErrors();
+    }
+
+    modal.querySelectorAll('[data-modal-close], [data-modal-backdrop]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        close();
+        setTimeout(resetForm, 300);
+      })
+    );
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('pointer-events-none')) {
+        close();
+        setTimeout(resetForm, 300);
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      const link = (e.target as HTMLElement).closest('a[href*="#contact"], [href="#contact"]');
+      if (link) {
+        e.preventDefault();
+        resetForm();
+        open();
+      }
+    });
+
+    // --- Validation ---
+    function showError(name: string) {
+      const input = form.querySelector(`[name="${name}"]`) as HTMLElement;
+      const msg = form.querySelector(`[data-error="${name}"]`) as HTMLElement;
+      input?.classList.remove(OK_BORDER);
+      input?.classList.add(ERR_BORDER);
+      msg?.classList.remove('hidden');
+    }
+
+    function clearError(name: string) {
+      const input = form.querySelector(`[name="${name}"]`) as HTMLElement;
+      const msg = form.querySelector(`[data-error="${name}"]`) as HTMLElement;
+      input?.classList.remove(ERR_BORDER);
+      input?.classList.add(OK_BORDER);
+      msg?.classList.add('hidden');
+    }
+
+    function clearAllErrors() {
+      form.querySelectorAll('[data-validate]').forEach((el) => {
+        const name = (el as HTMLInputElement).name;
+        clearError(name);
+      });
+      formErrorEl.classList.add('hidden');
+    }
+
+    // Clear individual error on input
+    form.querySelectorAll('[data-validate]').forEach((el) => {
+      el.addEventListener('input', () => clearError((el as HTMLInputElement).name));
+    });
+
+    function validate(): boolean {
+      let valid = true;
+      const data = new FormData(form);
+
+      const fullname = ((data.get('FULLNAME') as string) || '').trim();
+      if (!fullname) {
+        showError('FULLNAME');
+        valid = false;
+      } else {
+        clearError('FULLNAME');
+      }
+
+      const email = ((data.get('EMAIL') as string) || '').trim();
+      if (!email || !EMAIL_RE.test(email)) {
+        showError('EMAIL');
+        valid = false;
+      } else {
+        clearError('EMAIL');
+      }
+
+      const subject = ((data.get('SUBJECT') as string) || '').trim();
+      if (!subject) {
+        showError('SUBJECT');
+        valid = false;
+      } else {
+        clearError('SUBJECT');
+      }
+
+      const message = ((data.get('MESSAGE') as string) || '').trim();
+      if (!message) {
+        showError('MESSAGE');
+        valid = false;
+      } else {
+        clearError('MESSAGE');
+      }
+
+      return valid;
+    }
+
+    // --- Submit via JSONP (avoids CORS, gives real response) ---
+    function submitMailchimp(formData: FormData): Promise<{ result: string; msg: string }> {
+      return new Promise((resolve, reject) => {
+        const cbName = '_mc_cb_' + Date.now();
+        const params = new URLSearchParams();
+
+        formData.forEach((value, key) => {
+          params.set(key, value as string);
+        });
+        params.set('c', cbName);
+
+        const url = MC_BASE + '&' + params.toString();
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const win = window as any;
+
+        win[cbName] = (data: { result: string; msg: string }) => {
+          delete win[cbName];
+          script.remove();
+          resolve(data);
+        };
+
+        const script = document.createElement('script');
+        script.src = url;
+        script.onerror = () => {
+          delete win[cbName];
+          script.remove();
+          reject(new Error('Network error. Please try again.'));
+        };
+
+        // Timeout after 10s
+        setTimeout(() => {
+          if (win[cbName]) {
+            delete win[cbName];
+            script.remove();
+            reject(new Error('Request timed out. Please try again.'));
+          }
+        }, 10000);
+
+        document.body.appendChild(script);
+      });
+    }
+
+    function setLoading(loading: boolean) {
+      submitBtn.disabled = loading;
+      submitText.classList.toggle('hidden', loading);
+      submitArrow.classList.toggle('hidden', loading);
+      submitLoading.classList.toggle('hidden', !loading);
+      if (loading) submitBtn.classList.add('opacity-70', 'cursor-wait');
+      else submitBtn.classList.remove('opacity-70', 'cursor-wait');
+    }
+
+    function showSuccess() {
+      formHeader.classList.add('hidden');
+      form.classList.add('hidden');
+      successEl.classList.remove('hidden');
+    }
+
+    // --- Form submission ---
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formErrorEl.classList.add('hidden');
+
+      if (!validate()) return;
+
+      setLoading(true);
+
+      try {
+        const data = new FormData(form);
+        const result = await submitMailchimp(data);
+
+        if (result.result === 'success') {
+          showSuccess();
+        } else {
+          // Mailchimp returns HTML in error messages, strip tags
+          let msg = result.msg || 'Something went wrong.';
+          msg = msg.replace(/<[^>]*>/g, '');
+          // "already subscribed" is still a success for us
+          if (msg.toLowerCase().includes('already subscribed')) {
+            showSuccess();
+          } else {
+            formErrorEl.textContent = msg;
+            formErrorEl.classList.remove('hidden');
+          }
+        }
+      } catch (err: unknown) {
+        formErrorEl.textContent = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+        formErrorEl.classList.remove('hidden');
+      } finally {
+        setLoading(false);
+      }
+    });
+  }
+
+  initContactModal();
+  document.addEventListener('astro:after-swap', initContactModal);
+</script>

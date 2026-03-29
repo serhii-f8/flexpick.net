@@ -1,0 +1,6 @@
+services:
+  flexpick:
+    build: .
+    container_name: flexpick
+    ports:
+      - 8080:8080
