@@ -136,3 +136,297 @@ span.font-heading {
 .dd *:first-child {
   margin-top: 0;
 }
+
+/* ===== Geometric SVG Animations ===== */
+
+@media (prefers-reduced-motion: no-preference) {
+  .geo-spin-slow {
+    animation: geoSpin 60s linear infinite;
+    transform-origin: 250px 250px;
+  }
+  .geo-spin-slow-reverse {
+    animation: geoSpin 45s linear infinite reverse;
+    transform-origin: 250px 250px;
+  }
+  .geo-spin-diamond {
+    animation: geoSpin 90s linear infinite;
+    transform-origin: 250px 250px;
+  }
+  .geo-spin-inner {
+    animation: geoSpin 120s linear infinite reverse;
+    transform-origin: 250px 250px;
+  }
+  .geo-spin-dashed {
+    animation: geoSpin 50s linear infinite reverse;
+    transform-origin: 250px 250px;
+  }
+  .geo-pulse-arc {
+    animation: geoPulseArc 4s ease-in-out infinite;
+  }
+  .geo-pulse-arc-alt {
+    animation: geoPulseArc 5s ease-in-out infinite 1.5s;
+  }
+  .geo-pulse-dot {
+    animation: geoPulseDot 3s ease-in-out infinite;
+  }
+  .geo-float-a {
+    animation: geoFloat 7s ease-in-out infinite;
+    opacity: 0.25;
+  }
+  .geo-float-b {
+    animation: geoFloat 8s ease-in-out infinite 2s;
+    opacity: 0.25;
+  }
+  .geo-float-c {
+    animation: geoFloat 9s ease-in-out infinite 4s;
+    opacity: 0.15;
+  }
+  .geo-float-d {
+    animation: geoFloat 6s ease-in-out infinite 1s;
+    opacity: 0.15;
+  }
+}
+
+@keyframes geoSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes geoPulseArc {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes geoPulseDot {
+  0%,
+  100% {
+    opacity: 0.3;
+    r: 3;
+  }
+  50% {
+    opacity: 0.7;
+    r: 4.5;
+  }
+}
+
+@keyframes geoFloat {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.15;
+  }
+  25% {
+    transform: translate(4px, -3px);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(-2px, 5px);
+    opacity: 0.2;
+  }
+  75% {
+    transform: translate(3px, 2px);
+    opacity: 0.35;
+  }
+}
+
+/* ===== Interactive Hover Effects ===== */
+
+/* Feature cards — glow border + icon pop */
+.feature-card {
+  position: relative;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.feature-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: radial-gradient(
+    600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(212, 168, 83, 0.06),
+    transparent 40%
+  );
+  pointer-events: none;
+}
+.feature-card:hover::before {
+  opacity: 1;
+}
+.feature-card:hover .feature-icon {
+  transform: scale(1.12) rotate(-4deg);
+  background-color: rgba(212, 168, 83, 0.18);
+}
+.feature-icon {
+  transition:
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.35s ease;
+}
+
+/* Trust cards — lift + accent bar expand */
+.trust-card {
+  transition:
+    transform 0.35s ease,
+    background-color 0.35s ease;
+}
+.trust-card:hover {
+  transform: translateY(-4px);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+.trust-card .trust-accent {
+  transition:
+    width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.35s ease;
+}
+.trust-card:hover .trust-accent {
+  width: 3rem;
+  background-color: rgb(212, 168, 83);
+}
+
+/* Process steps — number glow on hover */
+.process-step {
+  transition: transform 0.3s ease;
+}
+.process-step:hover {
+  transform: translateY(-2px);
+}
+.process-step .step-number {
+  transition:
+    color 0.4s ease,
+    text-shadow 0.4s ease;
+}
+.process-step:hover .step-number {
+  color: rgba(212, 168, 83, 0.35);
+  text-shadow: 0 0 30px rgba(212, 168, 83, 0.15);
+}
+
+/* FAQ items — subtle glow */
+.faq-hover {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+.faq-hover:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+  border-color: rgba(212, 168, 83, 0.12);
+}
+
+/* Primary button — shine sweep */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -75%;
+  width: 50%;
+  height: 200%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  transform: skewX(-25deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+.btn-primary:hover::after {
+  left: 125%;
+}
+
+/* CTA section — ambient pulse */
+.cta-glow {
+  position: relative;
+}
+.cta-glow::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 400px;
+  height: 400px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(212, 168, 83, 0.06), transparent 70%);
+  animation: ctaPulse 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ctaPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+}
+
+/* Dashboard mockup animations */
+.dash-progress-bar {
+  animation: dashFill 1.5s ease-out both;
+  animation-delay: 0.6s;
+  transform-origin: left;
+}
+
+@keyframes dashFill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.dash-row {
+  opacity: 0;
+  animation: dashRowIn 0.4s ease both;
+}
+.dash-row:nth-child(1) {
+  animation-delay: 0.3s;
+}
+.dash-row:nth-child(2) {
+  animation-delay: 0.45s;
+}
+.dash-row:nth-child(3) {
+  animation-delay: 0.6s;
+}
+.dash-row:nth-child(4) {
+  animation-delay: 0.75s;
+}
+
+@keyframes dashRowIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.dash-stat {
+  opacity: 0;
+  animation: dashStatIn 0.5s ease both;
+  animation-delay: 0.2s;
+}
+
+@keyframes dashStatIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
