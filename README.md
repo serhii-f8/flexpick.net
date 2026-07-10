@@ -1,4 +1,4 @@
-# FlexPick — Affordable Tech Partnership for Growing Businesses
+# FlexPick — We Rescue AI-Built Codebases
 
 [![Build](https://github.com/serhii-f8/flexpick.net/actions/workflows/actions.yaml/badge.svg)](https://github.com/serhii-f8/flexpick.net/actions/workflows/actions.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE.md)
@@ -6,17 +6,18 @@
 [![Astro](https://img.shields.io/badge/Astro-6-ff5d01.svg)](https://astro.build/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4.svg)](https://tailwindcss.com/)
 
-**Stop searching the market. Start building.**
+**Keep building. We'll fix the foundation.**
 
-FlexPick is a dedicated development team offering end-to-end web and mobile solutions — from initial consultation to launch, hosting, and ongoing support. We work with modern stacks (Laravel, React, Node.js, Flutter) and specialize in transparent, long-term partnerships with no agency bloat.
+FlexPick helps companies whose products were built with vibe coding and AI agents — and now struggle with stability, maintainability, or scalability. We audit the codebase, fix the risks, introduce proven engineering practices, and prepare the project for effective AI-assisted development.
 
 ## What We Do
 
-- **Free consultation & estimation** — turn ideas into tech specs and realistic budgets
-- **Greenfield or legacy work** — new projects or rescuing existing codebases
-- **Continuous maintenance** — ongoing support during and after development
-- **Monthly support packages** — fixed-price plans for steady, affordable help
-- **Hosting & server setup** — infrastructure tailored to your project and budget
+- **Free codebase audit** — an honest, plain-language health report on where your code stands
+- **Stabilization** — tests around critical behavior, CI, and error monitoring
+- **Refactoring & simplification** — collapse duplication, untangle architecture, shrink the codebase
+- **Engineering practices** — code review, safe deployments, and documentation habits
+- **AI-ready codebase** — conventions and guardrails that make AI coding tools effective at scale
+- **Ongoing partnership** — senior engineering support after the rescue, if you want it
 
 ## Built in a Day
 
@@ -24,13 +25,13 @@ This corporate website was designed, developed, and deployed in a single day —
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Astro 6 (static output, zero JS by default) |
-| Styling | Tailwind CSS 4 with CSS variable theming and dark mode |
-| Build | Vite with custom integration for YAML-driven site config |
-| Deployment | Netlify / Vercel / Docker (nginx) |
-| CI | GitHub Actions — lint, type-check, and build validation |
+| Layer      | Technology                                               |
+| ---------- | -------------------------------------------------------- |
+| Framework  | Astro 6 (static output, zero JS by default)              |
+| Styling    | Tailwind CSS 4 with CSS variable theming and dark mode   |
+| Build      | Vite with custom integration for YAML-driven site config |
+| Deployment | Netlify / Vercel / Docker (nginx)                        |
+| CI         | GitHub Actions — lint, type-check, and build validation  |
 
 ## Quick Start
 
@@ -43,13 +44,13 @@ npm run preview      # Preview production build locally
 
 ## Available Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start dev server at localhost:4321 |
-| `npm run build` | Production build to `dist/` |
-| `npm run preview` | Preview production build locally |
-| `npm run check` | Run Astro check + ESLint + Prettier validation |
-| `npm run fix` | Auto-fix ESLint + Prettier issues |
+| Command           | Description                                    |
+| ----------------- | ---------------------------------------------- |
+| `npm run dev`     | Start dev server at localhost:4321             |
+| `npm run build`   | Production build to `dist/`                    |
+| `npm run preview` | Preview production build locally               |
+| `npm run check`   | Run Astro check + ESLint + Prettier validation |
+| `npm run fix`     | Auto-fix ESLint + Prettier issues              |
 
 ## Project Structure
 

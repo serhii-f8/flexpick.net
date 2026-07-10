@@ -7,7 +7,7 @@ import Button from '~/components/ui/Button.astro';
 import ContactModal from '~/components/widgets/ContactModal.astro';
 
 const metadata = {
-  title: 'FlexPick — Affordable Partnership to Boost Your Business',
+  title: 'FlexPick — We Rescue AI-Built Codebases',
   ignoreTitleTemplate: true,
 };
 ---
@@ -47,16 +47,17 @@ const metadata = {
             <h1
               class="text-4xl sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-[4rem] font-heading font-bold leading-[1.08] tracking-tight mb-6"
             >
-              Affordable partnership to
-              <span class="text-primary"> boost</span> your business needs
+              Your AI-built product
+              <span class="text-primary">works</span>. Let's keep it that way.
             </h1>
             <p class="text-lg md:text-xl text-muted max-w-lg mb-10 leading-relaxed">
-              A dedicated team with all the skills you need — from kickoff to launch and beyond. Stop searching the
-              market. Start building.
+              Vibe coding got you to market fast — that was the right call. But when every new feature breaks two old
+              ones, it's time for engineering. We turn AI-built codebases into stable, scalable products your team can
+              keep building on.
             </p>
             <div class="flex flex-wrap gap-4">
-              <Button variant="primary" text="State your intention" href="#contact" icon="tabler:arrow-right" />
-              <Button variant="secondary" text="Services" href="#services" />
+              <Button variant="primary" text="Get a free audit" href="#contact" icon="tabler:arrow-right" />
+              <Button variant="secondary" text="What we do" href="#services" />
             </div>
           </div>
 
@@ -172,45 +173,45 @@ const metadata = {
   <Features
     id="services"
     tagline="Services"
-    title="What working with us actually looks like"
+    title="From vibecoded to production-grade"
     subtitle=""
     columns={3}
     items={[
       {
-        title: 'Free consultation & estimation',
+        title: 'Free codebase audit',
         description:
-          'We turn your ideas into a tech spec and a realistic budget. No fluff, no surprises — just a clear picture of what it takes.',
-        icon: 'tabler:message-circle',
+          "We dig into your repository and tell you honestly where it stands — the risks, the debt, and what it will take to fix. If we can't help, we tell you straight. No charge, no strings.",
+        icon: 'tabler:zoom-code',
       },
       {
-        title: 'Continuous project maintenance',
+        title: 'Stabilization',
         description:
-          "Book any slot during or after development. We don't disappear after launch — we're always a message away.",
-        icon: 'tabler:refresh',
+          'Tests around the behavior your business depends on, CI that catches regressions before your users do, and error monitoring so surprises stop being surprises.',
+        icon: 'tabler:shield-check',
       },
       {
-        title: 'AI-powered development',
+        title: 'Refactoring & simplification',
         description:
-          'We integrate AI into every stage of the process — from intelligent code generation and automated testing to AI-driven analytics and smart features baked into your product.',
+          'AI agents tend to duplicate instead of reuse. We collapse the copies, untangle the architecture, and shrink the codebase — same functionality, far less to maintain.',
+        icon: 'tabler:layers-difference',
+      },
+      {
+        title: 'Engineering practices',
+        description:
+          'Code review, sane branching, safe deployments, and documentation — the habits that let a team ship confidently instead of crossing fingers on every release.',
+        icon: 'tabler:git-pull-request',
+      },
+      {
+        title: 'AI-ready codebase',
+        description:
+          'Clear conventions, guardrails, and project docs that make AI coding tools dramatically more effective — so your team keeps its speed without regrowing the mess.',
         icon: 'tabler:brain',
       },
       {
-        title: 'Monthly support packages',
+        title: 'Ongoing partnership',
         description:
-          'Fixed-price packages for small businesses that need steady, affordable help without committing to a full engagement.',
-        icon: 'tabler:calendar-check',
-      },
-      {
-        title: 'Long-term cooperation discounts',
-        description:
-          'Trust compounds. The longer we work together, the better we understand your product — and the more you save.',
+          'After the rescue, we can stay on for features, reviews, and support. You keep a senior engineering team a message away — only when you need one.',
         icon: 'tabler:heart-handshake',
-      },
-      {
-        title: 'Hosting & server setup',
-        description:
-          'We recommend and configure the right infrastructure for your project type and budget. No over-engineering, no under-provisioning.',
-        icon: 'tabler:server',
       },
     ]}
     classes={{
@@ -237,7 +238,7 @@ const metadata = {
         class="text-center mb-14 md:mb-20 intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
       >
         <p class="text-base text-primary font-bold tracking-wide uppercase mb-2">Process</p>
-        <h2 class="text-3xl md:text-4xl font-heading font-bold tracking-tight">Simple process. No agency fluff.</h2>
+        <h2 class="text-3xl md:text-4xl font-heading font-bold tracking-tight">Honest audit. Clear plan. Real fix.</h2>
       </div>
 
       <!-- Steps grid -->
@@ -256,10 +257,10 @@ const metadata = {
           <div class="mb-5">
             <span class="step-number text-6xl font-heading font-bold text-primary/15 leading-none">01</span>
           </div>
-          <h3 class="text-lg font-bold mb-3">You reach out</h3>
+          <h3 class="text-lg font-bold mb-3">Show us your codebase</h3>
           <p class="text-muted text-[0.925rem] leading-relaxed">
-            We schedule a free 30-minute discovery call to understand your vision, goals, and constraints. No pressure,
-            no pitch deck.
+            Repository access and a 30-minute call — that's all we need. We audit the code for free and give you an
+            honest verdict. If we can't help, we say so.
           </p>
         </div>
 
@@ -271,10 +272,10 @@ const metadata = {
           <div class="mb-5">
             <span class="step-number text-6xl font-heading font-bold text-primary/15 leading-none">02</span>
           </div>
-          <h3 class="text-lg font-bold mb-3">We scope it together</h3>
+          <h3 class="text-lg font-bold mb-3">Get a clear plan</h3>
           <p class="text-muted text-[0.925rem] leading-relaxed">
-            Clear estimate, realistic timeline, and team assignment. No surprises, no bloated quotes — just an honest
-            plan.
+            You receive a health report with risks ranked by impact and a concrete plan of what to fix first — in plain
+            language, not engineering jargon.
           </p>
         </div>
 
@@ -286,10 +287,10 @@ const metadata = {
           <div class="mb-5">
             <span class="step-number text-6xl font-heading font-bold text-primary/15 leading-none">03</span>
           </div>
-          <h3 class="text-lg font-bold mb-3">We build</h3>
+          <h3 class="text-lg font-bold mb-3">We stabilize, you keep building</h3>
           <p class="text-muted text-[0.925rem] leading-relaxed">
-            With full transparency, regular check-ins, and zero ghosting. You're never left wondering what's happening
-            with your project.
+            We fix the foundation without freezing your roadmap, then hand everything back — code, docs, tests, and
+            guardrails your team builds on from day one.
           </p>
         </div>
       </div>
@@ -304,7 +305,9 @@ const metadata = {
         class="text-center mb-14 md:mb-20 intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
       >
         <p class="text-base text-primary font-bold tracking-wide uppercase mb-2">Trust</p>
-        <h2 class="text-3xl md:text-4xl font-heading font-bold tracking-tight">Why teams choose us</h2>
+        <h2 class="text-3xl md:text-4xl font-heading font-bold tracking-tight">
+          Why founders trust us with their code
+        </h2>
       </div>
 
       <!-- Trust signals -->
@@ -313,26 +316,26 @@ const metadata = {
       >
         <div class="trust-card md:px-8 md:first:pl-0 md:border-r md:border-white/[0.06] rounded-lg p-4 md:p-6">
           <div class="trust-accent w-8 h-[2px] bg-primary/60 mb-6"></div>
-          <p class="text-lg font-semibold leading-snug mb-3">Referral-only client base</p>
+          <p class="text-lg font-semibold leading-snug mb-3">We'll tell you if we can't help</p>
           <p class="text-muted text-[0.925rem] leading-relaxed">
-            Our reputation is our pipeline. Every client comes through a trusted recommendation — that's how we know
-            we're doing it right.
+            The audit is free and the verdict is honest. If your codebase is healthier than you feared — or beyond what
+            we can save — we say exactly that.
           </p>
         </div>
         <div class="trust-card md:px-8 md:border-r md:border-white/[0.06] rounded-lg p-4 md:p-6">
           <div class="trust-accent w-8 h-[2px] bg-primary/60 mb-6"></div>
-          <p class="text-lg font-semibold leading-snug mb-3">9+ years of combined experience</p>
+          <p class="text-lg font-semibold leading-snug mb-3">Senior engineering, AI-native</p>
           <p class="text-muted text-[0.925rem] leading-relaxed">
-            Engineering expertise across web, mobile, and integrations — built on real-world delivery, not
-            certifications on a wall.
+            We build with AI tools every day, so we know exactly where they shine and where they quietly create debt.
+            That's how we fix it — and prevent it.
           </p>
         </div>
         <div class="trust-card md:px-8 md:last:pr-0 rounded-lg p-4 md:p-6">
           <div class="trust-accent w-8 h-[2px] bg-primary/60 mb-6"></div>
-          <p class="text-lg font-semibold leading-snug mb-3">Fixed-price options available</p>
+          <p class="text-lg font-semibold leading-snug mb-3">You keep everything</p>
           <p class="text-muted text-[0.925rem] leading-relaxed">
-            For teams that need predictable budgets. Transparent pricing with no hidden fees — you know exactly what
-            you're paying for.
+            The cleaned-up code, the tests, the docs, the AI guardrails — it's all yours, built so your team can run
+            without us. No lock-in, ever.
           </p>
         </div>
       </div>
@@ -348,13 +351,13 @@ const metadata = {
       <div class="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
         <!-- Left: Copy -->
         <div class="intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade">
-          <p class="text-base text-primary font-bold tracking-wide uppercase mb-2">Built-In Tooling</p>
+          <p class="text-base text-primary font-bold tracking-wide uppercase mb-2">The Audit</p>
           <h2 class="text-3xl md:text-4xl font-heading font-bold tracking-tight mb-6">
-            Full project visibility.<br />Zero extra cost.
+            Know exactly where<br />your codebase stands.
           </h2>
           <p class="text-muted text-[0.95rem] leading-relaxed mb-8 max-w-lg">
-            Every engagement includes access to our customizable task and time tracking system — purpose-built to give
-            you complete control over internal processes from the first commit to final delivery.
+            Every audit produces a codebase health report — a plain-language picture of what's solid, what's fragile,
+            and what it will take to fix. It's yours to keep whether we work together or not.
           </p>
 
           <div class="space-y-5">
@@ -377,10 +380,10 @@ const metadata = {
                 </svg>
               </div>
               <div>
-                <p class="font-semibold text-[0.95rem] mb-1">Task boards tailored to your workflow</p>
+                <p class="font-semibold text-[0.95rem] mb-1">A risk map of your entire codebase</p>
                 <p class="text-muted text-sm leading-relaxed">
-                  Kanban, list, or timeline — configured to match how your team actually works, not how a tool thinks
-                  you should.
+                  Where fragility concentrates: untested critical paths, oversized modules, and the places where the
+                  next change is most likely to break something.
                 </p>
               </div>
             </div>
@@ -401,10 +404,10 @@ const metadata = {
                 </svg>
               </div>
               <div>
-                <p class="font-semibold text-[0.95rem] mb-1">Real-time tracking per task</p>
+                <p class="font-semibold text-[0.95rem] mb-1">Duplication and dead-code analysis</p>
                 <p class="text-muted text-sm leading-relaxed">
-                  See exactly where hours go. Every task carries logged time so you always know the cost of each
-                  feature.
+                  How much of your code is doing the same job twice — the single biggest reason AI-built projects slow
+                  down as they grow.
                 </p>
               </div>
             </div>
@@ -427,10 +430,10 @@ const metadata = {
                 </svg>
               </div>
               <div>
-                <p class="font-semibold text-[0.95rem] mb-1">No third-party fees</p>
+                <p class="font-semibold text-[0.95rem] mb-1">A prioritized action plan</p>
                 <p class="text-muted text-sm leading-relaxed">
-                  Forget Jira licenses and tool sprawl. Everything lives under one roof — included in your engagement at
-                  no additional cost.
+                  Not a wall of findings — a ranked list of what to fix first, why it matters to your business, and what
+                  can safely wait.
                 </p>
               </div>
             </div>
@@ -459,7 +462,7 @@ const metadata = {
                 <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
                 <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
                 <div class="w-2.5 h-2.5 rounded-full bg-white/10"></div>
-                <span class="ml-3 text-xs text-muted font-medium tracking-wide">FlexPick — Project Dashboard</span>
+                <span class="ml-3 text-xs text-muted font-medium tracking-wide">FlexPick — Codebase Health Report</span>
               </div>
 
               <!-- Dashboard content -->
@@ -467,53 +470,55 @@ const metadata = {
                 <!-- Stats row -->
                 <div class="grid grid-cols-3 gap-3">
                   <div class="border border-white/[0.06] rounded-lg p-3 bg-white/[0.015] dash-stat">
-                    <p class="text-xs text-muted mb-1">Tasks</p>
-                    <p class="text-xl font-heading font-bold text-primary">24</p>
-                    <p class="text-[0.7rem] text-muted mt-0.5">6 in progress</p>
+                    <p class="text-xs text-muted mb-1">Risk score</p>
+                    <p class="text-xl font-heading font-bold text-red-400">7.4</p>
+                    <p class="text-[0.7rem] text-muted mt-0.5">high — fixable</p>
                   </div>
                   <div
                     class="border border-white/[0.06] rounded-lg p-3 bg-white/[0.015] dash-stat"
                     style="--tw-animation-delay: 0.1s; animation-delay: 0.1s;"
                   >
-                    <p class="text-xs text-muted mb-1">Hours</p>
-                    <p class="text-xl font-heading font-bold">142<span class="text-sm text-muted">.5h</span></p>
-                    <p class="text-[0.7rem] text-muted mt-0.5">this sprint</p>
+                    <p class="text-xs text-muted mb-1">Duplication</p>
+                    <p class="text-xl font-heading font-bold text-primary">
+                      38<span class="text-sm text-muted">%</span>
+                    </p>
+                    <p class="text-[0.7rem] text-muted mt-0.5">of the codebase</p>
                   </div>
                   <div
                     class="border border-white/[0.06] rounded-lg p-3 bg-white/[0.015] dash-stat"
                     style="--tw-animation-delay: 0.2s; animation-delay: 0.2s;"
                   >
-                    <p class="text-xs text-muted mb-1">Progress</p>
-                    <p class="text-xl font-heading font-bold text-green-400">78%</p>
-                    <p class="text-[0.7rem] text-muted mt-0.5">on track</p>
+                    <p class="text-xs text-muted mb-1">Test coverage</p>
+                    <p class="text-xl font-heading font-bold text-amber-400">4%</p>
+                    <p class="text-[0.7rem] text-muted mt-0.5">critical paths: 0%</p>
                   </div>
                 </div>
 
                 <!-- Task list -->
                 <div class="border border-white/[0.06] rounded-lg overflow-hidden">
                   <div class="px-3 py-2 border-b border-white/[0.06] bg-white/[0.02]">
-                    <p class="text-xs font-semibold tracking-wide text-muted uppercase">Active Tasks</p>
+                    <p class="text-xs font-semibold tracking-wide text-muted uppercase">Top Risk Hotspots</p>
                   </div>
                   <div class="divide-y divide-white/[0.04]">
                     <div class="flex items-center gap-3 px-3 py-2.5 dash-row hover:bg-white/[0.02] transition-colors">
-                      <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                      <span class="text-xs flex-1">Implement user auth flow</span>
-                      <span class="text-[0.65rem] text-primary/70 font-medium">4.5h</span>
+                      <div class="w-1.5 h-1.5 rounded-full bg-red-400"></div>
+                      <span class="text-xs flex-1">PaymentService — 2,400 lines, zero tests</span>
+                      <span class="text-[0.65rem] text-red-400/70 font-medium">critical</span>
                     </div>
                     <div class="flex items-center gap-3 px-3 py-2.5 dash-row hover:bg-white/[0.02] transition-colors">
-                      <div class="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
-                      <span class="text-xs flex-1">Design payment integration</span>
-                      <span class="text-[0.65rem] text-blue-400/70 font-medium">2.0h</span>
-                    </div>
-                    <div class="flex items-center gap-3 px-3 py-2.5 dash-row hover:bg-white/[0.02] transition-colors">
-                      <div class="w-1.5 h-1.5 rounded-full bg-green-400"></div>
-                      <span class="text-xs flex-1">API endpoint testing</span>
-                      <span class="text-[0.65rem] text-green-400/70 font-medium">1.5h</span>
+                      <div class="w-1.5 h-1.5 rounded-full bg-red-400"></div>
+                      <span class="text-xs flex-1">Auth logic copy-pasted across 6 screens</span>
+                      <span class="text-[0.65rem] text-red-400/70 font-medium">critical</span>
                     </div>
                     <div class="flex items-center gap-3 px-3 py-2.5 dash-row hover:bg-white/[0.02] transition-colors">
                       <div class="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
-                      <span class="text-xs flex-1">Mobile responsive fixes</span>
-                      <span class="text-[0.65rem] text-amber-400/70 font-medium">3.0h</span>
+                      <span class="text-xs flex-1">9 near-identical API client wrappers</span>
+                      <span class="text-[0.65rem] text-amber-400/70 font-medium">high</span>
+                    </div>
+                    <div class="flex items-center gap-3 px-3 py-2.5 dash-row hover:bg-white/[0.02] transition-colors">
+                      <div class="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+                      <span class="text-xs flex-1">No CI — deploys run from a laptop</span>
+                      <span class="text-[0.65rem] text-amber-400/70 font-medium">high</span>
                     </div>
                   </div>
                 </div>
@@ -521,13 +526,13 @@ const metadata = {
                 <!-- Progress bar -->
                 <div class="pt-1">
                   <div class="flex justify-between text-[0.7rem] text-muted mb-2">
-                    <span>Sprint progress</span>
-                    <span>78%</span>
+                    <span>Stabilization roadmap — phase 1 of 3</span>
+                    <span>34%</span>
                   </div>
                   <div class="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                     <div
                       class="h-full rounded-full bg-gradient-to-r from-primary/80 to-primary dash-progress-bar"
-                      style="width: 78%"
+                      style="width: 34%"
                     >
                     </div>
                   </div>
@@ -555,29 +560,34 @@ const metadata = {
     }}
     items={[
       {
-        title: 'Why hourly pricing?',
+        title: 'Will you rewrite everything from scratch?',
         description:
-          'Transparent, no hidden fees. You pay for time directly applied toward your goal — not for overhead, not for "project management surcharges." Every hour is accounted for.',
+          "No — full rewrites are slow, expensive, and risky. We keep what works, refactor what's fragile, and rebuild only the parts that are genuinely beyond saving. Your product keeps running the whole time.",
       },
       {
-        title: 'How do I get started?',
+        title: 'My product works fine. Why should I care?',
         description:
-          'Reach out via the contact button on this page. We typically respond within 24 hours and schedule a free discovery call to understand your needs before anything else.',
+          "It works today. The pattern we see: features that took days start taking weeks, every change breaks something unrelated, and the whole product depends on one person who 'gets' the code. Fixing that early is far cheaper than fixing it during a crisis.",
       },
       {
-        title: 'What do I need to bring?',
+        title: 'Are you against AI-assisted development?',
         description:
-          "An idea, business goals, and an initial investment mindset. You don't need a detailed spec — that's what we help you build. But the clearer your vision, the faster we move.",
+          "The opposite — we use AI coding tools every day. They're genuinely great, but on a codebase without structure they duplicate code, miss context, and compound the mess. We fix the foundation and set up guardrails so AI makes your team faster, not more fragile.",
       },
       {
-        title: 'Do you work with non-technical founders?',
+        title: 'What do you need from me to start?',
         description:
-          'Absolutely. Many of our clients come from non-technical backgrounds. We translate business problems into technical solutions and keep you informed in plain language throughout.',
+          "Read access to your repository and about 30 minutes of your time to walk us through the product. That's enough for the free audit. We're happy to sign an NDA first.",
       },
       {
-        title: 'What technologies do you use?',
+        title: 'What if the audit finds nothing serious?',
         description:
-          'We handle any web or mobile stack — Laravel, React, Node.js, Flutter, Swift, and beyond. On top of that, we build with AI at the core: LLM integrations, intelligent automation, computer vision, and custom ML pipelines. Whatever your product needs, we pick the right tools — not the trendiest ones.',
+          "Then we tell you exactly that, and you walk away with a free health report confirming your codebase is in good shape. We only take on projects where we're confident we can make a real difference.",
+      },
+      {
+        title: 'What happens after the rescue?',
+        description:
+          'Your team continues building — now on a stable foundation, with docs, tests, and AI guardrails in place. If you want us to stay involved for features, reviews, or support, we offer ongoing partnership. If not, everything is set up for you to run without us.',
       },
     ]}
   />
@@ -591,14 +601,15 @@ const metadata = {
       class="cta-glow relative max-w-3xl mx-auto px-4 sm:px-6 text-center intersect-once intersect-quarter motion-safe:md:opacity-0 motion-safe:md:intersect:animate-fade"
     >
       <h2 class="text-3xl md:text-4xl lg:text-5xl font-heading font-bold tracking-tight mb-6">
-        Let's build something<br class="hidden sm:block" /> worth building.
+        Keep building.<br class="hidden sm:block" /> We'll fix the foundation.
       </h2>
       <p class="text-lg text-muted mb-10 max-w-xl mx-auto leading-relaxed">
-        Tell us about your project. We'll tell you how we can help.
+        Tell us about your product. You'll get an honest assessment of where your codebase stands — free, whatever the
+        verdict.
       </p>
       <Button
         variant="primary"
-        text="Get Started"
+        text="Get a free audit"
         href="#contact"
         icon="tabler:arrow-right"
         class="text-lg py-4 px-10"

@@ -15,7 +15,7 @@ export const headerData = {
       href: getPermalink('/#faq'),
     },
   ],
-  actions: [{ text: 'Contact Us', href: getPermalink('/#contact'), variant: 'primary' as const }],
+  actions: [{ text: 'Free Audit', href: getPermalink('/#contact'), variant: 'primary' as const }],
 };
 
 export const footerData = {

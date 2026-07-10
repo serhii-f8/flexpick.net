@@ -11,7 +11,7 @@ metadata:
   title:
     default: FlexPick
     template: '%s — FlexPick'
-  description: 'FlexPick — Affordable software development partnership. A dedicated team from kickoff to launch and beyond.'
+  description: 'FlexPick rescues AI-built codebases. We audit vibecoded projects, fix stability and scalability risks, introduce proven engineering practices, and prepare your codebase for effective AI-assisted development.'
   robots:
     index: true
     follow: true
