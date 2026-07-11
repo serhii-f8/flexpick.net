@@ -30,6 +30,9 @@ class AuditRequest extends Model
         return 'uuid';
     }
 
+    /**
+     * @return HasOne<AuditReport, $this>
+     */
     public function report(): HasOne
     {
         return $this->hasOne(AuditReport::class);

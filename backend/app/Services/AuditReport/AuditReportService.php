@@ -16,6 +16,11 @@ class AuditReportService
 {
     public function create(AuditRequest $auditRequest, array $payload): AuditReport
     {
+        if ($existing = $auditRequest->report()->first()) {
+            Storage::disk('local')->delete($existing->pdf_path);
+            $existing->delete();
+        }
+
         $report = new AuditReport([
             'audit_request_id' => $auditRequest->id,
             'user_id' => User::where('email', $auditRequest->email)->value('id'),

@@ -23,6 +23,7 @@ class GenerateAuditReport implements ShouldQueue
     public function __construct(
         public AuditRequest $auditRequest,
     ) {
+        $this->onConnection('redis-audit');
         $this->onQueue(config('audit.queue'));
     }
 

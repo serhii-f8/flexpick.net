@@ -30,6 +30,24 @@ class AuditReportControllerTest extends FeatureTest
         Storage::disk('local')->assertExists($report->pdf_path);
     }
 
+    public function test_create_replaces_existing_report_and_deletes_old_pdf(): void
+    {
+        $request = AuditRequest::factory()->create();
+        $service = app(AuditReportService::class);
+
+        $firstReport = $service->create($request, $this->payload());
+        $firstPdfPath = $firstReport->pdf_path;
+        Storage::disk('local')->assertExists($firstPdfPath);
+
+        $secondReport = $service->create($request, $this->payload());
+
+        $this->assertSame(1, AuditReport::where('audit_request_id', $request->id)->count());
+        $this->assertNotSame($firstReport->id, $secondReport->id);
+        $this->assertDatabaseMissing('audit_reports', ['id' => $firstReport->id]);
+        Storage::disk('local')->assertMissing($firstPdfPath);
+        Storage::disk('local')->assertExists($secondReport->pdf_path);
+    }
+
     public function test_send_mails_report_and_marks_sent(): void
     {
         Mail::fake();
