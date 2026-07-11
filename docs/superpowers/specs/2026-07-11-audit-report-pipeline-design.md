@@ -94,7 +94,8 @@ found).
 - git signals available at depth 1 (default branch, last-commit age)
 
 **Stage 3 — `AnalyzeWithClaude`.** One Claude API call (model configured via
-`config/services.php`, default `claude-sonnet-5`; key in `.env` `ANTHROPIC_API_KEY`).
+`config/services.php`, default `claude-opus-4-8`, overridable via `AUDIT_AI_MODEL`;
+key in `.env` `ANTHROPIC_API_KEY`).
 Input: metrics digest + up to ~50 short excerpts of the highest-signal files (largest,
 most duplicated, entry points). Output: **structured JSON enforced via a tool/JSON schema**:
 
