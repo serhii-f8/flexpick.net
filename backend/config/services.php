@@ -117,4 +117,9 @@ return [
         'from' => env('TWILIO_FROM'),
     ],
 
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('AUDIT_AI_MODEL', 'claude-opus-4-8'),
+    ],
+
 ];
