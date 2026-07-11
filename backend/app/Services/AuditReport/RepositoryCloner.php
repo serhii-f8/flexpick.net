@@ -8,11 +8,11 @@ use Illuminate\Support\Facades\Process;
 
 class RepositoryCloner
 {
-    public function preflight(string $url): void
+    public function preflight(string $url, bool $useToken = true): void
     {
         $result = Process::timeout(config('audit.preflight_timeout'))
             ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run(['git', 'ls-remote', '--exit-code', $url, 'HEAD']);
+            ->run(['git', 'ls-remote', '--exit-code', $useToken ? $this->authenticatedUrl($url) : $url, 'HEAD']);
 
         if (! $result->successful()) {
             throw new AuditNotAnalyzableException(
@@ -28,7 +28,7 @@ class RepositoryCloner
 
         $result = Process::timeout(config('audit.clone_timeout'))
             ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run(['git', 'clone', '--depth', '1', '--no-tags', '--single-branch', $url, $path]);
+            ->run(['git', 'clone', '--depth', '1', '--no-tags', '--single-branch', $this->authenticatedUrl($url), $path]);
 
         if (! $result->successful()) {
             $this->cleanup($uuid);
@@ -68,5 +68,16 @@ class RepositoryCloner
     private function redactUrl(string $url): string
     {
         return preg_replace('#//[^/@]+@#', '//', $url) ?? $url;
+    }
+
+    private function authenticatedUrl(string $url): string
+    {
+        $token = config('audit.github_token');
+
+        if (! $token || ! str_starts_with($url, 'https://github.com/')) {
+            return $url;
+        }
+
+        return 'https://x-access-token:'.$token.'@'.substr($url, strlen('https://'));
     }
 }

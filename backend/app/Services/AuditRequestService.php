@@ -73,7 +73,7 @@ class AuditRequestService
         }
 
         try {
-            $this->cloner->preflight($auditRequest->repo_url);
+            $this->cloner->preflight($auditRequest->repo_url, useToken: false);
         } catch (AuditNotAnalyzableException) {
             $auditRequest->update(['status' => AuditRequestStatus::AWAITING_ACCESS->value]);
             Mail::to($auditRequest->email)->send(new AuditRepoAccessNeeded($auditRequest));
