@@ -36,7 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (InvalidSignatureException $e, Request $request) {
-            if ($request->routeIs('reports.view')) {
+            if ($request->routeIs('reports.view') || $request->routeIs('audit-requests.verify')) {
                 return response()->view('reports.link-expired', [], 403);
             }
         });

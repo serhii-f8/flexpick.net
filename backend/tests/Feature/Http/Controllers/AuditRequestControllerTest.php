@@ -3,9 +3,7 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\AuditRequestStatus;
-use App\Jobs\GenerateAuditReport;
-use App\Mail\Audit\AuditRepoAccessNeeded;
-use App\Mail\Audit\AuditRequestReceived;
+use App\Mail\Audit\AuditVerifyEmail;
 use App\Models\AuditRequest;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -34,10 +32,10 @@ class AuditRequestControllerTest extends FeatureTest
         $response->assertStatus(201)->assertJsonStructure(['id']);
         $this->assertDatabaseHas('audit_requests', [
             'email' => 'ada@example.com',
-            'status' => AuditRequestStatus::QUEUED->value,
+            'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
         ]);
-        Queue::assertPushedOn('audit', GenerateAuditReport::class);
-        Mail::assertQueued(AuditRequestReceived::class, fn ($mail) => $mail->hasTo('ada@example.com'));
+        Queue::assertNothingPushed();
+        Mail::assertQueued(AuditVerifyEmail::class, fn ($mail) => $mail->hasTo('ada@example.com'));
     }
 
     public function test_submission_without_repo_goes_to_followup(): void
@@ -50,10 +48,10 @@ class AuditRequestControllerTest extends FeatureTest
         $response->assertStatus(201);
         $this->assertDatabaseHas('audit_requests', [
             'email' => 'ada2@example.com',
-            'status' => AuditRequestStatus::NEEDS_FOLLOWUP->value,
+            'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
         ]);
         Queue::assertNothingPushed();
-        Mail::assertQueued(AuditRepoAccessNeeded::class, fn ($mail) => $mail->hasTo('ada2@example.com'));
+        Mail::assertQueued(AuditVerifyEmail::class, fn ($mail) => $mail->hasTo('ada2@example.com'));
     }
 
     public function test_honeypot_rejects(): void

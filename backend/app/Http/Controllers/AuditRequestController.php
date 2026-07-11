@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreAuditRequestRequest;
+use App\Jobs\RouteVerifiedAuditRequest;
+use App\Models\AuditRequest;
 use App\Services\AuditRequestService;
 use Illuminate\Http\JsonResponse;
 
@@ -18,5 +20,15 @@ class AuditRequestController extends Controller
         ]);
 
         return response()->json(['id' => $auditRequest->uuid], 201);
+    }
+
+    public function verify(AuditRequest $auditRequest)
+    {
+        if ($auditRequest->email_verified_at === null) {
+            $auditRequest->update(['email_verified_at' => now()]);
+            RouteVerifiedAuditRequest::dispatch($auditRequest);
+        }
+
+        return view('audit.verified', ['auditRequest' => $auditRequest]);
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuditReportController;
+use App\Http\Controllers\AuditRequestController;
 use App\Http\Controllers\Auth\OAuthController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\InvoiceController;
@@ -197,6 +198,10 @@ Route::controller(InvoiceController::class)
     });
 
 // Audit reports
+
+Route::get('/audit-requests/{auditRequest:uuid}/verify', [AuditRequestController::class, 'verify'])
+    ->name('audit-requests.verify')
+    ->middleware('signed');
 
 Route::get('/reports/{auditReport:uuid}', [AuditReportController::class, 'show'])
     ->name('reports.view')
