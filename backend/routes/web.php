@@ -31,9 +31,17 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', function () {
-    return view('home');
-})->name('home')->middleware('sitemapped');
+Route::get('/', function (UserDashboardService $dashboardService) {
+    if (auth()->check()) {
+        $dashboardUrl = $dashboardService->getUserDashboardUrl(auth()->user());
+
+        if ($dashboardUrl !== route('home')) {
+            return redirect($dashboardUrl);
+        }
+    }
+
+    return redirect()->route('pricing');
+})->name('home');
 
 Route::get('/pricing', function () {
     return view('pricing');

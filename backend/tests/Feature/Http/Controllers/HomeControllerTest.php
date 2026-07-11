@@ -2,51 +2,35 @@
 
 namespace Tests\Feature\Http\Controllers;
 
-use App\Models\Announcement;
-use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 
 class HomeControllerTest extends FeatureTest
 {
-    public function test_announcement_is_displayed()
+    public function test_guest_is_redirected_to_pricing(): void
     {
-        Announcement::query()->delete();
-
-        $announcement = Announcement::factory()->create([
-            'title' => 'Test Announcement',
-            'content' => 'Test content 1',
-            'is_active' => true,
-            'starts_at' => now()->subDay(),
-            'ends_at' => now()->addDay(),
-        ]);
-
-        Livewire::withoutLazyLoading();
-
         $response = $this->get(route('home'));
 
-        $response->assertStatus(200);
-
-        $response->assertSee($announcement->content);
+        $response->assertRedirect(route('pricing'));
     }
 
-    public function test_announcement_is_not_displayed_when_inactive()
+    public function test_user_with_tenant_is_redirected_to_dashboard(): void
     {
-        Announcement::query()->delete();
-
-        $announcement = Announcement::factory()->create([
-            'title' => 'Test Announcement',
-            'content' => 'Test content 1',
-            'is_active' => false,
-            'starts_at' => now()->subDay(),
-            'ends_at' => now()->addDay(),
-        ]);
-
-        Livewire::withoutLazyLoading();
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+        $this->actingAs($user);
 
         $response = $this->get(route('home'));
 
-        $response->assertStatus(200);
+        $response->assertRedirect(route('filament.dashboard.pages.dashboard', ['tenant' => $tenant]));
+    }
 
-        $response->assertDontSee($announcement->content);
+    public function test_user_without_tenant_is_redirected_to_pricing(): void
+    {
+        $user = $this->createUser();
+        $this->actingAs($user);
+
+        $response = $this->get(route('home'));
+
+        $response->assertRedirect(route('pricing'));
     }
 }
