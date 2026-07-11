@@ -1,0 +1,171 @@
+---
+// Audit request modal — matches the "Stabilize" landing redesign.
+// Submit is a localStorage stub; wire a real endpoint here when ready.
+---
+
+<!-- Audit request modal -->
+<div id="fp-modal-root" class="fp-modal-root" aria-hidden="true">
+  <!-- Backdrop -->
+  <div class="fp-modal-overlay" data-modal-close></div>
+
+  <!-- Dialog -->
+  <div
+    id="fp-modal"
+    class="fp-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Request a free audit"
+    aria-labelledby="fp-modal-title"
+  >
+    <button type="button" class="fp-close" data-modal-close aria-label="Close">×</button>
+
+    <!-- Form state -->
+    <div data-modal-form>
+      <p class="fp-mono fp-eyebrow" style="color: #d4a853; margin: 0 0 10px;">FREE AUDIT</p>
+      <h3 id="fp-modal-title" class="fp-modal-heading">Tell us about your product</h3>
+      <p class="fp-modal-sub">We reply within one business day. Happy to sign an NDA first.</p>
+
+      <form class="fp-form" novalidate data-modal-form-el>
+        <div class="fp-field-group">
+          <label class="fp-label" for="fp-name">YOUR NAME</label>
+          <input id="fp-name" name="name" type="text" required placeholder="Ada Lovelace" class="fp-input" />
+        </div>
+        <div class="fp-field-group">
+          <label class="fp-label" for="fp-email">WORK EMAIL</label>
+          <input id="fp-email" name="email" type="email" required placeholder="you@company.com" class="fp-input" />
+        </div>
+        <div class="fp-field-group">
+          <label class="fp-label" for="fp-link">
+            PRODUCT OR REPO LINK <span style="color: rgba(232,230,222,0.3);">(OPTIONAL)</span>
+          </label>
+          <input id="fp-link" name="link" type="url" placeholder="https://" class="fp-input" />
+        </div>
+        <div class="fp-field-group">
+          <label class="fp-label" for="fp-msg">WHAT'S GOING ON?</label>
+          <textarea
+            id="fp-msg"
+            name="message"
+            rows="4"
+            placeholder="e.g. Shipping slowed down, every release breaks something, our codebase was built with Cursor over 4 months…"
+            class="fp-input fp-textarea"></textarea>
+        </div>
+        <button type="submit" class="fp-btn fp-btn-full">Request my free audit →</button>
+        <p class="fp-mono fp-modal-footnote">NO CHARGE · NO STRINGS · HONEST VERDICT</p>
+      </form>
+    </div>
+
+    <!-- Sent state -->
+    <div data-modal-sent hidden style="text-align: center; padding: 24px 0 12px;">
+      <div class="fp-check">✓</div>
+      <h3 class="fp-modal-heading" style="margin-bottom: 10px;">Request received</h3>
+      <p class="fp-modal-sub" style="max-width: 320px; margin: 0 auto 28px;">
+        We'll look at what you sent and reply within one business day with next steps.
+      </p>
+      <button type="button" class="fp-ghost fp-ghost-btn" data-modal-close>Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function initAuditModal() {
+    const rootEl = document.getElementById('fp-modal-root');
+    if (!rootEl || rootEl.hasAttribute('data-init')) return;
+    rootEl.setAttribute('data-init', '');
+    const modal = rootEl;
+
+    const dialog = document.getElementById('fp-modal') as HTMLElement;
+    const formWrap = modal.querySelector('[data-modal-form]') as HTMLElement;
+    const sentWrap = modal.querySelector('[data-modal-sent]') as HTMLElement;
+    const form = modal.querySelector('[data-modal-form-el]') as HTMLFormElement;
+    let lastFocused: HTMLElement | null = null;
+
+    function open() {
+      lastFocused = document.activeElement as HTMLElement;
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      // Reset to form view
+      formWrap.hidden = false;
+      sentWrap.hidden = true;
+      form.reset();
+      window.setTimeout(() => {
+        const name = document.getElementById('fp-name') as HTMLElement | null;
+        name?.focus();
+      }, 80);
+    }
+
+    function close() {
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      lastFocused?.focus?.();
+    }
+
+    // Open triggers (any element with data-audit-open)
+    document.addEventListener('click', (e) => {
+      const trigger = (e.target as HTMLElement).closest('[data-audit-open]');
+      if (trigger) {
+        e.preventDefault();
+        open();
+      }
+    });
+
+    // Close triggers
+    modal.querySelectorAll('[data-modal-close]').forEach((el) =>
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        close();
+      })
+    );
+
+    // Keyboard: Esc to close, Tab focus trap
+    document.addEventListener('keydown', (e) => {
+      if (!modal.classList.contains('is-open')) return;
+      if (e.key === 'Escape') {
+        close();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusables = dialog.querySelectorAll<HTMLElement>(
+          'button, input, textarea, a[href], [tabindex]:not([tabindex="-1"])'
+        );
+        const visible = Array.from(focusables).filter((el) => el.offsetParent !== null || el === dialog);
+        if (!visible.length) return;
+        const first = visible[0];
+        const last = visible[visible.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+
+    // Submit → localStorage stub
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      try {
+        localStorage.setItem(
+          'flexpick-audit-request',
+          JSON.stringify({
+            name: fd.get('name'),
+            email: fd.get('email'),
+            link: fd.get('link'),
+            message: fd.get('message'),
+            at: new Date().toISOString(),
+          })
+        );
+      } catch {
+        /* storage unavailable — ignore */
+      }
+      formWrap.hidden = true;
+      sentWrap.hidden = false;
+    });
+  }
+
+  initAuditModal();
+  document.addEventListener('astro:after-swap', initAuditModal);
+</script>
