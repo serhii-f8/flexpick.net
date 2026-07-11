@@ -15,6 +15,26 @@ Per-app deep documentation (read these when working in an app):
 - `frontend/CLAUDE.md` — Astro architecture, config system, blog, theming.
 - `backend/AGENTS.md` — full Laravel architecture, services, models, coding standards, Boost/Herd rules. (`backend/CLAUDE.MD` simply delegates to it.)
 
+## Docker dev environment
+
+One command boots both apps (requires Docker Compose >= 2.20):
+
+```bash
+cp backend/.env.example backend/.env   # first time only; ensure APP_PORT=8080, WWWUSER/WWWGROUP set
+docker compose up -d                   # backend :8080, frontend :4321, Mailpit UI :8025
+docker compose exec laravel.test composer install
+docker compose exec laravel.test php artisan key:generate
+docker compose exec laravel.test php artisan migrate:fresh --seed
+docker compose exec laravel.test npm install && docker compose exec laravel.test npm run build
+```
+
+- The backend needs its Vite assets built at least once (`npm run build` above) or `/pricing` and other pages 500 with "Vite manifest not found". For live asset editing use HMR instead (next bullet).
+- Backend Vite HMR (optional, replaces the one-off `npm run build` above): `docker compose exec laravel.test npm install && docker compose exec laravel.test npm run dev`
+- Queue worker (needed for emails/report pipeline): `docker compose exec laravel.test php artisan horizon`
+- ngrok (webhook testing, needs `NGROK_AUTHTOKEN` in `backend/.env`): `docker compose --profile ngrok up -d`
+- Frontend-only or backend-only workflows still work from each app directory as before.
+- If `FORWARD_DB_PORT` (3306), `FORWARD_REDIS_PORT` (6379), or `FORWARD_MAILPIT_PORT`/`FORWARD_MAILPIT_DASHBOARD_PORT` (1025/8025) collide with another project already running on your machine, override them in `backend/.env` before `docker compose up`.
+
 ## frontend/ — quick reference
 
 Node.js >= 22.12.0. Run from `frontend/`:
