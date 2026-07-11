@@ -2,8 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\BlogPostCategory;
-use App\Services\BlogService;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Isolatable;
 use Illuminate\Support\Facades\Route;
@@ -28,7 +26,7 @@ class GenerateSitemap extends Command implements Isolatable
     /**
      * Execute the console command.
      */
-    public function handle(BlogService $blogService)
+    public function handle()
     {
         if (! app()->environment('production')) {
             $this->warn('Not generating sitemap in local environment');
@@ -54,23 +52,6 @@ class GenerateSitemap extends Command implements Isolatable
         })->map(function ($route) {
             return route($route->getName());
         })->values()->toArray();
-
-        // go through all blog posts and add them to the sitemap (chunked to avoid memory issues)
-
-        $blogService->getAllPostsQuery()->chunk(100, function ($posts) use (&$routes) {
-            foreach ($posts as $post) {
-                $routes[] = route('blog.view', $post->slug);
-            }
-        });
-
-        // add all blog categories to the sitemap (that have posts)
-        $categories = BlogPostCategory::whereHas('posts', function ($query) {
-            $query->where('is_published', true);
-        })->get();
-
-        foreach ($categories as $category) {
-            $routes[] = route('blog.category', $category->slug);
-        }
 
         $sitemap = Sitemap::create();
 
