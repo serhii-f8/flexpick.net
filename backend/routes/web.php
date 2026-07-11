@@ -35,6 +35,10 @@ Route::get('/', function () {
     return view('home');
 })->name('home')->middleware('sitemapped');
 
+Route::get('/pricing', function () {
+    return view('pricing');
+})->name('pricing')->middleware('sitemapped');
+
 Route::get('/dashboard', function (UserDashboardService $dashboardService) {
     return redirect($dashboardService->getUserDashboardUrl(Auth::user()));
 })->name('dashboard')->middleware('auth');
