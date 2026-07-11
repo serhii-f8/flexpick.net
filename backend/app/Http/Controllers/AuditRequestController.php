@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreAuditRequestRequest;
 use App\Services\AuditRequestService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class AuditRequestController extends Controller
 {
