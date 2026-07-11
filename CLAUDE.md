@@ -34,6 +34,7 @@ docker compose exec laravel.test npm install && docker compose exec laravel.test
 - ngrok (webhook testing, needs `NGROK_AUTHTOKEN` in `backend/.env`): `docker compose --profile ngrok up -d`
 - Frontend-only or backend-only workflows still work from each app directory as before.
 - If `FORWARD_DB_PORT` (3306), `FORWARD_REDIS_PORT` (6379), or `FORWARD_MAILPIT_PORT`/`FORWARD_MAILPIT_DASHBOARD_PORT` (1025/8025) collide with another project already running on your machine, override them in `backend/.env` before `docker compose up`.
+- The `frontend` service runs as `WWWUSER:WWWGROUP` (default `1000:1000`) so `npm install` inside the container doesn't leave root-owned files in the bind-mounted `frontend/node_modules`. If your host UID differs, export `WWWUSER`/`WWWGROUP` before `docker compose up` (same variables the backend already uses).
 
 ## frontend/ — quick reference
 
