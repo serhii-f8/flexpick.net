@@ -222,4 +222,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants, MustVeri
     {
         return $this->hasMany(ReferralReward::class, 'referrer_user_id');
     }
+
+    public function auditReports(): HasMany
+    {
+        return $this->hasMany(AuditReport::class);
+    }
 }
