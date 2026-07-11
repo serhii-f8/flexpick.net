@@ -11,6 +11,7 @@ export type Config = {
   };
   ui?: unknown;
   analytics?: unknown;
+  productApp?: ProductAppConfig;
 };
 
 export interface SiteConfig {
@@ -80,6 +81,10 @@ export interface AnalyticsConfig {
 
 export interface UIConfig {
   theme: string;
+}
+
+export interface ProductAppConfig {
+  url: string;
 }
 
 const DEFAULT_SITE_NAME = 'Website';
@@ -193,6 +198,22 @@ const getAnalytics = (config: Config) => {
   return merge({}, _default, config?.analytics ?? {}) as AnalyticsConfig;
 };
 
+const getProductApp = (config: Config): ProductAppConfig => {
+  const _default = {
+    url: 'https://app.flexpick.net',
+  };
+
+  const merged = merge({}, _default, config?.productApp ?? {}) as ProductAppConfig;
+
+  if (process.env.PUBLIC_APP_URL) {
+    merged.url = process.env.PUBLIC_APP_URL;
+  }
+
+  merged.url = merged.url.replace(/\/+$/, '');
+
+  return merged;
+};
+
 export default (config: Config) => ({
   SITE: getSite(config),
   I18N: getI18N(config),
@@ -200,4 +221,5 @@ export default (config: Config) => ({
   APP_BLOG: getAppBlog(config),
   UI: getUI(config),
   ANALYTICS: getAnalytics(config),
+  PRODUCT_APP: getProductApp(config),
 });

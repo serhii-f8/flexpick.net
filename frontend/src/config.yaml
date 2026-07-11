@@ -6,6 +6,9 @@ site:
 
   googleSiteVerificationId: false
 
+productApp:
+  url: 'https://app.flexpick.net'
+
 # Default SEO metadata
 metadata:
   title:
