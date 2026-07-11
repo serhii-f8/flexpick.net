@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditRequestController;
 use App\Http\Controllers\PaymentProviders\CreemController;
 use App\Http\Controllers\PaymentProviders\LemonSqueezyController;
 use App\Http\Controllers\PaymentProviders\PaddleController;
@@ -17,6 +18,10 @@ use Illuminate\Support\Facades\Route;
 | be assigned to the "api" middleware group. Make something great!
 |
 */
+
+Route::post('/audit-requests', [AuditRequestController::class, 'store'])
+    ->name('audit-requests.store')
+    ->middleware('throttle:5,1');
 
 Route::post('/payments-providers/stripe/webhook', [
     StripeController::class,
