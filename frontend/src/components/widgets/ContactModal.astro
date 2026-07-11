@@ -1,6 +1,7 @@
 ---
 // Audit request modal — matches the "Stabilize" landing redesign.
-// Submit is a localStorage stub; wire a real endpoint here when ready.
+// Submits to the backend audit-requests endpoint (see PRODUCT_APP config).
+import { PRODUCT_APP } from 'flexpick:config';
 ---
 
 <!-- Audit request modal -->
@@ -25,7 +26,15 @@
       <h3 id="fp-modal-title" class="fp-modal-heading">Tell us about your product</h3>
       <p class="fp-modal-sub">We reply within one business day. Happy to sign an NDA first.</p>
 
-      <form class="fp-form" novalidate data-modal-form-el>
+      <form class="fp-form" novalidate data-modal-form-el data-endpoint={`${PRODUCT_APP.url}/api/audit-requests`}>
+        <input
+          type="text"
+          name="website"
+          tabindex="-1"
+          autocomplete="off"
+          aria-hidden="true"
+          style="position: absolute; left: -9999px; height: 0; width: 0; opacity: 0;"
+        />
         <div class="fp-field-group">
           <label class="fp-label" for="fp-name">YOUR NAME</label>
           <input id="fp-name" name="name" type="text" required placeholder="Ada Lovelace" class="fp-input" />
@@ -49,6 +58,9 @@
             placeholder="e.g. Shipping slowed down, every release breaks something, our codebase was built with Cursor over 4 months…"
             class="fp-input fp-textarea"></textarea>
         </div>
+        <p class="fp-mono" data-modal-error hidden style="color: #dc6b5a; font-size: 12px; margin: 0 0 10px;">
+          Something went wrong — please try again, or email hello@flexpick.net.
+        </p>
         <button type="submit" class="fp-btn fp-btn-full">Request my free audit →</button>
         <p class="fp-mono fp-modal-footnote">NO CHARGE · NO STRINGS · HONEST VERDICT</p>
       </form>
@@ -143,26 +155,35 @@
       }
     });
 
-    // Submit → localStorage stub
-    form.addEventListener('submit', (e) => {
+    // Submit → backend audit-requests endpoint
+    const errorEl = modal.querySelector('[data-modal-error]') as HTMLElement;
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(form);
+      errorEl.hidden = true;
+      submitBtn.disabled = true;
       try {
-        localStorage.setItem(
-          'flexpick-audit-request',
-          JSON.stringify({
+        const res = await fetch(form.dataset.endpoint || '', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
             name: fd.get('name'),
             email: fd.get('email'),
-            link: fd.get('link'),
-            message: fd.get('message'),
-            at: new Date().toISOString(),
-          })
-        );
+            repo_url: fd.get('link') || null,
+            message: fd.get('message') || null,
+            website: fd.get('website') || '',
+          }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        formWrap.hidden = true;
+        sentWrap.hidden = false;
       } catch {
-        /* storage unavailable — ignore */
+        errorEl.hidden = false;
+      } finally {
+        submitBtn.disabled = false;
       }
-      formWrap.hidden = true;
-      sentWrap.hidden = false;
     });
   }
 
