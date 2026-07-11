@@ -22,3 +22,5 @@ Schedule::command('app:local-subscription-expiring-soon-reminder')->dailyAt('00:
 Schedule::command('app:cleanup-local-subscription-statuses')->hourly();
 
 Schedule::command('app:sync-seat-based-subscription-quantities')->hourly();
+
+Schedule::command('app:purge-unverified-audit-requests')->dailyAt('02:10');
