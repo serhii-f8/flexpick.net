@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditReportController;
 use App\Http\Controllers\Auth\OAuthController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\InvoiceController;
@@ -194,3 +195,13 @@ Route::controller(InvoiceController::class)
         Route::get('/generate/{transactionUuid}', 'generate')->name('invoice.generate');
         Route::get('/preview', 'preview')->name('invoice.preview');
     });
+
+// Audit reports
+
+Route::get('/reports/{auditReport:uuid}', [AuditReportController::class, 'show'])
+    ->name('reports.view')
+    ->middleware('signed');
+
+Route::get('/reports/{auditReport:uuid}/download', [AuditReportController::class, 'download'])
+    ->name('reports.download')
+    ->middleware('auth');
