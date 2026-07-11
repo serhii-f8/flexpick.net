@@ -26,7 +26,6 @@ services:
             - mysql
             - mailpit
             - redis
-            - ngrok
     mysql:
         image: 'mysql:8.4'
         ports:
@@ -76,6 +75,7 @@ services:
             timeout: 5s
 
     ngrok:
+        profiles: [ngrok]
         image: ngrok/ngrok:alpine
         environment:
             NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
