@@ -17,4 +17,19 @@ class AuditRequestFactory extends Factory
             'status' => AuditRequestStatus::NEW->value,
         ];
     }
+
+    public function verified(): static
+    {
+        return $this->state(fn () => ['email_verified_at' => now()]);
+    }
+
+    public function freeRun(): static
+    {
+        return $this->state(fn () => ['free_run' => true]);
+    }
+
+    public function dashboardSource(): static
+    {
+        return $this->state(fn () => ['source' => 'dashboard']);
+    }
 }

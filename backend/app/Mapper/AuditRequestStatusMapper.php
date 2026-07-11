@@ -17,6 +17,9 @@ class AuditRequestStatusMapper
             AuditRequestStatus::FAILED->value => __('Failed'),
             AuditRequestStatus::NEEDS_FOLLOWUP->value => __('Needs follow-up'),
             AuditRequestStatus::HANDLED->value => __('Handled'),
+            AuditRequestStatus::PENDING_VERIFICATION->value => __('Pending verification'),
+            AuditRequestStatus::AWAITING_ACCESS->value => __('Awaiting repo access'),
+            AuditRequestStatus::AWAITING_PAYMENT->value => __('Awaiting payment'),
             default => $status,
         };
     }
@@ -26,7 +29,7 @@ class AuditRequestStatusMapper
         return match ($status) {
             AuditRequestStatus::SENT->value, AuditRequestStatus::HANDLED->value => 'success',
             AuditRequestStatus::FAILED->value => 'danger',
-            AuditRequestStatus::NEEDS_FOLLOWUP->value => 'warning',
+            AuditRequestStatus::NEEDS_FOLLOWUP->value, AuditRequestStatus::AWAITING_ACCESS->value, AuditRequestStatus::AWAITING_PAYMENT->value => 'warning',
             AuditRequestStatus::REPORT_READY->value, AuditRequestStatus::ANALYZING->value, AuditRequestStatus::QUEUED->value => 'info',
             default => 'gray',
         };

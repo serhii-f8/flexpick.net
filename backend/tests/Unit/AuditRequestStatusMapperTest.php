@@ -17,4 +17,16 @@ class AuditRequestStatusMapperTest extends TestCase
             $this->assertContains($mapper->mapColor($case->value), ['gray', 'info', 'warning', 'success', 'danger']);
         }
     }
+
+    public function test_maps_new_intake_statuses(): void
+    {
+        $mapper = new \App\Mapper\AuditRequestStatusMapper;
+
+        $this->assertSame('Pending verification', $mapper->mapForDisplay('pending_verification'));
+        $this->assertSame('Awaiting repo access', $mapper->mapForDisplay('awaiting_access'));
+        $this->assertSame('Awaiting payment', $mapper->mapForDisplay('awaiting_payment'));
+        $this->assertSame('gray', $mapper->mapColor('pending_verification'));
+        $this->assertSame('warning', $mapper->mapColor('awaiting_access'));
+        $this->assertSame('warning', $mapper->mapColor('awaiting_payment'));
+    }
 }

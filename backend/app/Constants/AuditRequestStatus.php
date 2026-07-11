@@ -12,4 +12,7 @@ enum AuditRequestStatus: string
     case FAILED = 'failed';
     case NEEDS_FOLLOWUP = 'needs_followup';
     case HANDLED = 'handled';
+    case PENDING_VERIFICATION = 'pending_verification';
+    case AWAITING_ACCESS = 'awaiting_access';
+    case AWAITING_PAYMENT = 'awaiting_payment';
 }

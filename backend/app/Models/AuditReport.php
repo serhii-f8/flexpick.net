@@ -11,10 +11,11 @@ class AuditReport extends Model
 {
     use HasFactory, HasUuids;
 
-    protected $fillable = ['audit_request_id', 'user_id', 'payload', 'pdf_path'];
+    protected $fillable = ['audit_request_id', 'user_id', 'payload', 'pdf_path', 'unlocked_at', 'unlock_order_id'];
 
     protected $casts = [
         'payload' => 'array',
+        'unlocked_at' => 'datetime',
     ];
 
     public function uniqueIds(): array

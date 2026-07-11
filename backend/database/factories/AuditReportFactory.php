@@ -21,4 +21,14 @@ class AuditReportFactory extends Factory
             'pdf_path' => 'audit-reports/fixture.pdf',
         ];
     }
+
+    public function unlocked(): static
+    {
+        return $this->state(fn () => ['unlocked_at' => now()]);
+    }
+
+    public function locked(): static
+    {
+        return $this->state(fn () => ['unlocked_at' => null, 'pdf_path' => null]);
+    }
 }
