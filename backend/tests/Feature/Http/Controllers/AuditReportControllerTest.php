@@ -18,7 +18,7 @@ class AuditReportControllerTest extends FeatureTest
         return AuditReport::factory()->raw()['payload'];
     }
 
-    public function test_create_renders_pdf_and_links_existing_user(): void
+    public function test_create_links_existing_user_and_locks_web_source_report(): void
     {
         $user = $this->createUser();
         $request = AuditRequest::factory()->create(['email' => $user->email]);
@@ -27,12 +27,13 @@ class AuditReportControllerTest extends FeatureTest
 
         $this->assertSame($user->id, $report->user_id);
         $this->assertSame(AuditRequestStatus::REPORT_READY->value, $request->fresh()->status);
-        Storage::disk('local')->assertExists($report->pdf_path);
+        $this->assertNull($report->pdf_path);
+        $this->assertNull($report->unlocked_at);
     }
 
     public function test_create_replaces_existing_report_and_deletes_old_pdf(): void
     {
-        $request = AuditRequest::factory()->create();
+        $request = AuditRequest::factory()->dashboardSource()->create();
         $service = app(AuditReportService::class);
 
         $firstReport = $service->create($request, $this->payload());

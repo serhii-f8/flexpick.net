@@ -14,7 +14,6 @@ use App\Services\AuditReport\AuditPipeline;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
-use Illuminate\Support\Facades\Storage;
 use Tests\Feature\FeatureTest;
 use Tests\Support\FakeAiAnalyzer;
 
@@ -52,7 +51,8 @@ class AuditPipelineTest extends FeatureTest
         $this->assertSame(AuditRequestStatus::SENT->value, $request->status);
         $this->assertNotNull($request->report);
         $this->assertNotNull($request->metrics);
-        Storage::disk('local')->assertExists($request->report->pdf_path);
+        $this->assertNull($request->report->pdf_path);
+        $this->assertNull($request->report->unlocked_at);
         Mail::assertQueued(AuditReportReady::class, fn ($mail) => $mail->hasTo($request->email));
         $this->assertDirectoryDoesNotExist(config('audit.workdir').'/'.$request->uuid); // workdir cleaned
     }
