@@ -1,6 +1,7 @@
 ---
 import Layout from '~/layouts/Layout.astro';
 import ContactModal from '~/components/widgets/ContactModal.astro';
+import { PRODUCT_APP } from 'flexpick:config';
 
 const metadata = {
   title: 'FlexPick — We Rescue AI-Built Codebases',
@@ -69,6 +70,7 @@ const hotspots = [
           <a href="#process" class="fp-navlink" data-nav="process">Process</a>
           <a href="#report" class="fp-navlink" data-nav="report">The audit</a>
           <a href="#faq" class="fp-navlink" data-nav="faq">FAQ</a>
+          <a href={`${PRODUCT_APP.url}/login`} class="fp-navlink" rel="nofollow">Log in</a>
           <button type="button" class="fp-btn" data-audit-open style="font-size: 14px; padding: 10px 20px;"
             >Get a free audit</button
           >
@@ -908,6 +910,9 @@ const hotspots = [
             CONTACT
           </p>
           <a href="mailto:hello@flexpick.net" class="fp-footlink">hello@flexpick.net</a>
+          <a href={`${PRODUCT_APP.url}/login`} class="fp-footlink" style="margin-top: 10px;" rel="nofollow"
+            >Client login</a
+          >
           <p class="fp-mono" style="margin: 14px 0 0; font-size: 11px; line-height: 1.7; color: rgba(232,230,222,0.5);">
             NDA-FRIENDLY<br />REPLY WITHIN 1 BUSINESS DAY
           </p>
