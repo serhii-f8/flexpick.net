@@ -3,17 +3,26 @@
 namespace App\Services;
 
 use App\Constants\AuditRequestStatus;
+use App\Exceptions\AuditNotAnalyzableException;
 use App\Jobs\GenerateAuditReport;
+use App\Mail\Audit\AuditQuotaExhausted;
 use App\Mail\Audit\AuditRepoAccessNeeded;
 use App\Mail\Audit\AuditRequestFailed;
 use App\Mail\Audit\AuditRequestReceived;
 use App\Mail\Audit\NewAuditRequestAdminNotification;
 use App\Models\AuditRequest;
+use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\RepositoryCloner;
 use Illuminate\Support\Facades\Mail;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 class AuditRequestService
 {
+    public function __construct(
+        private AuditEntitlementService $entitlements,
+        private RepositoryCloner $cloner,
+    ) {}
+
     public function submit(array $data, array $meta = []): AuditRequest
     {
         $recentDuplicate = AuditRequest::query()
@@ -45,6 +54,40 @@ class AuditRequestService
         }
 
         return $auditRequest;
+    }
+
+    public function routeVerified(AuditRequest $auditRequest): void
+    {
+        if ($auditRequest->repo_url === null) {
+            $this->markNeedsFollowup($auditRequest, 'No repository URL provided');
+            $this->notifyAdmin($auditRequest);
+
+            return;
+        }
+
+        try {
+            $this->cloner->preflight($auditRequest->repo_url);
+        } catch (AuditNotAnalyzableException) {
+            $auditRequest->update(['status' => AuditRequestStatus::AWAITING_ACCESS->value]);
+            Mail::to($auditRequest->email)->send(new AuditRepoAccessNeeded($auditRequest));
+            $this->notifyAdmin($auditRequest);
+
+            return;
+        }
+
+        if (! $this->entitlements->hasFreeRun($auditRequest->email)) {
+            $auditRequest->update(['status' => AuditRequestStatus::AWAITING_PAYMENT->value]);
+            Mail::to($auditRequest->email)->send(new AuditQuotaExhausted($auditRequest));
+            $this->notifyAdmin($auditRequest);
+
+            return;
+        }
+
+        $this->entitlements->consumeFreeRun($auditRequest);
+        $auditRequest->update(['status' => AuditRequestStatus::QUEUED->value]);
+        GenerateAuditReport::dispatch($auditRequest);
+        Mail::to($auditRequest->email)->send(new AuditRequestReceived($auditRequest));
+        $this->notifyAdmin($auditRequest);
     }
 
     public function markNeedsFollowup(AuditRequest $auditRequest, string $reason): void
