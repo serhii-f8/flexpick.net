@@ -6,18 +6,19 @@ use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\UserParameter;
+use App\Services\AuditReport\AuditBenchmarkService;
 use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Storage;
 
 class AuditReportController extends Controller
 {
-    public function show(AuditReport $auditReport)
+    public function show(AuditReport $auditReport, AuditBenchmarkService $benchmark)
     {
         return view('reports.audit-web', [
             'report' => $auditReport,
             'unlocked' => $auditReport->unlocked_at !== null,
             'isSample' => false,
-            'percentile' => null,
+            'percentile' => $benchmark->percentileFor((int) data_get($auditReport->payload, 'scores.overall', 0)),
         ]);
     }
 
