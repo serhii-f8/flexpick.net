@@ -105,9 +105,14 @@ import { PRODUCT_APP } from 'flexpick:config';
     const form = modal.querySelector('[data-modal-form-el]') as HTMLFormElement;
     let lastFocused: HTMLElement | null = null;
 
+    const track = (name: string) => {
+      (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag?.('event', name);
+    };
+
     function open() {
       lastFocused = document.activeElement as HTMLElement;
       modal.classList.add('is-open');
+      track('audit_modal_open');
       modal.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
       // Reset to form view
@@ -191,10 +196,21 @@ import { PRODUCT_APP } from 'flexpick:config';
             marketing_consent: fd.get('consent') === 'on',
           }),
         });
-        if (!res.ok) throw new Error(String(res.status));
+        if (!res.ok) {
+          errorEl.textContent =
+            res.status === 429
+              ? 'We already have a recent request from this email — check your inbox for the confirmation link.'
+              : res.status === 422
+                ? 'Please double-check your name and email address.'
+                : 'Something went wrong — please try again, or email hello@flexpick.net.';
+          errorEl.hidden = false;
+          return;
+        }
+        track('audit_request_submitted');
         formWrap.hidden = true;
         sentWrap.hidden = false;
       } catch {
+        errorEl.textContent = 'Something went wrong — please try again, or email hello@flexpick.net.';
         errorEl.hidden = false;
       } finally {
         submitBtn.disabled = false;
