@@ -81,4 +81,48 @@ class AuditReportPageTest extends FeatureTest
         $this->withExceptionHandling()
             ->actingAs($user)->get("/reports/{$report->uuid}/unlock")->assertForbidden();
     }
+
+    public function test_unlock_route_redirects_to_signed_view_when_already_unlocked(): void
+    {
+        $user = User::factory()->create();
+        $report = AuditReport::factory()->unlocked()->create(['user_id' => $user->id]);
+
+        $expectedUrl = app(AuditReportService::class)->signedUrl($report);
+
+        $this->actingAs($user)
+            ->get("/reports/{$report->uuid}/unlock")
+            ->assertRedirect($expectedUrl);
+    }
+
+    public function test_sample_report_returns_404_when_fixture_file_is_missing(): void
+    {
+        $this->withExceptionHandling();
+
+        $path = resource_path('data/sample-audit-report.json');
+        $backupPath = $path.'.bak';
+
+        rename($path, $backupPath);
+
+        try {
+            $this->get('/reports/sample')->assertNotFound();
+        } finally {
+            rename($backupPath, $path);
+        }
+    }
+
+    public function test_sample_report_returns_404_when_fixture_file_is_corrupt(): void
+    {
+        $this->withExceptionHandling();
+
+        $path = resource_path('data/sample-audit-report.json');
+        $original = file_get_contents($path);
+
+        file_put_contents($path, 'not valid json {{{');
+
+        try {
+            $this->get('/reports/sample')->assertNotFound();
+        } finally {
+            file_put_contents($path, $original);
+        }
+    }
 }

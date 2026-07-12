@@ -18,14 +18,20 @@ class AuditReportService
 {
     public function create(AuditRequest $auditRequest, array $payload): AuditReport
     {
+        $wasUnlocked = false;
+        $unlockOrderId = null;
+
         if ($existing = $auditRequest->report()->first()) {
+            $wasUnlocked = $existing->unlocked_at !== null;
+            $unlockOrderId = $existing->unlock_order_id;
+
             if ($existing->pdf_path !== null) {
                 Storage::disk('local')->delete($existing->pdf_path);
             }
             $existing->delete();
         }
 
-        $unlocked = $auditRequest->source === 'dashboard';
+        $unlocked = $auditRequest->source === 'dashboard' || $wasUnlocked;
 
         $report = new AuditReport([
             'audit_request_id' => $auditRequest->id,
@@ -33,6 +39,7 @@ class AuditReportService
             'payload' => $payload,
             'pdf_path' => null,
             'unlocked_at' => $unlocked ? now() : null,
+            'unlock_order_id' => $wasUnlocked ? $unlockOrderId : null,
         ]);
         $report->save();
 

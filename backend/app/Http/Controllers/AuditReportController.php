@@ -24,7 +24,13 @@ class AuditReportController extends Controller
 
     public function sample()
     {
-        $fixture = json_decode(file_get_contents(resource_path('data/sample-audit-report.json')), true);
+        $path = resource_path('data/sample-audit-report.json');
+
+        abort_unless(is_file($path), 404);
+
+        $fixture = json_decode(file_get_contents($path), true);
+
+        abort_if(! is_array($fixture), 404);
 
         $request = new AuditRequest(['repo_url' => $fixture['repo_url']]);
         $report = new AuditReport(['payload' => $fixture['payload']]);

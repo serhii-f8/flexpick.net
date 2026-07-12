@@ -5,6 +5,8 @@ namespace Tests\Feature\Services;
 use App\Mail\Audit\AuditReportUnlocked;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Models\Order;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Mail;
@@ -70,5 +72,32 @@ class AuditReportUnlockTest extends FeatureTest
         $this->actingAs($user)
             ->get(route('reports.download', ['auditReport' => $report->uuid]))
             ->assertNotFound();
+    }
+
+    public function test_retrying_create_preserves_paid_unlock_and_order_id(): void
+    {
+        $request = AuditRequest::factory()->verified()->create();
+        $report = app(AuditReportService::class)->create($request, $this->payload());
+        $order = Order::factory()->create(['tenant_id' => Tenant::factory()->create()->id]);
+        $report->update(['unlocked_at' => now(), 'unlock_order_id' => $order->id]);
+
+        $retried = app(AuditReportService::class)->create($request, $this->payload());
+
+        $this->assertNotNull($retried->unlocked_at);
+        $this->assertSame($order->id, $retried->unlock_order_id);
+        $this->assertNotNull($retried->pdf_path);
+        Storage::disk('local')->assertExists($retried->pdf_path);
+    }
+
+    public function test_retrying_create_on_never_unlocked_web_report_is_still_born_locked(): void
+    {
+        $request = AuditRequest::factory()->verified()->create();
+        app(AuditReportService::class)->create($request, $this->payload());
+
+        $retried = app(AuditReportService::class)->create($request, $this->payload());
+
+        $this->assertNull($retried->unlocked_at);
+        $this->assertNull($retried->unlock_order_id);
+        $this->assertNull($retried->pdf_path);
     }
 }
