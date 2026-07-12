@@ -106,6 +106,7 @@ import { PRODUCT_APP } from 'flexpick:config';
     const formWrap = modal.querySelector('[data-modal-form]') as HTMLElement;
     const sentWrap = modal.querySelector('[data-modal-sent]') as HTMLElement;
     const form = modal.querySelector('[data-modal-form-el]') as HTMLFormElement;
+    const errorEl = modal.querySelector('[data-modal-error]') as HTMLElement;
     let lastFocused: HTMLElement | null = null;
 
     const track = (name: string) => {
@@ -122,6 +123,7 @@ import { PRODUCT_APP } from 'flexpick:config';
       formWrap.hidden = false;
       sentWrap.hidden = true;
       form.reset();
+      errorEl.hidden = true;
       window.setTimeout(() => {
         const name = document.getElementById('fp-name') as HTMLElement | null;
         name?.focus();
@@ -178,7 +180,6 @@ import { PRODUCT_APP } from 'flexpick:config';
     });
 
     // Submit → backend audit-requests endpoint
-    const errorEl = modal.querySelector('[data-modal-error]') as HTMLElement;
     const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
 
     form.addEventListener('submit', async (e) => {
