@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Http\Controllers;
 
+use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
+use App\Models\User;
 use App\Services\AuditReport\AuditReportService;
 use Tests\Feature\FeatureTest;
 
@@ -46,7 +48,7 @@ class AuditReportPageTest extends FeatureTest
 
     public function test_unlock_route_stores_intent_and_redirects_to_checkout(): void
     {
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $report = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
 
         $this->actingAs($user)
@@ -55,14 +57,14 @@ class AuditReportPageTest extends FeatureTest
 
         $this->assertDatabaseHas('user_parameters', [
             'user_id' => $user->id,
-            'name' => \App\Listeners\Order\HandleAuditUnlockOrder::INTENT_PARAM,
+            'name' => HandleAuditUnlockOrder::INTENT_PARAM,
             'value' => $report->uuid,
         ]);
     }
 
     public function test_unlock_route_claims_report_by_matching_email(): void
     {
-        $user = \App\Models\User::factory()->create(['email' => 'match@example.com']);
+        $user = User::factory()->create(['email' => 'match@example.com']);
         $report = AuditReport::factory()->locked()->create(['user_id' => null]);
         $report->auditRequest->update(['email' => 'match@example.com']);
 
@@ -73,8 +75,8 @@ class AuditReportPageTest extends FeatureTest
 
     public function test_unlock_route_denies_foreign_reports(): void
     {
-        $user = \App\Models\User::factory()->create(['email' => 'other@example.com']);
-        $report = AuditReport::factory()->locked()->create(['user_id' => \App\Models\User::factory()->create()->id]);
+        $user = User::factory()->create(['email' => 'other@example.com']);
+        $report = AuditReport::factory()->locked()->create(['user_id' => User::factory()->create()->id]);
 
         $this->withExceptionHandling()
             ->actingAs($user)->get("/reports/{$report->uuid}/unlock")->assertForbidden();

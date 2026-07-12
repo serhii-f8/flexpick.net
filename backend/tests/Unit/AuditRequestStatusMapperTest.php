@@ -20,7 +20,7 @@ class AuditRequestStatusMapperTest extends TestCase
 
     public function test_maps_new_intake_statuses(): void
     {
-        $mapper = new \App\Mapper\AuditRequestStatusMapper;
+        $mapper = new AuditRequestStatusMapper;
 
         $this->assertSame('Pending verification', $mapper->mapForDisplay('pending_verification'));
         $this->assertSame('Awaiting repo access', $mapper->mapForDisplay('awaiting_access'));

@@ -3,12 +3,13 @@
 namespace Tests\Feature\Listeners;
 
 use App\Events\Order\Ordered;
+use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\OneTimeProduct;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserParameter;
-use App\Listeners\Order\HandleAuditUnlockOrder;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\Feature\FeatureTest;
@@ -30,7 +31,7 @@ class HandleAuditUnlockOrderTest extends FeatureTest
         );
         $order = Order::factory()->create([
             'user_id' => $user->id,
-            'tenant_id' => \App\Models\Tenant::factory()->create()->id,
+            'tenant_id' => Tenant::factory()->create()->id,
         ]);
         $order->items()->create([
             'one_time_product_id' => $product->id,
@@ -77,7 +78,7 @@ class HandleAuditUnlockOrderTest extends FeatureTest
         $product = OneTimeProduct::factory()->create(['slug' => 'something-else']);
         $order = Order::factory()->create([
             'user_id' => $user->id,
-            'tenant_id' => \App\Models\Tenant::factory()->create()->id,
+            'tenant_id' => Tenant::factory()->create()->id,
         ]);
         $order->items()->create([
             'one_time_product_id' => $product->id, 'quantity' => 1, 'currency_id' => $order->currency_id,

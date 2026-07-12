@@ -5,6 +5,7 @@ namespace Tests\Feature\Services;
 use App\Mail\Audit\AuditReportUnlocked;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Models\User;
 use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -63,7 +64,7 @@ class AuditReportUnlockTest extends FeatureTest
     {
         $this->withExceptionHandling();
         $report = AuditReport::factory()->locked()->create();
-        $user = \App\Models\User::factory()->create();
+        $user = User::factory()->create();
         $report->update(['user_id' => $user->id]);
 
         $this->actingAs($user)

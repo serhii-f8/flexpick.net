@@ -34,7 +34,7 @@ class AuditReportsPageTest extends FeatureTest
             ->test(AuditReports::class)
             ->call('launchAudit', 'https://github.com/acme/my-app');
 
-        $request = AuditRequest::firstOrFail();
+        $request = AuditRequest::where('user_id', $user->id)->firstOrFail();
         $this->assertSame('dashboard', $request->source);
         $this->assertSame($user->id, $request->user_id);
         $this->assertSame(AuditRequestStatus::QUEUED->value, $request->status);
