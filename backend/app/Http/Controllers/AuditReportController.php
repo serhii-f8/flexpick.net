@@ -18,11 +18,13 @@ class AuditReportController extends Controller
 {
     public function show(AuditReport $auditReport, AuditBenchmarkService $benchmark)
     {
-        app(AuditFunnelRecorder::class)->record(
-            AuditFunnelRecorder::STAGE_REPORT_VIEWED,
-            $auditReport->auditRequest,
-            ['unlocked' => $auditReport->unlocked_at !== null],
-        );
+        if ($auditReport->auditRequest->source !== 'dashboard') {
+            app(AuditFunnelRecorder::class)->record(
+                AuditFunnelRecorder::STAGE_REPORT_VIEWED,
+                $auditReport->auditRequest,
+                ['unlocked' => $auditReport->unlocked_at !== null],
+            );
+        }
 
         return view('reports.audit-web', [
             'report' => $auditReport,

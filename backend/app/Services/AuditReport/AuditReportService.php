@@ -80,7 +80,10 @@ class AuditReportService
             ->send(new AuditReportReady($report, $this->signedUrl($report), $this->deltaService->deltasFor($report)));
 
         $report->auditRequest->update(['status' => AuditRequestStatus::SENT->value]);
-        $this->funnel->record(AuditFunnelRecorder::STAGE_REPORT_SENT, $report->auditRequest);
+
+        if ($report->auditRequest->source !== 'dashboard') {
+            $this->funnel->record(AuditFunnelRecorder::STAGE_REPORT_SENT, $report->auditRequest);
+        }
     }
 
     public function signedUrl(AuditReport $report): string

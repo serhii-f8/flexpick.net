@@ -38,6 +38,12 @@ class HandleAuditUnlockOrder
             return;
         }
 
+        $alreadyProcessed = AuditReport::query()->where('unlock_order_id', $order->id)->exists()
+            || AuditRequest::query()->where('meta->paid_order_id', $order->id)->exists();
+        if ($alreadyProcessed) {
+            return;
+        }
+
         if ($this->handleUnlockIntent($order) || $this->handleRunIntent($order)) {
             return;
         }
@@ -95,7 +101,11 @@ class HandleAuditUnlockOrder
             return false;
         }
 
-        $auditRequest->update(['prepaid' => true, 'status' => AuditRequestStatus::QUEUED->value]);
+        $auditRequest->update([
+            'prepaid' => true,
+            'status' => AuditRequestStatus::QUEUED->value,
+            'meta' => array_merge($auditRequest->meta ?? [], ['paid_order_id' => $order->id]),
+        ]);
         GenerateAuditReport::dispatch($auditRequest);
         $this->funnel->record(AuditFunnelRecorder::STAGE_RUN_PURCHASED, $auditRequest);
         $intent->delete();

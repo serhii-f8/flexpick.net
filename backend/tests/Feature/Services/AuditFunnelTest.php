@@ -3,11 +3,14 @@
 namespace Tests\Feature\Services;
 
 use App\Models\AuditFunnelEvent;
+use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\AuditFunnelStats;
+use App\Services\AuditReport\AuditReportService;
 use App\Services\AuditRequestService;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\Feature\FeatureTest;
 
 class AuditFunnelTest extends FeatureTest
@@ -37,6 +40,19 @@ class AuditFunnelTest extends FeatureTest
         $request = AuditRequest::where('email', 'funnel-submit@example.com')->firstOrFail();
         $this->assertSame(1, AuditFunnelEvent::where('audit_request_id', $request->id)
             ->where('stage', AuditFunnelRecorder::STAGE_SUBMITTED)->count());
+    }
+
+    public function test_send_does_not_record_report_sent_stage_for_dashboard_source(): void
+    {
+        Storage::fake('local');
+
+        $request = AuditRequest::factory()->verified()->dashboardSource()->create();
+        $report = AuditReport::factory()->create(['audit_request_id' => $request->id]);
+
+        app(AuditReportService::class)->send($report);
+
+        $this->assertSame(0, AuditFunnelEvent::where('audit_request_id', $request->id)
+            ->where('stage', AuditFunnelRecorder::STAGE_REPORT_SENT)->count());
     }
 
     public function test_stats_zero_fills_all_stages_and_respects_window(): void

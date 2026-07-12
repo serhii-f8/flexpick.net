@@ -116,6 +116,46 @@ class AuditPrepaidRunTest extends FeatureTest
         $this->assertNotNull($report->pdf_path);
     }
 
+    public function test_redelivered_unlock_order_does_not_unlock_a_second_report(): void
+    {
+        $user = User::factory()->create();
+        $reportA = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
+        $reportB = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
+        UserParameter::create(['user_id' => $user->id, 'name' => HandleAuditUnlockOrder::INTENT_PARAM, 'value' => $reportA->uuid]);
+
+        $order = $this->unlockOrderFor($user);
+
+        Ordered::dispatch($order);
+        Ordered::dispatch($order);
+
+        $this->assertNotNull($reportA->refresh()->unlocked_at);
+        $this->assertNull($reportB->refresh()->unlocked_at);
+    }
+
+    public function test_redelivered_run_order_does_not_touch_other_reports(): void
+    {
+        Queue::fake();
+        $user = User::factory()->create();
+        $request = AuditRequest::factory()->verified()->create([
+            'email' => $user->email,
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+        ]);
+        UserParameter::create(['user_id' => $user->id, 'name' => HandleAuditUnlockOrder::RUN_INTENT_PARAM, 'value' => $request->uuid]);
+        $otherReport = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
+
+        $order = $this->unlockOrderFor($user);
+
+        Ordered::dispatch($order);
+        Ordered::dispatch($order);
+
+        $request->refresh();
+        $this->assertTrue($request->prepaid);
+        $this->assertSame(AuditRequestStatus::QUEUED->value, $request->status);
+        $this->assertSame($order->id, $request->meta['paid_order_id'] ?? null);
+        $this->assertNull($otherReport->refresh()->unlocked_at);
+        Queue::assertPushed(GenerateAuditReport::class, 1);
+    }
+
     private function payload(): array
     {
         return AuditReport::factory()->raw()['payload'];
