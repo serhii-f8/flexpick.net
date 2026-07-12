@@ -1,7 +1,7 @@
 {
-  "name": "flexpick",
+  "name": "flexpick-site",
   "version": "1.0.0",
-  "description": "FlexPick: Flexible Workforce Solutions. Built with Astro 6 and Tailwind CSS 4.",
+  "description": "FlexPick marketing site — we rescue AI-built codebases.",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -57,7 +57,7 @@
     "prettier": "^3.8.1",
     "prettier-plugin-astro": "^0.14.1",
     "reading-time": "^1.5.0",
-    "sharp": "0.34.5",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",

@@ -3,6 +3,74 @@ import Layout from '~/layouts/Layout.astro';
 import ContactModal from '~/components/widgets/ContactModal.astro';
 import { PRODUCT_APP } from 'flexpick:config';
 
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'FlexPick',
+      url: 'https://flexpick.net',
+      email: 'hello@flexpick.net',
+      description:
+        'We rescue AI-built codebases — audits, stabilization, and engineering practices for vibecoded products.',
+    },
+    { '@type': 'WebSite', name: 'FlexPick', url: 'https://flexpick.net' },
+    {
+      '@type': 'FAQPage',
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'Will you rewrite everything from scratch?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'No — full rewrites are slow, expensive, and risky. We keep what works, refactor what is fragile, and rebuild only the parts that are genuinely beyond saving. Your product keeps running the whole time.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'My product works fine. Why should I care?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'It works today. The pattern we see: features that took days start taking weeks, every change breaks something unrelated, and the whole product depends on one person who gets the code. Fixing that early is far cheaper than fixing it during a crisis.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Are you against AI-assisted development?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'The opposite — we use AI coding tools every day. They are genuinely great, but on a codebase without structure they duplicate code, miss context, and compound the mess. We fix the foundation and set up guardrails so AI makes your team faster, not more fragile.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'What do you need from me to start?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Read access to your repository and about 30 minutes of your time to walk us through the product. That is enough for the free audit. We are happy to sign an NDA first.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'What if the audit finds nothing serious?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Then we tell you exactly that, and you walk away with a free health report confirming your codebase is in good shape. We only take on projects where we are confident we can make a real difference.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'What happens after the rescue?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'Your team continues building — now on a stable foundation, with docs, tests, and AI guardrails in place. If you want us to stay involved for features, reviews, or support, we offer ongoing partnership. If not, everything is set up for you to run without us.',
+          },
+        },
+      ],
+    },
+  ],
+};
+
 const metadata = {
   title: 'FlexPick — We Rescue AI-Built Codebases',
   ignoreTitleTemplate: true,
@@ -868,6 +936,8 @@ const hotspots = [
         >
       </div>
     </section>
+
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
 
     <!-- ===== Footer ===== -->
     <footer style="position: relative; border-top: 1px solid rgba(255,255,255,0.05);">
