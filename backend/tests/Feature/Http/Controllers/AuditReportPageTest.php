@@ -43,4 +43,40 @@ class AuditReportPageTest extends FeatureTest
             ->assertSee(__('Sample report'))
             ->assertSee(__('What to fix first'));
     }
+
+    public function test_unlock_route_stores_intent_and_redirects_to_checkout(): void
+    {
+        $user = \App\Models\User::factory()->create();
+        $report = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
+
+        $this->actingAs($user)
+            ->get("/reports/{$report->uuid}/unlock")
+            ->assertRedirect(route('buy.product', ['productSlug' => config('audit.unlock_product_slug')]));
+
+        $this->assertDatabaseHas('user_parameters', [
+            'user_id' => $user->id,
+            'name' => \App\Listeners\Order\HandleAuditUnlockOrder::INTENT_PARAM,
+            'value' => $report->uuid,
+        ]);
+    }
+
+    public function test_unlock_route_claims_report_by_matching_email(): void
+    {
+        $user = \App\Models\User::factory()->create(['email' => 'match@example.com']);
+        $report = AuditReport::factory()->locked()->create(['user_id' => null]);
+        $report->auditRequest->update(['email' => 'match@example.com']);
+
+        $this->actingAs($user)->get("/reports/{$report->uuid}/unlock")->assertRedirect();
+
+        $this->assertSame($user->id, $report->refresh()->user_id);
+    }
+
+    public function test_unlock_route_denies_foreign_reports(): void
+    {
+        $user = \App\Models\User::factory()->create(['email' => 'other@example.com']);
+        $report = AuditReport::factory()->locked()->create(['user_id' => \App\Models\User::factory()->create()->id]);
+
+        $this->withExceptionHandling()
+            ->actingAs($user)->get("/reports/{$report->uuid}/unlock")->assertForbidden();
+    }
 }

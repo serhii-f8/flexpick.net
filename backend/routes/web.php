@@ -212,3 +212,7 @@ Route::get('/reports/{auditReport:uuid}', [AuditReportController::class, 'show']
 Route::get('/reports/{auditReport:uuid}/download', [AuditReportController::class, 'download'])
     ->name('reports.download')
     ->middleware('auth');
+
+Route::get('/reports/{auditReport:uuid}/unlock', [AuditReportController::class, 'unlock'])
+    ->name('reports.unlock')
+    ->middleware('auth');

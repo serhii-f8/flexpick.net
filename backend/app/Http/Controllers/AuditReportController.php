@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Models\UserParameter;
+use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Storage;
 
 class AuditReportController extends Controller
@@ -41,5 +44,28 @@ class AuditReportController extends Controller
         abort_if($auditReport->pdf_path === null, 404);
 
         return Storage::disk('local')->download($auditReport->pdf_path, 'codebase-health-report.pdf');
+    }
+
+    public function unlock(AuditReport $auditReport)
+    {
+        $user = auth()->user();
+
+        if ($auditReport->user_id === null && $auditReport->auditRequest->email === $user->email) {
+            $auditReport->user_id = $user->id;
+            $auditReport->save();
+        }
+
+        abort_unless($auditReport->user_id === $user->id, 403);
+
+        if ($auditReport->unlocked_at !== null) {
+            return redirect(app(AuditReportService::class)->signedUrl($auditReport));
+        }
+
+        UserParameter::updateOrCreate(
+            ['user_id' => $user->id, 'name' => HandleAuditUnlockOrder::INTENT_PARAM],
+            ['value' => $auditReport->uuid],
+        );
+
+        return redirect()->route('buy.product', ['productSlug' => config('audit.unlock_product_slug')]);
     }
 }
