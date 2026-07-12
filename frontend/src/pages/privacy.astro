@@ -1,0 +1,52 @@
+---
+import Layout from '~/layouts/Layout.astro';
+
+const metadata = { title: 'Privacy Policy' };
+---
+
+<Layout metadata={metadata}>
+  <main
+    style="max-width: 720px; margin: 0 auto; padding: 80px 24px 96px; color: #e8e6de; font-size: 15px; line-height: 1.75;"
+  >
+    <a href="/" style="color: #d4a853; text-decoration: none; font-size: 13px;">← flexpick.net</a>
+    <h1 style="font-size: 32px; margin: 24px 0 8px; color: #f5f5f0;">Privacy Policy</h1>
+    <p style="color: rgba(232,230,222,0.55); font-size: 13px;">Last updated: July 13, 2026</p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">What we collect</h2>
+    <p>
+      When you request an audit we collect your name, email address, an optional repository or product URL, and any
+      message you include. We also record the IP address and browser user-agent of the request for abuse prevention. If
+      you create an account, we store your account and billing details; card data is handled entirely by our payment
+      providers and never touches our servers.
+    </p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">How we handle your code</h2>
+    <p>
+      To produce an audit we clone your repository into an isolated working directory, compute metrics from it, and send
+      limited file excerpts to Anthropic's API for analysis. The clone is deleted as soon as the analysis finishes. We
+      do not use your code to train models, and we do not share it with anyone other than the analysis provider named
+      above. We are happy to sign an NDA before you grant access.
+    </p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">How we use your data</h2>
+    <p>
+      We use your contact details to deliver the audit and send transactional email about it (verification, status,
+      report links, receipts). We only send marketing email if you ticked the consent box, and every such email has an
+      unsubscribe link. Unverified audit requests are deleted after 7 days.
+    </p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">Who we share it with</h2>
+    <p>
+      Only the processors needed to run the service: our hosting provider, our transactional email provider, our payment
+      providers (e.g. Stripe, Paddle, Lemon Squeezy), and Anthropic for report analysis. We never sell your data.
+    </p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">Your rights</h2>
+    <p>
+      You can request a copy of your data or ask us to delete it at any time — email
+      <a href="mailto:hello@flexpick.net" style="color: #d4a853;">hello@flexpick.net</a> and we'll act within 30 days. If
+      you are in the EU/EEA, you additionally have the rights granted by the GDPR, including the right to lodge a complaint
+      with your supervisory authority.
+    </p>
+  </main>
+</Layout>

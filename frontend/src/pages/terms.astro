@@ -1,0 +1,49 @@
+---
+import Layout from '~/layouts/Layout.astro';
+
+const metadata = { title: 'Terms of Service' };
+---
+
+<Layout metadata={metadata}>
+  <main
+    style="max-width: 720px; margin: 0 auto; padding: 80px 24px 96px; color: #e8e6de; font-size: 15px; line-height: 1.75;"
+  >
+    <a href="/" style="color: #d4a853; text-decoration: none; font-size: 13px;">← flexpick.net</a>
+    <h1 style="font-size: 32px; margin: 24px 0 8px; color: #f5f5f0;">Terms of Service</h1>
+    <p style="color: rgba(232,230,222,0.55); font-size: 13px;">Last updated: July 13, 2026</p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">The service</h2>
+    <p>
+      FlexPick produces automated codebase health reports and offers related engineering services. Free audits are
+      limited to 3 per email address. Full report contents can be unlocked with a one-time payment, and subscriptions
+      include a monthly allowance of audit runs as described on the pricing page.
+    </p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">Your repository</h2>
+    <p>
+      You may only submit repositories you own or have the right to share with us. You grant us a limited license to
+      clone and analyze the submitted code solely to produce your report. We delete the clone after analysis.
+    </p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">Payments and cancellation</h2>
+    <p>
+      Payments are processed by our payment providers. Subscriptions renew monthly until cancelled from your dashboard;
+      cancellation stops future charges and your allowance remains usable until the end of the paid period. If something
+      went wrong with a purchase, email us — we'd rather fix it than argue about it.
+    </p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">No warranties</h2>
+    <p>
+      Reports are produced by automated static analysis and AI-assisted review. They are an assessment, not a guarantee
+      — they may miss issues or flag non-issues, and they are not a security certification. The service is provided "as
+      is"; to the maximum extent permitted by law, our total liability for any claim is limited to the amount you paid
+      us in the 12 months before the claim.
+    </p>
+
+    <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">Changes and contact</h2>
+    <p>
+      We may update these terms; material changes will be announced by email to account holders. Questions:
+      <a href="mailto:hello@flexpick.net" style="color: #d4a853;">hello@flexpick.net</a>.
+    </p>
+  </main>
+</Layout>
