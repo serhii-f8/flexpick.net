@@ -89,11 +89,15 @@ class HandleAuditUnlockOrder
             ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value)
             ->first();
 
-        if ($auditRequest !== null) {
-            $auditRequest->update(['prepaid' => true, 'status' => AuditRequestStatus::QUEUED->value]);
-            GenerateAuditReport::dispatch($auditRequest);
-            $this->funnel->record(AuditFunnelRecorder::STAGE_RUN_PURCHASED, $auditRequest);
+        if ($auditRequest === null) {
+            $intent->delete();
+
+            return false;
         }
+
+        $auditRequest->update(['prepaid' => true, 'status' => AuditRequestStatus::QUEUED->value]);
+        GenerateAuditReport::dispatch($auditRequest);
+        $this->funnel->record(AuditFunnelRecorder::STAGE_RUN_PURCHASED, $auditRequest);
         $intent->delete();
 
         return true;

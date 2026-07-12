@@ -86,6 +86,26 @@ class AuditPrepaidRunTest extends FeatureTest
         $this->assertDatabaseMissing('user_parameters', ['user_id' => $user->id, 'name' => HandleAuditUnlockOrder::RUN_INTENT_PARAM]);
     }
 
+    public function test_stale_run_intent_falls_back_to_unlocking_latest_locked_report(): void
+    {
+        Queue::fake();
+        $user = User::factory()->create();
+        $queuedRequest = AuditRequest::factory()->verified()->create([
+            'email' => $user->email,
+            'status' => AuditRequestStatus::QUEUED->value,
+        ]);
+        UserParameter::create(['user_id' => $user->id, 'name' => HandleAuditUnlockOrder::RUN_INTENT_PARAM, 'value' => $queuedRequest->uuid]);
+        $report = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
+
+        Ordered::dispatch($this->unlockOrderFor($user));
+
+        $this->assertNotNull($report->refresh()->unlocked_at);
+        $this->assertDatabaseMissing('user_parameters', ['user_id' => $user->id, 'name' => HandleAuditUnlockOrder::RUN_INTENT_PARAM]);
+        $queuedRequest->refresh();
+        $this->assertSame(AuditRequestStatus::QUEUED->value, $queuedRequest->status);
+        $this->assertFalse($queuedRequest->prepaid);
+    }
+
     public function test_prepaid_request_report_is_born_unlocked_with_pdf(): void
     {
         $request = AuditRequest::factory()->verified()->create(['prepaid' => true]);
