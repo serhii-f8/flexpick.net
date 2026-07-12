@@ -203,6 +203,14 @@ Route::get('/audit-requests/{auditRequest:uuid}/verify', [AuditRequestController
     ->name('audit-requests.verify')
     ->middleware('signed');
 
+Route::get('/audit-requests/{auditRequest:uuid}/status', [AuditRequestController::class, 'status'])
+    ->name('audit-requests.status')
+    ->middleware('signed');
+
+Route::get('/audit-requests/{auditRequest:uuid}/status.json', [AuditRequestController::class, 'statusJson'])
+    ->name('audit-requests.status.json')
+    ->middleware('signed');
+
 Route::get('/audit-requests/{auditRequest:uuid}/purchase-run', [AuditRequestController::class, 'purchaseRun'])
     ->name('audit-requests.purchase-run')
     ->middleware('signed');

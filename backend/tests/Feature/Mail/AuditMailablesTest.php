@@ -16,7 +16,7 @@ class AuditMailablesTest extends FeatureTest
     {
         $request = AuditRequest::factory()->create();
 
-        $mailable = new AuditRequestReceived($request);
+        $mailable = new AuditRequestReceived($request, 'https://app.example.com/audit-requests/abc/status?signature=x');
         $mailable->assertSeeInHtml($request->name);
     }
 

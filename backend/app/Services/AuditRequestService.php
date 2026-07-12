@@ -76,6 +76,11 @@ class AuditRequestService
         );
     }
 
+    public function statusUrl(AuditRequest $auditRequest): string
+    {
+        return URL::signedRoute('audit-requests.status', ['auditRequest' => $auditRequest->uuid]);
+    }
+
     public function routeVerified(AuditRequest $auditRequest): void
     {
         if ($auditRequest->repo_url === null) {
@@ -108,7 +113,7 @@ class AuditRequestService
         $auditRequest->update(['status' => AuditRequestStatus::QUEUED->value]);
         GenerateAuditReport::dispatch($auditRequest);
         $this->funnel->record(AuditFunnelRecorder::STAGE_QUEUED, $auditRequest);
-        Mail::to($auditRequest->email)->send(new AuditRequestReceived($auditRequest));
+        Mail::to($auditRequest->email)->send(new AuditRequestReceived($auditRequest, $this->statusUrl($auditRequest)));
         $this->notifyAdmin($auditRequest);
     }
 

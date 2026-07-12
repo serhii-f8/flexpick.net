@@ -16,6 +16,7 @@ class AuditRequestReceived extends Mailable implements ShouldQueue
 
     public function __construct(
         public AuditRequest $auditRequest,
+        public string $statusUrl,
     ) {}
 
     public function envelope(): Envelope

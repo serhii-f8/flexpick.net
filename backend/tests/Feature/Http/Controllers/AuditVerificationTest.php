@@ -55,8 +55,9 @@ class AuditVerificationTest extends FeatureTest
     {
         $request = AuditRequest::factory()->create(['status' => AuditRequestStatus::PENDING_VERIFICATION->value]);
 
-        $url = app(AuditRequestService::class)->verificationUrl($request);
-        $this->get($url)->assertOk()->assertSee(__('Email confirmed'));
+        $service = app(AuditRequestService::class);
+        $url = $service->verificationUrl($request);
+        $this->get($url)->assertRedirect($service->statusUrl($request));
 
         $this->assertNotNull($request->refresh()->email_verified_at);
         Queue::assertPushed(RouteVerifiedAuditRequest::class, 1);
@@ -65,10 +66,11 @@ class AuditVerificationTest extends FeatureTest
     public function test_verify_is_idempotent(): void
     {
         $request = AuditRequest::factory()->create(['status' => AuditRequestStatus::PENDING_VERIFICATION->value]);
-        $url = app(AuditRequestService::class)->verificationUrl($request);
+        $service = app(AuditRequestService::class);
+        $url = $service->verificationUrl($request);
 
-        $this->get($url)->assertOk();
-        $this->get($url)->assertOk();
+        $this->get($url)->assertRedirect($service->statusUrl($request));
+        $this->get($url)->assertRedirect($service->statusUrl($request));
 
         Queue::assertPushed(RouteVerifiedAuditRequest::class, 1);
     }

@@ -14,6 +14,9 @@
             <p style="margin: 16px 0 0; line-height: 24px">
                 {{ __('No charge, no strings, honest verdict.') }}
             </p>
+            <p style="margin: 24px 0 0; line-height: 24px">
+                <a href="{{ $statusUrl }}" style="color: #2563eb; text-decoration: underline;">{{ __('Track your audit\'s progress live') }}</a>
+            </p>
         </td>
     </tr>
 </x-layouts.email>
