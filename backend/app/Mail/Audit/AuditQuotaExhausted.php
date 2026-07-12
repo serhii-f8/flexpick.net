@@ -16,6 +16,7 @@ class AuditQuotaExhausted extends Mailable implements ShouldQueue
 
     public function __construct(
         public AuditRequest $auditRequest,
+        public string $purchaseUrl,
     ) {}
 
     public function envelope(): Envelope

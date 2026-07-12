@@ -35,7 +35,7 @@ class AuditReportService
             $existing->delete();
         }
 
-        $unlocked = $auditRequest->source === 'dashboard' || $wasUnlocked;
+        $unlocked = $auditRequest->source === 'dashboard' || $wasUnlocked || $auditRequest->prepaid;
 
         $report = new AuditReport([
             'audit_request_id' => $auditRequest->id,

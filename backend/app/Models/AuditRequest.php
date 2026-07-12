@@ -14,7 +14,7 @@ class AuditRequest extends Model
 
     protected $fillable = [
         'name', 'email', 'repo_url', 'message', 'status', 'failure_reason', 'meta', 'metrics',
-        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'user_id',
+        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'user_id', 'prepaid',
     ];
 
     protected $casts = [
@@ -24,6 +24,7 @@ class AuditRequest extends Model
         'marketing_consent' => 'boolean',
         'consented_at' => 'datetime',
         'free_run' => 'boolean',
+        'prepaid' => 'boolean',
     ];
 
     public function uniqueIds(): array

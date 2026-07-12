@@ -67,6 +67,15 @@ class AuditRequestService
         );
     }
 
+    public function purchaseRunUrl(AuditRequest $auditRequest): string
+    {
+        return URL::temporarySignedRoute(
+            'audit-requests.purchase-run',
+            now()->addDays(7),
+            ['auditRequest' => $auditRequest->uuid],
+        );
+    }
+
     public function routeVerified(AuditRequest $auditRequest): void
     {
         if ($auditRequest->repo_url === null) {
@@ -89,7 +98,7 @@ class AuditRequestService
         if (! $this->entitlements->hasFreeRun($auditRequest->email)) {
             $auditRequest->update(['status' => AuditRequestStatus::AWAITING_PAYMENT->value]);
             $this->funnel->record(AuditFunnelRecorder::STAGE_AWAITING_PAYMENT, $auditRequest);
-            Mail::to($auditRequest->email)->send(new AuditQuotaExhausted($auditRequest));
+            Mail::to($auditRequest->email)->send(new AuditQuotaExhausted($auditRequest, $this->purchaseRunUrl($auditRequest)));
             $this->notifyAdmin($auditRequest);
 
             return;

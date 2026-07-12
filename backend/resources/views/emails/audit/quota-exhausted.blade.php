@@ -12,10 +12,13 @@
                 {{ __('You\'ve used all of your free codebase audits, so we couldn\'t start this one.') }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
-                {{ __('To keep auditing, pick a subscription — plans start at $10/month for 5 analyses, and every subscription report includes full details and PDF export.') }}
+                {{ __('Two ways to keep going:') }}
             </p>
             <p style="margin: 24px 0 0; line-height: 24px">
-                <a href="{{ url('/pricing') }}" style="color: #2563eb; text-decoration: underline;">{{ __('See plans and pricing') }}</a>
+                <a href="{{ $purchaseUrl }}" style="color: #2563eb; text-decoration: underline;">{{ __('Run this audit now for $5 — full report included') }}</a>
+            </p>
+            <p style="margin: 12px 0 0; line-height: 24px">
+                <a href="{{ url('/pricing') }}" style="color: #2563eb; text-decoration: underline;">{{ __('Or subscribe from $10/month for 5 analyses') }}</a>
             </p>
         </td>
     </tr>
