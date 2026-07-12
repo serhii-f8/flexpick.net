@@ -18,5 +18,31 @@
             {"step": "Extract the duplicated price calculation into one service", "why": "Two copies already disagree — this is a live billing bug", "effort": "M"},
             {"step": "Set up CI running the new tests plus secret scanning", "why": "Locks in the gains from the first three steps", "effort": "S"}
         ]
+    },
+    "metrics": {
+        "files_total": 412,
+        "loc_total": 68450,
+        "languages": {
+            "ts": {"files": 210, "loc": 41200},
+            "tsx": {"files": 88, "loc": 15300},
+            "js": {"files": 54, "loc": 6900},
+            "css": {"files": 25, "loc": 3050},
+            "json": {"files": 35, "loc": 2000}
+        },
+        "largest_files": [
+            {"path": "src/services/PaymentService.ts", "loc": 2412},
+            {"path": "src/screens/Checkout.tsx", "loc": 1876},
+            {"path": "src/api/handlers.ts", "loc": 1544},
+            {"path": "src/state/store.ts", "loc": 1102},
+            {"path": "src/utils/helpers.ts", "loc": 987}
+        ],
+        "duplication_pct": 26.4,
+        "test_files": 9,
+        "test_ratio_pct": 2.2,
+        "has_ci": false,
+        "has_readme": true,
+        "manifests": {"package.json": {"dependencies": 64, "dev_dependencies": 21, "lockfile": true}},
+        "secret_findings": {"generic_api_key": {"count": 3, "files": ["src/config.ts", ".env.production"]}},
+        "git": {"default_branch": "main", "last_commit_at": "2026-06-28T14:12:00+00:00"}
     }
 }

@@ -46,7 +46,7 @@ class AuditReportController extends Controller
 
         abort_if(! is_array($fixture), 404);
 
-        $request = new AuditRequest(['repo_url' => $fixture['repo_url']]);
+        $request = new AuditRequest(['repo_url' => $fixture['repo_url'], 'metrics' => $fixture['metrics'] ?? null]);
         $report = new AuditReport(['payload' => $fixture['payload']]);
         $report->setRelation('auditRequest', $request);
         $report->created_at = now();

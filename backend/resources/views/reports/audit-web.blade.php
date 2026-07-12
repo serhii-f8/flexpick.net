@@ -73,6 +73,42 @@
         </div>
     </div>
 
+    @php($metrics = $report->auditRequest->metrics)
+    @if (is_array($metrics) && $metrics !== [])
+        <div class="card">
+            <h2>{{ __('Repository facts') }}</h2>
+            <div class="scores-grid">
+                <div class="score-tile"><div class="value">{{ number_format($metrics['files_total'] ?? 0) }}</div><div class="label">{{ __('source files') }}</div></div>
+                <div class="score-tile"><div class="value">{{ number_format($metrics['loc_total'] ?? 0) }}</div><div class="label">{{ __('lines of code') }}</div></div>
+                <div class="score-tile"><div class="value">{{ $metrics['duplication_pct'] ?? 0 }}%</div><div class="label">{{ __('duplicated lines') }}</div></div>
+                <div class="score-tile"><div class="value">{{ $metrics['test_ratio_pct'] ?? 0 }}%</div><div class="label">{{ __('test file ratio') }}</div></div>
+                <div class="score-tile"><div class="value">{{ ($metrics['has_ci'] ?? false) ? __('yes') : __('no') }}</div><div class="label">{{ __('CI configured') }}</div></div>
+                <div class="score-tile"><div class="value">{{ array_sum(array_column($metrics['secret_findings'] ?? [], 'count')) }}</div><div class="label">{{ __('potential secrets') }}</div></div>
+            </div>
+            @php($langs = collect($metrics['languages'] ?? [])->sortByDesc('loc')->take(5))
+            @if ($langs->isNotEmpty())
+                <p class="muted" style="margin-top: 14px;">
+                    {{ __('Languages') }}:
+                    {{ $langs->map(fn ($stats, $ext) => strtoupper($ext).' '.number_format($stats['loc']).' loc')->implode(' · ') }}
+                </p>
+            @endif
+            @php($largest = array_slice($metrics['largest_files'] ?? [], 0, 5))
+            @if ($largest !== [])
+                <table style="margin-top: 12px;">
+                    <tr><th>{{ __('Largest files') }}</th><th>{{ __('Lines') }}</th></tr>
+                    @foreach ($largest as $file)
+                        <tr><td>{{ $file['path'] }}</td><td>{{ number_format($file['loc']) }}</td></tr>
+                    @endforeach
+                </table>
+            @endif
+            @if (($metrics['git']['last_commit_at'] ?? null) !== null)
+                <p class="muted" style="margin-top: 12px;">
+                    {{ __('Last commit') }}: {{ \Illuminate\Support\Carbon::parse($metrics['git']['last_commit_at'])->format('Y-m-d') }}
+                </p>
+            @endif
+        </div>
+    @endif
+
     <div class="card">
         <h2>{{ __('Risks, ranked by impact') }}</h2>
         @foreach (collect($payload['risks'])->sortBy(fn ($r) => array_search($r['impact'], ['high', 'medium', 'low'])) as $risk)

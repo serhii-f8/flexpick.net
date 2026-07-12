@@ -43,6 +43,20 @@
         </tr>
     </table>
 
+    @php($metrics = $report->auditRequest->metrics)
+    @if (is_array($metrics) && $metrics !== [])
+        <h2>{{ __('Repository facts') }}</h2>
+        <table>
+            <tr><th>{{ __('Fact') }}</th><th>{{ __('Value') }}</th></tr>
+            <tr><td>{{ __('Source files') }}</td><td>{{ number_format($metrics['files_total'] ?? 0) }}</td></tr>
+            <tr><td>{{ __('Lines of code') }}</td><td>{{ number_format($metrics['loc_total'] ?? 0) }}</td></tr>
+            <tr><td>{{ __('Duplicated lines') }}</td><td>{{ $metrics['duplication_pct'] ?? 0 }}%</td></tr>
+            <tr><td>{{ __('Test file ratio') }}</td><td>{{ $metrics['test_ratio_pct'] ?? 0 }}%</td></tr>
+            <tr><td>{{ __('CI configured') }}</td><td>{{ ($metrics['has_ci'] ?? false) ? __('yes') : __('no') }}</td></tr>
+            <tr><td>{{ __('Potential secrets') }}</td><td>{{ array_sum(array_column($metrics['secret_findings'] ?? [], 'count')) }}</td></tr>
+        </table>
+    @endif
+
     <h2>{{ __('Risks, ranked by impact') }}</h2>
     <table>
         <tr><th>{{ __('Risk') }}</th><th>{{ __('Impact') }}</th><th>{{ __('Evidence') }}</th><th>{{ __('Recommendation') }}</th></tr>
