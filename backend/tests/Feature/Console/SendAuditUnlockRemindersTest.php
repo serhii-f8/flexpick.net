@@ -44,7 +44,12 @@ class SendAuditUnlockRemindersTest extends FeatureTest
         Mail::assertQueued(AuditUnlockReminder::class, 1);
         $this->assertDatabaseHas('user_parameters', [
             'user_id' => $user->id,
-            'name' => SendAuditUnlockReminders::REMINDER_PARAM,
+            'name' => SendAuditUnlockReminders::REMINDER_PARAM.':'.$report->uuid,
+            'value' => $report->uuid,
+        ]);
+        $this->assertDatabaseHas('user_parameters', [
+            'user_id' => $user->id,
+            'name' => HandleAuditUnlockOrder::INTENT_PARAM,
             'value' => $report->uuid,
         ]);
     }
@@ -63,5 +68,29 @@ class SendAuditUnlockRemindersTest extends FeatureTest
 
         Mail::assertNotQueued(AuditUnlockReminder::class);
         $this->assertDatabaseMissing('user_parameters', ['id' => $staleIntent->id]); // stale intent cleaned up
+    }
+
+    public function test_second_abandoned_report_for_same_user_is_reminded(): void
+    {
+        $user = User::factory()->create();
+
+        $reportA = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
+        UserParameter::create([
+            'user_id' => $user->id,
+            'name' => SendAuditUnlockReminders::REMINDER_PARAM.':'.$reportA->uuid,
+            'value' => $reportA->uuid,
+        ]);
+
+        $reportB = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
+        $this->abandonedIntent($user, $reportB);
+
+        $this->artisan('app:send-audit-unlock-reminders')->assertSuccessful();
+
+        Mail::assertQueued(AuditUnlockReminder::class, 1);
+        $this->assertDatabaseHas('user_parameters', [
+            'user_id' => $user->id,
+            'name' => SendAuditUnlockReminders::REMINDER_PARAM.':'.$reportB->uuid,
+            'value' => $reportB->uuid,
+        ]);
     }
 }

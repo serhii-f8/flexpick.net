@@ -28,33 +28,40 @@ class SendAuditUnlockReminders extends Command
             ->get();
 
         foreach ($intents as $intent) {
-            $report = AuditReport::query()->where('uuid', $intent->value)->first();
+            try {
+                $report = AuditReport::query()->where('uuid', $intent->value)->first();
 
-            if ($report === null || $report->unlocked_at !== null) {
-                $intent->delete();
+                if ($report === null || $report->unlocked_at !== null) {
+                    $intent->delete();
+
+                    continue;
+                }
+
+                $reminderName = self::REMINDER_PARAM.':'.$report->uuid;
+
+                $alreadyReminded = UserParameter::query()
+                    ->where('user_id', $intent->user_id)
+                    ->where('name', $reminderName)
+                    ->exists();
+
+                if ($alreadyReminded) {
+                    continue;
+                }
+
+                $unlockUrl = URL::temporarySignedRoute('reports.unlock', now()->addDays(7), ['auditReport' => $report->uuid]);
+                Mail::to($report->auditRequest->email)->send(new AuditUnlockReminder($report, $unlockUrl));
+
+                UserParameter::create([
+                    'user_id' => $intent->user_id,
+                    'name' => $reminderName,
+                    'value' => $report->uuid,
+                ]);
+                $sent++;
+            } catch (\Throwable $e) {
+                report($e);
 
                 continue;
             }
-
-            $alreadyReminded = UserParameter::query()
-                ->where('user_id', $intent->user_id)
-                ->where('name', self::REMINDER_PARAM)
-                ->where('value', $report->uuid)
-                ->exists();
-
-            if ($alreadyReminded) {
-                continue;
-            }
-
-            $unlockUrl = URL::temporarySignedRoute('reports.unlock', now()->addDays(7), ['auditReport' => $report->uuid]);
-            Mail::to($report->auditRequest->email)->send(new AuditUnlockReminder($report, $unlockUrl));
-
-            UserParameter::create([
-                'user_id' => $intent->user_id,
-                'name' => self::REMINDER_PARAM,
-                'value' => $report->uuid,
-            ]);
-            $sent++;
         }
 
         $this->info("Sent {$sent} unlock reminders.");
