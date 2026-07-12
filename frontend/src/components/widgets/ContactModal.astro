@@ -58,20 +58,34 @@ import { PRODUCT_APP } from 'flexpick:config';
             placeholder="e.g. Shipping slowed down, every release breaks something, our codebase was built with Cursor over 4 months…"
             class="fp-input fp-textarea"></textarea>
         </div>
+        <details class="fp-field-group" style="font-size: 12px; color: rgba(232,230,222,0.55);">
+          <summary class="fp-mono" style="cursor: pointer; color: #d4a853;">PRIVATE REPO?</summary>
+          <p style="margin: 8px 0 0; line-height: 1.5;">
+            Invite <strong>flexpick-audit</strong> on GitHub as a read-only collaborator (Settings → Collaborators → Add people),
+            then paste the repo URL above. We launch private-repo audits by hand after the invite lands.
+          </p>
+        </details>
+        <label
+          class="fp-field-group"
+          style="display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: rgba(232,230,222,0.55); cursor: pointer;"
+        >
+          <input type="checkbox" name="consent" style="margin-top: 2px;" />
+          <span>Send me occasional tips and product updates. No spam, unsubscribe anytime.</span>
+        </label>
         <p class="fp-mono" data-modal-error hidden style="color: #dc6b5a; font-size: 12px; margin: 0 0 10px;">
           Something went wrong — please try again, or email hello@flexpick.net.
         </p>
         <button type="submit" class="fp-btn fp-btn-full">Request my free audit →</button>
-        <p class="fp-mono fp-modal-footnote">NO CHARGE · NO STRINGS · HONEST VERDICT</p>
+        <p class="fp-mono fp-modal-footnote">FIRST 3 AUDITS FREE · CONFIRM YOUR EMAIL TO START · HONEST VERDICT</p>
       </form>
     </div>
 
     <!-- Sent state -->
     <div data-modal-sent hidden style="text-align: center; padding: 24px 0 12px;">
       <div class="fp-check">✓</div>
-      <h3 class="fp-modal-heading" style="margin-bottom: 10px;">Request received</h3>
+      <h3 class="fp-modal-heading" style="margin-bottom: 10px;">Check your inbox</h3>
       <p class="fp-modal-sub" style="max-width: 320px; margin: 0 auto 28px;">
-        We'll look at what you sent and reply within one business day with next steps.
+        We sent you a confirmation link — click it to start your free audit. The link expires in 48 hours.
       </p>
       <button type="button" class="fp-ghost fp-ghost-btn" data-modal-close>Done</button>
     </div>
@@ -174,6 +188,7 @@ import { PRODUCT_APP } from 'flexpick:config';
             repo_url: fd.get('link') || null,
             message: fd.get('message') || null,
             website: fd.get('website') || '',
+            marketing_consent: fd.get('consent') === 'on',
           }),
         });
         if (!res.ok) throw new Error(String(res.status));
