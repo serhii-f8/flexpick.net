@@ -11,6 +11,7 @@ use App\Mail\Audit\AuditRequestFailed;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\AuditPipeline;
+use App\Services\AuditReport\ScoreCalculator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
@@ -55,6 +56,13 @@ class AuditPipelineTest extends FeatureTest
         $this->assertNull($request->report->unlocked_at);
         Mail::assertQueued(AuditReportReady::class, fn ($mail) => $mail->hasTo($request->email));
         $this->assertDirectoryDoesNotExist(config('audit.workdir').'/'.$request->uuid); // workdir cleaned
+
+        $expected = app(ScoreCalculator::class)
+            ->calculate($request->refresh()->metrics);
+        // assertEquals, not assertSame: MySQL's JSON column type reorders object
+        // keys (by length, then lexicographically) on round-trip, so key order
+        // is not preserved through storage even though values are unchanged.
+        $this->assertEquals($expected, $request->report->payload['scores']);
     }
 
     public function test_inaccessible_repo_goes_to_followup(): void

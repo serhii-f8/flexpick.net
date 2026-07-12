@@ -15,6 +15,7 @@ class AuditPipeline
         private AiAnalyzer $analyzer,
         private AuditReportService $reportService,
         private AuditRequestService $requestService,
+        private ScoreCalculator $scoreCalculator,
     ) {}
 
     public function run(AuditRequest $auditRequest): void
@@ -26,9 +27,13 @@ class AuditPipeline
             $path = $this->cloner->clone($auditRequest->repo_url, $auditRequest->uuid);
 
             $collected = $this->metricsCollector->collect($path);
-            $auditRequest->update(['metrics' => $collected['metrics']]);
+            $metrics = $collected['metrics'];
+            $scores = $this->scoreCalculator->calculate($metrics);
+            $metrics['computed_scores'] = $scores;
+            $auditRequest->update(['metrics' => $metrics]);
 
-            $payload = $this->analyzer->analyze($collected['metrics'], $collected['excerpts']);
+            $payload = $this->analyzer->analyze($metrics, $collected['excerpts']);
+            $payload['scores'] = $scores;
 
             $report = $this->reportService->create($auditRequest, $payload);
             $this->reportService->send($report);

@@ -14,6 +14,8 @@ Ground every score, risk, and recommendation in the provided metrics and excerpt
 facts about code you have not seen. Frame findings as assessment based on automated analysis,
 not guarantees. Scores are 0-100 (higher is healthier). Rank risks by impact. The fix-first plan
 must be concrete and ordered by leverage.
+The metrics include computed_scores measured deterministically; treat them as authoritative — output them
+verbatim as your scores and keep the summary, risks, and plan consistent with them.
 PROMPT;
 
     private const SCHEMA = [
