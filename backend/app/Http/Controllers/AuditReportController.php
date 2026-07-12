@@ -7,6 +7,7 @@ use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\UserParameter;
 use App\Services\AuditReport\AuditBenchmarkService;
+use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,6 +15,12 @@ class AuditReportController extends Controller
 {
     public function show(AuditReport $auditReport, AuditBenchmarkService $benchmark)
     {
+        app(AuditFunnelRecorder::class)->record(
+            AuditFunnelRecorder::STAGE_REPORT_VIEWED,
+            $auditReport->auditRequest,
+            ['unlocked' => $auditReport->unlocked_at !== null],
+        );
+
         return view('reports.audit-web', [
             'report' => $auditReport,
             'unlocked' => $auditReport->unlocked_at !== null,
@@ -72,6 +79,8 @@ class AuditReportController extends Controller
             ['user_id' => $user->id, 'name' => HandleAuditUnlockOrder::INTENT_PARAM],
             ['value' => $auditReport->uuid],
         );
+
+        app(AuditFunnelRecorder::class)->record(AuditFunnelRecorder::STAGE_UNLOCK_STARTED, $auditReport->auditRequest);
 
         return redirect()->route('buy.product', ['productSlug' => config('audit.unlock_product_slug')]);
     }

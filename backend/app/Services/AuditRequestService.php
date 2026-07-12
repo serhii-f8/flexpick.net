@@ -13,6 +13,7 @@ use App\Mail\Audit\AuditVerifyEmail;
 use App\Mail\Audit\NewAuditRequestAdminNotification;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\RepositoryCloner;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
@@ -23,6 +24,7 @@ class AuditRequestService
     public function __construct(
         private AuditEntitlementService $entitlements,
         private RepositoryCloner $cloner,
+        private AuditFunnelRecorder $funnel,
     ) {}
 
     public function submit(array $data, array $meta = []): AuditRequest
@@ -48,6 +50,8 @@ class AuditRequestService
             'consented_at' => $consented ? now() : null,
             'meta' => $meta,
         ]);
+
+        $this->funnel->record(AuditFunnelRecorder::STAGE_SUBMITTED, $auditRequest);
 
         Mail::to($auditRequest->email)->send(new AuditVerifyEmail($auditRequest, $this->verificationUrl($auditRequest)));
 
@@ -84,6 +88,7 @@ class AuditRequestService
 
         if (! $this->entitlements->hasFreeRun($auditRequest->email)) {
             $auditRequest->update(['status' => AuditRequestStatus::AWAITING_PAYMENT->value]);
+            $this->funnel->record(AuditFunnelRecorder::STAGE_AWAITING_PAYMENT, $auditRequest);
             Mail::to($auditRequest->email)->send(new AuditQuotaExhausted($auditRequest));
             $this->notifyAdmin($auditRequest);
 
@@ -93,6 +98,7 @@ class AuditRequestService
         $this->entitlements->consumeFreeRun($auditRequest);
         $auditRequest->update(['status' => AuditRequestStatus::QUEUED->value]);
         GenerateAuditReport::dispatch($auditRequest);
+        $this->funnel->record(AuditFunnelRecorder::STAGE_QUEUED, $auditRequest);
         Mail::to($auditRequest->email)->send(new AuditRequestReceived($auditRequest));
         $this->notifyAdmin($auditRequest);
     }
@@ -113,6 +119,8 @@ class AuditRequestService
             'status' => AuditRequestStatus::FAILED->value,
             'failure_reason' => $reason,
         ]);
+
+        $this->funnel->record(AuditFunnelRecorder::STAGE_FAILED, $auditRequest, ['reason' => $reason]);
 
         Mail::to($auditRequest->email)->send(new AuditRequestFailed($auditRequest));
         $this->notifyAdmin($auditRequest);

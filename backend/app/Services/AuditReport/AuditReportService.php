@@ -16,6 +16,10 @@ use Illuminate\Support\Facades\URL;
 
 class AuditReportService
 {
+    public function __construct(
+        private AuditFunnelRecorder $funnel,
+    ) {}
+
     public function create(AuditRequest $auditRequest, array $payload): AuditReport
     {
         $wasUnlocked = false;
@@ -61,6 +65,10 @@ class AuditReportService
         $report->update(['unlocked_at' => now(), 'unlock_order_id' => $order?->id]);
         $this->generatePdf($report);
 
+        if ($order !== null) {
+            $this->funnel->record(AuditFunnelRecorder::STAGE_UNLOCK_PAID, $report->auditRequest);
+        }
+
         Mail::to($report->auditRequest->email)
             ->send(new AuditReportUnlocked($report, $this->signedUrl($report)));
     }
@@ -71,6 +79,7 @@ class AuditReportService
             ->send(new AuditReportReady($report, $this->signedUrl($report)));
 
         $report->auditRequest->update(['status' => AuditRequestStatus::SENT->value]);
+        $this->funnel->record(AuditFunnelRecorder::STAGE_REPORT_SENT, $report->auditRequest);
     }
 
     public function signedUrl(AuditReport $report): string
