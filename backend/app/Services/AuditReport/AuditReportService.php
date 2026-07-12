@@ -18,6 +18,7 @@ class AuditReportService
 {
     public function __construct(
         private AuditFunnelRecorder $funnel,
+        private AuditDeltaService $deltaService,
     ) {}
 
     public function create(AuditRequest $auditRequest, array $payload): AuditReport
@@ -76,7 +77,7 @@ class AuditReportService
     public function send(AuditReport $report): void
     {
         Mail::to($report->auditRequest->email)
-            ->send(new AuditReportReady($report, $this->signedUrl($report)));
+            ->send(new AuditReportReady($report, $this->signedUrl($report), $this->deltaService->deltasFor($report)));
 
         $report->auditRequest->update(['status' => AuditRequestStatus::SENT->value]);
         $this->funnel->record(AuditFunnelRecorder::STAGE_REPORT_SENT, $report->auditRequest);

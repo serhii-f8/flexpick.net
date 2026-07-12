@@ -57,6 +57,12 @@
         @if ($percentile !== null)
             <p class="muted">{{ __('This codebase scores better than :p% of repositories we\'ve audited.', ['p' => $percentile]) }}</p>
         @endif
+        @if ($deltas !== null && ($deltas['deltas']['overall'] ?? 0) !== 0)
+            <p class="muted" style="color: {{ $deltas['deltas']['overall'] > 0 ? '#4d7c0f' : '#b91c1c' }};">
+                {{ sprintf('%+d', $deltas['deltas']['overall']) }}
+                {{ __('since your previous audit on :date', ['date' => $deltas['previous_at']->format('Y-m-d')]) }}
+            </p>
+        @endif
         <p style="margin-top: 14px;">{{ $payload['summary'] }}</p>
     </div>
 
@@ -68,6 +74,11 @@
                 <div class="score-tile">
                     <div class="value">{{ $score }}</div>
                     <div class="label">{{ str_replace('_', ' ', $dimension) }}</div>
+                    @if ($deltas !== null && ($deltas['deltas'][$dimension] ?? 0) !== 0)
+                        <div style="font-size: 11px; font-weight: bold; color: {{ $deltas['deltas'][$dimension] > 0 ? '#4d7c0f' : '#b91c1c' }};">
+                            {{ sprintf('%+d', $deltas['deltas'][$dimension]) }}
+                        </div>
+                    @endif
                 </div>
             @endforeach
         </div>

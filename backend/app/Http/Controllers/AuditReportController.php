@@ -8,6 +8,7 @@ use App\Models\AuditRequest;
 use App\Models\UserParameter;
 use App\Services\AuditGuestAccountService;
 use App\Services\AuditReport\AuditBenchmarkService;
+use App\Services\AuditReport\AuditDeltaService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Storage;
@@ -33,6 +34,7 @@ class AuditReportController extends Controller
                 now()->addDays((int) config('audit.report_link_days')),
                 ['auditReport' => $auditReport->uuid],
             ),
+            'deltas' => app(AuditDeltaService::class)->deltasFor($auditReport),
         ]);
     }
 
@@ -57,6 +59,7 @@ class AuditReportController extends Controller
             'isSample' => true,
             'percentile' => $fixture['percentile'],
             'unlockUrl' => null,
+            'deltas' => null,
         ]);
     }
 
