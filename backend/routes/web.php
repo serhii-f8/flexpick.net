@@ -215,4 +215,4 @@ Route::get('/reports/{auditReport:uuid}/download', [AuditReportController::class
 
 Route::get('/reports/{auditReport:uuid}/unlock', [AuditReportController::class, 'unlock'])
     ->name('reports.unlock')
-    ->middleware('auth');
+    ->middleware('signed');

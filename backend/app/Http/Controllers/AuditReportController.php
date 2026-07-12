@@ -6,10 +6,12 @@ use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\UserParameter;
+use App\Services\AuditGuestAccountService;
 use App\Services\AuditReport\AuditBenchmarkService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 
 class AuditReportController extends Controller
 {
@@ -26,6 +28,11 @@ class AuditReportController extends Controller
             'unlocked' => $auditReport->unlocked_at !== null,
             'isSample' => false,
             'percentile' => $benchmark->percentileFor((int) data_get($auditReport->payload, 'scores.overall', 0)),
+            'unlockUrl' => URL::temporarySignedRoute(
+                'reports.unlock',
+                now()->addDays((int) config('audit.report_link_days')),
+                ['auditReport' => $auditReport->uuid],
+            ),
         ]);
     }
 
@@ -49,6 +56,7 @@ class AuditReportController extends Controller
             'unlocked' => true,
             'isSample' => true,
             'percentile' => $fixture['percentile'],
+            'unlockUrl' => null,
         ]);
     }
 
@@ -60,11 +68,18 @@ class AuditReportController extends Controller
         return Storage::disk('local')->download($auditReport->pdf_path, 'codebase-health-report.pdf');
     }
 
-    public function unlock(AuditReport $auditReport)
+    public function unlock(AuditReport $auditReport, AuditGuestAccountService $guestAccounts)
     {
-        $user = auth()->user();
+        $user = $guestAccounts->resolveUser($auditReport->auditRequest);
 
-        if ($auditReport->user_id === null && $auditReport->auditRequest->email === $user->email) {
+        if ($user === null) {
+            return redirect()->guest(route('login'))->with('status', __(
+                'An account already exists for :email — log in to unlock this report.',
+                ['email' => $auditReport->auditRequest->email],
+            ));
+        }
+
+        if ($auditReport->user_id === null && strtolower($auditReport->auditRequest->email) === strtolower($user->email)) {
             $auditReport->user_id = $user->id;
             $auditReport->save();
         }

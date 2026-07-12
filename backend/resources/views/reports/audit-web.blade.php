@@ -116,7 +116,7 @@
         <div class="card cta-card">
             <h2>{{ __('Unlock full report') }}</h2>
             <p style="color: #d6d3d1;">{{ __('Get every finding\'s evidence and recommendation, the prioritized fix-first plan, and PDF export.') }}</p>
-            <a class="btn" href="{{ url('/reports/'.$report->uuid.'/unlock') }}">{{ __('Unlock for $5') }}</a>
+            <a class="btn" href="{{ $unlockUrl }}">{{ __('Unlock for $5') }}</a>
             <a class="btn btn-ghost" href="{{ url('/pricing') }}">{{ __('Or subscribe from $10/mo') }}</a>
         </div>
     @endif

@@ -6,10 +6,16 @@ use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\User;
 use App\Services\AuditReport\AuditReportService;
+use Illuminate\Support\Facades\URL;
 use Tests\Feature\FeatureTest;
 
 class AuditReportPageTest extends FeatureTest
 {
+    private function signedUnlockUrl(AuditReport $report): string
+    {
+        return URL::temporarySignedRoute('reports.unlock', now()->addDay(), ['auditReport' => $report->uuid]);
+    }
+
     public function test_locked_report_shows_titles_but_hides_details(): void
     {
         $report = AuditReport::factory()->locked()->create();
@@ -52,7 +58,7 @@ class AuditReportPageTest extends FeatureTest
         $report = AuditReport::factory()->locked()->create(['user_id' => $user->id]);
 
         $this->actingAs($user)
-            ->get("/reports/{$report->uuid}/unlock")
+            ->get($this->signedUnlockUrl($report))
             ->assertRedirect(route('buy.product', ['productSlug' => config('audit.unlock_product_slug')]));
 
         $this->assertDatabaseHas('user_parameters', [
@@ -68,7 +74,7 @@ class AuditReportPageTest extends FeatureTest
         $report = AuditReport::factory()->locked()->create(['user_id' => null]);
         $report->auditRequest->update(['email' => 'match@example.com']);
 
-        $this->actingAs($user)->get("/reports/{$report->uuid}/unlock")->assertRedirect();
+        $this->actingAs($user)->get($this->signedUnlockUrl($report))->assertRedirect();
 
         $this->assertSame($user->id, $report->refresh()->user_id);
     }
@@ -79,7 +85,7 @@ class AuditReportPageTest extends FeatureTest
         $report = AuditReport::factory()->locked()->create(['user_id' => User::factory()->create()->id]);
 
         $this->withExceptionHandling()
-            ->actingAs($user)->get("/reports/{$report->uuid}/unlock")->assertForbidden();
+            ->actingAs($user)->get($this->signedUnlockUrl($report))->assertForbidden();
     }
 
     public function test_unlock_route_redirects_to_signed_view_when_already_unlocked(): void
@@ -90,7 +96,7 @@ class AuditReportPageTest extends FeatureTest
         $expectedUrl = app(AuditReportService::class)->signedUrl($report);
 
         $this->actingAs($user)
-            ->get("/reports/{$report->uuid}/unlock")
+            ->get($this->signedUnlockUrl($report))
             ->assertRedirect($expectedUrl);
     }
 
