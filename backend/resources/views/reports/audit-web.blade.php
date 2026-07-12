@@ -84,6 +84,9 @@
                 <div class="score-tile"><div class="value">{{ $metrics['test_ratio_pct'] ?? 0 }}%</div><div class="label">{{ __('test file ratio') }}</div></div>
                 <div class="score-tile"><div class="value">{{ ($metrics['has_ci'] ?? false) ? __('yes') : __('no') }}</div><div class="label">{{ __('CI configured') }}</div></div>
                 <div class="score-tile"><div class="value">{{ array_sum(array_column($metrics['secret_findings'] ?? [], 'count')) }}</div><div class="label">{{ __('potential secrets') }}</div></div>
+                @if (isset($metrics['dependency_audit']) && ! isset($metrics['dependency_audit']['error']))
+                    <div class="score-tile"><div class="value">{{ $metrics['dependency_audit']['vulnerable_count'] }}</div><div class="label">{{ __('vulnerable dependencies') }}</div></div>
+                @endif
             </div>
             @php($langs = collect($metrics['languages'] ?? [])->sortByDesc('loc')->take(5))
             @if ($langs->isNotEmpty())

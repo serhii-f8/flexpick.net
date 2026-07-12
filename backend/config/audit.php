@@ -18,4 +18,5 @@ return [
     'unverified_purge_days' => 7,
     'benchmark_min_sample' => 20,
     'unlock_product_slug' => 'audit-report-unlock',
+    'osv_endpoint' => 'https://api.osv.dev/v1/querybatch',
 ];

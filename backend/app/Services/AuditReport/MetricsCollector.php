@@ -18,6 +18,10 @@ class MetricsCollector
         'generic_api_key' => '/(api[_-]?key|secret[_-]?key|access[_-]?token)["\']?\s*[:=>]+\s*["\'][A-Za-z0-9_\-]{16,}["\']/i',
     ];
 
+    public function __construct(
+        private DependencyAuditor $dependencyAuditor,
+    ) {}
+
     public function collect(string $repoPath): array
     {
         $files = iterator_to_array($this->sourceFiles($repoPath), false);
@@ -77,6 +81,7 @@ class MetricsCollector
             'has_ci' => is_dir($repoPath.'/.github/workflows') || file_exists($repoPath.'/.gitlab-ci.yml') || file_exists($repoPath.'/bitbucket-pipelines.yml'),
             'has_readme' => count(glob($repoPath.'/README*') ?: []) > 0,
             'manifests' => $this->manifests($repoPath),
+            'dependency_audit' => $this->dependencyAuditor->audit($repoPath),
             'secret_findings' => array_map(fn ($f) => ['count' => $f['count'], 'files' => array_values(array_unique($f['files']))], $secretFindings),
             'git' => $this->gitInfo($repoPath),
         ];
