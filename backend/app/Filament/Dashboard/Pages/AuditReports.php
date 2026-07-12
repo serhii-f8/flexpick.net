@@ -5,6 +5,7 @@ namespace App\Filament\Dashboard\Pages;
 use App\Constants\AuditRequestStatus;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
+use App\Models\AuditSchedule;
 use App\Services\AuditReport\AuditEntitlementService;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -77,6 +78,32 @@ class AuditReports extends Page
         Notification::make()->title(__('Audit started'))->body(__('You\'ll get an email when the report is ready.'))->success()->send();
     }
 
+    public function setSchedule(string $repoUrl, string $frequency): void
+    {
+        $user = auth()->user();
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null || ! in_array($frequency, ['off', 'weekly', 'monthly'], true)) {
+            return;
+        }
+
+        $repoUrl = rtrim($repoUrl, '/');
+
+        if ($frequency === 'off') {
+            AuditSchedule::query()->where('user_id', $user->id)->where('repo_url', $repoUrl)->delete();
+            Notification::make()->title(__('Scheduled audits turned off'))->success()->send();
+
+            return;
+        }
+
+        AuditSchedule::updateOrCreate(
+            ['user_id' => $user->id, 'repo_url' => $repoUrl],
+            ['tenant_id' => $tenant->id, 'frequency' => $frequency],
+        );
+
+        Notification::make()->title(__('Audits scheduled :frequency', ['frequency' => __($frequency)]))->success()->send();
+    }
+
     public function getViewData(): array
     {
         $user = auth()->user();
@@ -89,6 +116,7 @@ class AuditReports extends Page
             'reports' => $reports,
             'allowance' => $tenant ? $entitlements->subscriptionAllowance($tenant) : 0,
             'remainingRuns' => $tenant ? $entitlements->remainingDashboardRuns($user, $tenant) : 0,
+            'schedules' => AuditSchedule::query()->where('user_id', $user->id)->pluck('frequency', 'repo_url'),
             'repoGroups' => $reports
                 ->groupBy(fn ($report) => rtrim((string) $report->auditRequest->repo_url, '/'))
                 ->map(fn ($group) => [

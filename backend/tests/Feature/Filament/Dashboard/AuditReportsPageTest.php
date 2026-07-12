@@ -78,6 +78,32 @@ class AuditReportsPageTest extends FeatureTest
         $this->assertTrue(AuditReports::shouldRegisterNavigation());
     }
 
+    public function test_set_schedule_creates_and_removes_audit_schedules(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setSchedule', 'https://github.com/acme/app/', 'weekly');
+
+        $this->assertDatabaseHas('audit_schedules', [
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/app',
+            'frequency' => 'weekly',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setSchedule', 'https://github.com/acme/app', 'off');
+
+        $this->assertDatabaseMissing('audit_schedules', ['user_id' => $user->id]);
+    }
+
     private function createTenantFor(User $user): Tenant
     {
         $tenant = Tenant::factory()->create();

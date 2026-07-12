@@ -34,6 +34,14 @@
                             <polyline points="{{ $points }}" stroke="currentColor" stroke-width="2" class="text-primary-500" />
                         </svg>
                         @if ($allowance > 0)
+                            <select
+                                class="rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
+                                wire:change="setSchedule('{{ $repoUrl }}', $event.target.value)"
+                            >
+                                @foreach (['off' => __('No schedule'), 'weekly' => __('Audit weekly'), 'monthly' => __('Audit monthly')] as $value => $optionLabel)
+                                    <option value="{{ $value }}" @selected(($schedules[rtrim($repoUrl, '/')] ?? 'off') === $value)>{{ $optionLabel }}</option>
+                                @endforeach
+                            </select>
                             <x-filament::button size="sm" color="gray" wire:click="launchAudit('{{ $repoUrl }}')">{{ __('Re-run') }}</x-filament::button>
                         @endif
                     </div>

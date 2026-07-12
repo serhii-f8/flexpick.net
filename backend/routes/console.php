@@ -28,3 +28,5 @@ Schedule::command('app:purge-unverified-audit-requests')->dailyAt('02:10');
 Schedule::command('app:send-audit-verification-reminders')->dailyAt('09:00');
 
 Schedule::command('app:send-audit-unlock-reminders')->dailyAt('09:05');
+
+Schedule::command('app:run-scheduled-audits')->dailyAt('06:00')->withoutOverlapping()->onOneServer();
