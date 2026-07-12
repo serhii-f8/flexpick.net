@@ -18,7 +18,10 @@ class GenerateAuditReport implements ShouldQueue
 
     public int $timeout = 900;
 
-    public int $tries = 1;
+    public int $tries = 3;
+
+    /** @var array<int, int> */
+    public array $backoff = [60, 300];
 
     public function __construct(
         public AuditRequest $auditRequest,

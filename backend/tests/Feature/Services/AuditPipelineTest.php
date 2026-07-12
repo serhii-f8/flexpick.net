@@ -92,4 +92,12 @@ class AuditPipelineTest extends FeatureTest
         Mail::assertQueued(AuditRequestFailed::class);
         $this->assertDirectoryDoesNotExist(config('audit.workdir').'/'.$request->uuid); // cleanup ran in finally
     }
+
+    public function test_report_job_retries_transient_failures_before_giving_up(): void
+    {
+        $job = new GenerateAuditReport(AuditRequest::factory()->create());
+
+        $this->assertSame(3, $job->tries);
+        $this->assertSame([60, 300], $job->backoff);
+    }
 }
