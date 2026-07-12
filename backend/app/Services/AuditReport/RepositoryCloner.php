@@ -28,7 +28,7 @@ class RepositoryCloner
 
         $result = Process::timeout(config('audit.clone_timeout'))
             ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run(['git', 'clone', '--depth', '1', '--no-tags', '--single-branch', $this->authenticatedUrl($url), $path]);
+            ->run(['git', 'clone', '--depth', (string) config('audit.clone_depth'), '--no-tags', '--single-branch', $this->authenticatedUrl($url), $path]);
 
         if (! $result->successful()) {
             $this->cleanup($uuid);

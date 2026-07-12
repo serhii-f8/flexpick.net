@@ -43,6 +43,11 @@
         "has_readme": true,
         "manifests": {"package.json": {"dependencies": 64, "dev_dependencies": 21, "lockfile": true}},
         "secret_findings": {"generic_api_key": {"count": 3, "files": ["src/config.ts", ".env.production"]}},
-        "git": {"default_branch": "main", "last_commit_at": "2026-06-28T14:12:00+00:00"}
+        "git": {"default_branch": "main", "last_commit_at": "2026-06-28T14:12:00+00:00", "commits_analyzed": 200, "contributors": 2, "top_contributor_pct": 94},
+        "hotspots": [
+            {"path": "src/services/PaymentService.ts", "changes": 41, "loc": 2412},
+            {"path": "src/screens/Checkout.tsx", "changes": 28, "loc": 1876},
+            {"path": "src/api/handlers.ts", "changes": 19, "loc": 1544}
+        ]
     }
 }

@@ -4,6 +4,7 @@ return [
     'queue' => 'audit',
     'admin_email' => env('AUDIT_ADMIN_EMAIL'),
     'clone_timeout' => 120,
+    'clone_depth' => 200,
     'preflight_timeout' => 30,
     'max_repo_size_mb' => 500,
     'max_excerpt_files' => 50,

@@ -97,6 +97,7 @@ class MetricsCollector
             'dependency_audit' => $this->dependencyAuditor->audit($repoPath),
             'secret_findings' => array_map(fn ($f) => ['count' => $f['count'], 'files' => array_values(array_unique($f['files']))], $secretFindings),
             'git' => $this->gitInfo($repoPath),
+            'hotspots' => $this->hotspots($repoPath, $fileStats),
         ];
 
         return [
@@ -170,11 +171,37 @@ class MetricsCollector
     {
         $branch = Process::path($repoPath)->run(['git', 'rev-parse', '--abbrev-ref', 'HEAD']);
         $lastCommit = Process::path($repoPath)->run(['git', 'log', '-1', '--format=%cI']);
+        $authors = Process::path($repoPath)->run(['git', 'log', '--format=%ae']);
+
+        $emails = array_filter(explode("\n", trim($authors->output())));
+        $byAuthor = $emails === [] ? [] : array_count_values($emails);
 
         return [
             'default_branch' => trim($branch->output()) ?: null,
             'last_commit_at' => trim($lastCommit->output()) ?: null,
+            'commits_analyzed' => count($emails),
+            'contributors' => count($byAuthor),
+            'top_contributor_pct' => $emails === [] ? null : (int) round(max($byAuthor) / count($emails) * 100),
         ];
+    }
+
+    private function hotspots(string $repoPath, array $fileStats): array
+    {
+        $log = Process::path($repoPath)->run(['git', 'log', '--name-only', '--format=']);
+        $changes = array_count_values(array_filter(explode("\n", trim($log->output()))));
+        $locByPath = array_column($fileStats, 'loc', 'path');
+
+        $hotspots = [];
+        foreach ($changes as $path => $count) {
+            if ($count < 2 || ! isset($locByPath[$path])) {
+                continue;
+            }
+            $hotspots[] = ['path' => $path, 'changes' => $count, 'loc' => $locByPath[$path]];
+        }
+
+        usort($hotspots, fn (array $a, array $b) => ($b['changes'] * $b['loc']) <=> ($a['changes'] * $a['loc']));
+
+        return array_slice($hotspots, 0, 10);
     }
 
     private function excerpts(string $repoPath, array $fileStats): array

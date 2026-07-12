@@ -119,6 +119,24 @@
                     {{ __('Last commit') }}: {{ \Illuminate\Support\Carbon::parse($metrics['git']['last_commit_at'])->format('Y-m-d') }}
                 </p>
             @endif
+            @php($hotspots = array_slice($metrics['hotspots'] ?? [], 0, 5))
+            @if ($hotspots !== [])
+                <table style="margin-top: 12px;">
+                    <tr><th>{{ __('Change hotspots (last :n commits)', ['n' => config('audit.clone_depth')]) }}</th><th>{{ __('Changes') }}</th><th>{{ __('Lines') }}</th></tr>
+                    @foreach ($hotspots as $spot)
+                        <tr><td>{{ $spot['path'] }}</td><td>{{ $spot['changes'] }}</td><td>{{ number_format($spot['loc']) }}</td></tr>
+                    @endforeach
+                </table>
+            @endif
+            @if (($metrics['git']['contributors'] ?? 0) > 0)
+                <p class="muted" style="margin-top: 12px;">
+                    {{ __(':c contributor(s) in the last :n commits — top contributor authored :p% of them.', [
+                        'c' => $metrics['git']['contributors'],
+                        'n' => $metrics['git']['commits_analyzed'],
+                        'p' => $metrics['git']['top_contributor_pct'],
+                    ]) }}
+                </p>
+            @endif
         </div>
     @endif
 
