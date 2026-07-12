@@ -24,3 +24,5 @@ Schedule::command('app:cleanup-local-subscription-statuses')->hourly();
 Schedule::command('app:sync-seat-based-subscription-quantities')->hourly();
 
 Schedule::command('app:purge-unverified-audit-requests')->dailyAt('02:10');
+
+Schedule::command('app:send-audit-verification-reminders')->dailyAt('09:00');
