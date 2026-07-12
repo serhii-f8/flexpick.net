@@ -9,10 +9,10 @@
                 {{ __('Hi :name,', ['name' => $report->auditRequest->name]) }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
-                {{ __('Your automated codebase health report is attached as a PDF. You can also view it online:') }}
+                {{ __('Your codebase health report is ready — view it online:') }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
-                <a href="{{ $signedUrl }}">{{ __('View your report') }}</a>
+                <a href="{{ $signedUrl }}">{{ __('View my report') }}</a>
                 ({{ __('link valid for :days days', ['days' => config('audit.report_link_days')]) }})
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">

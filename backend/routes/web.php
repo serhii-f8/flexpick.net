@@ -203,6 +203,8 @@ Route::get('/audit-requests/{auditRequest:uuid}/verify', [AuditRequestController
     ->name('audit-requests.verify')
     ->middleware('signed');
 
+Route::get('/reports/sample', [AuditReportController::class, 'sample'])->name('reports.sample');
+
 Route::get('/reports/{auditReport:uuid}', [AuditReportController::class, 'show'])
     ->name('reports.view')
     ->middleware('signed');

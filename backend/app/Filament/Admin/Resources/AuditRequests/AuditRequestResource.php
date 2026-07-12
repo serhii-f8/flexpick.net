@@ -9,6 +9,7 @@ use App\Jobs\GenerateAuditReport;
 use App\Mapper\AuditRequestStatusMapper;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\AuditReportService;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
@@ -109,6 +110,11 @@ class AuditRequestResource extends Resource
                         $record->update(['status' => AuditRequestStatus::QUEUED->value, 'failure_reason' => null]);
                         GenerateAuditReport::dispatch($record);
                     }),
+                Action::make('grantUnlock')
+                    ->label(__('Grant full unlock'))
+                    ->requiresConfirmation()
+                    ->visible(fn (AuditRequest $record): bool => $record->report()->first()?->unlocked_at === null && $record->report()->exists())
+                    ->action(fn (AuditRequest $record) => app(AuditReportService::class)->unlock($record->report()->first())),
                 Action::make('markHandled')
                     ->label(__('Mark handled'))
                     ->visible(fn (AuditRequest $record): bool => $record->status === AuditRequestStatus::NEEDS_FOLLOWUP->value)

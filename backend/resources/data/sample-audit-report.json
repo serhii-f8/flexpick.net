@@ -1,0 +1,22 @@
+{
+    "repo_url": "https://github.com/acme/example-saas",
+    "percentile": 38,
+    "payload": {
+        "summary": "A four-month-old AI-assisted codebase with working core flows but heavy duplication, no automated tests, and several dependency risks. Shippable today, fragile tomorrow: most incidents will come from the checkout and auth modules, where copies of the same logic have already drifted apart.",
+        "scores": {"structure": 58, "duplication": 34, "testing": 12, "dependencies": 61, "security_hygiene": 55, "overall": 44},
+        "risks": [
+            {"title": "No automated tests on payment-critical flows", "impact": "high", "evidence": "0 test files across 214 source files; checkout, refund, and webhook handlers are fully untested.", "recommendation": "Add a smoke suite around checkout and webhooks first — 10-15 tests catch the regressions that actually cost money."},
+            {"title": "Checkout logic duplicated in 4 places with drift", "impact": "high", "evidence": "Price calculation appears in 4 files; two copies already disagree on coupon rounding.", "recommendation": "Extract a single PriceCalculator service and delete the copies; the drift is a live billing bug waiting to be reported."},
+            {"title": "Secrets committed to the repository", "impact": "high", "evidence": "2 API keys and 1 database password found in tracked config files.", "recommendation": "Rotate the exposed keys today, move them to environment variables, and add secret scanning to CI."},
+            {"title": "37 dependencies pinned to unmaintained versions", "impact": "medium", "evidence": "Lockfile references 9 packages with no release in 2+ years, including the session middleware.", "recommendation": "Upgrade the framework minor version and replace the two abandoned packages with maintained forks."},
+            {"title": "God-file controllers", "impact": "medium", "evidence": "3 controllers exceed 800 lines and mix validation, business logic, and rendering.", "recommendation": "Split by responsibility as you touch them — don't big-bang refactor; extract services per feature."},
+            {"title": "No error monitoring", "impact": "low", "evidence": "No error-tracking SDK found; production failures are invisible unless a user reports them.", "recommendation": "Wire an error tracker (Sentry or similar) — 30 minutes of work, immediate visibility."}
+        ],
+        "fix_first_plan": [
+            {"step": "Rotate the committed secrets and move them to env vars", "why": "They are exposed to anyone with repo access, today", "effort": "S"},
+            {"step": "Add smoke tests around checkout and webhooks", "why": "Highest-cost regressions with zero safety net", "effort": "M"},
+            {"step": "Extract the duplicated price calculation into one service", "why": "Two copies already disagree — this is a live billing bug", "effort": "M"},
+            {"step": "Set up CI running the new tests plus secret scanning", "why": "Locks in the gains from the first three steps", "effort": "S"}
+        ]
+    }
+}

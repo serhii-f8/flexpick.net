@@ -41,6 +41,10 @@ class AuditReportReady extends Mailable implements ShouldQueue
      */
     public function attachments(): array
     {
+        if ($this->report->pdf_path === null) {
+            return [];
+        }
+
         return [
             Attachment::fromStorageDisk('local', $this->report->pdf_path)
                 ->as('codebase-health-report.pdf')
