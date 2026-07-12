@@ -16,6 +16,18 @@ class MetricsCollector
         'aws_access_key' => '/AKIA[0-9A-Z]{16}/',
         'private_key_block' => '/-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/',
         'generic_api_key' => '/(api[_-]?key|secret[_-]?key|access[_-]?token)["\']?\s*[:=>]+\s*["\'][A-Za-z0-9_\-]{16,}["\']/i',
+        'github_token' => '/\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}\b/',
+        'github_fine_grained_pat' => '/\bgithub_pat_[A-Za-z0-9_]{60,}\b/',
+        'gitlab_pat' => '/\bglpat-[A-Za-z0-9\-_]{20,}\b/',
+        'slack_token' => '/\bxox[baprs]-[A-Za-z0-9\-]{10,}\b/',
+        'stripe_live_key' => '/\b(?:sk|rk)_live_[A-Za-z0-9]{20,}\b/',
+        'sendgrid_key' => '/\bSG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}\b/',
+        'google_api_key' => '/\bAIza[0-9A-Za-z\-_]{35}\b/',
+        'openai_key' => '/\bsk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}\b/',
+        'anthropic_key' => '/\bsk-ant-[A-Za-z0-9\-_]{32,}\b/',
+        'npm_token' => '/\bnpm_[A-Za-z0-9]{36}\b/',
+        'twilio_api_key' => '/\bSK[0-9a-f]{32}\b/',
+        'credentialed_url' => '#\b[a-z][a-z0-9+.\-]*://[^/\s:@"\']{1,64}:[^/\s:@"\']{1,64}@#i',
     ];
 
     public function __construct(

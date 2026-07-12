@@ -65,4 +65,27 @@ class MetricsCollectorTest extends FeatureTest
             $this->assertLessThanOrEqual(config('audit.max_excerpt_bytes'), strlen($excerpt['content']));
         }
     }
+
+    public function test_detects_modern_provider_token_formats(): void
+    {
+        $path = storage_path('framework/testing/secrets-'.uniqid());
+        File::ensureDirectoryExists($path);
+        File::put($path.'/config.js', implode("\n", [
+            'const gh = "ghp_'.str_repeat('a', 36).'";',
+            'const stripe = "sk_live_'.str_repeat('b', 24).'";',
+            'const anthropic = "sk-ant-'.str_repeat('c', 40).'";',
+            'const db = "postgres://admin:hunter2@db.internal:5432/app";',
+            'const slack = "xoxb-1234567890-abcdefghij";',
+        ]));
+
+        $metrics = app(MetricsCollector::class)->collect($path)['metrics'];
+        File::deleteDirectory($path);
+
+        $findings = $metrics['secret_findings'];
+        $this->assertArrayHasKey('github_token', $findings);
+        $this->assertArrayHasKey('stripe_live_key', $findings);
+        $this->assertArrayHasKey('anthropic_key', $findings);
+        $this->assertArrayHasKey('credentialed_url', $findings);
+        $this->assertArrayHasKey('slack_token', $findings);
+    }
 }
