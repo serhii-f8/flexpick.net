@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\AuditReport\AuditEntitlementService;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -59,6 +60,22 @@ class AuditReportsPageTest extends FeatureTest
 
         $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
         Queue::assertNotPushed(GenerateAuditReport::class);
+    }
+
+    public function test_navigation_registers_for_subscribed_tenant_without_reports(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->mock(AuditEntitlementService::class, function ($mock) {
+            $mock->shouldReceive('subscriptionAllowance')->andReturn(5);
+        });
+
+        $this->assertTrue(AuditReports::shouldRegisterNavigation());
     }
 
     private function createTenantFor(User $user): Tenant

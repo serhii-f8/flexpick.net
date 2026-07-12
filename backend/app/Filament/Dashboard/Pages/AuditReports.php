@@ -29,7 +29,17 @@ class AuditReports extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return auth()->check() && auth()->user()->auditReports()->exists();
+        if (! auth()->check()) {
+            return false;
+        }
+
+        if (auth()->user()->auditReports()->exists()) {
+            return true;
+        }
+
+        $tenant = Filament::getTenant();
+
+        return $tenant !== null && app(AuditEntitlementService::class)->subscriptionAllowance($tenant) > 0;
     }
 
     public function launchAudit(?string $repoUrl = null): void
