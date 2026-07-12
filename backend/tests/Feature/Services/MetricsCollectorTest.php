@@ -88,4 +88,28 @@ class MetricsCollectorTest extends FeatureTest
         $this->assertArrayHasKey('credentialed_url', $findings);
         $this->assertArrayHasKey('slack_token', $findings);
     }
+
+    public function test_detects_engineering_tooling_from_manifests_and_files(): void
+    {
+        $path = storage_path('framework/testing/tooling-'.uniqid());
+        File::ensureDirectoryExists($path);
+        File::put($path.'/package.json', json_encode([
+            'dependencies' => ['@sentry/node' => '^8.0.0'],
+            'devDependencies' => ['eslint' => '^9.0.0', 'prettier' => '^3.0.0', 'typescript' => '^5.0.0'],
+        ]));
+        File::put($path.'/.env.example', 'APP_KEY=');
+        File::put($path.'/Dockerfile', 'FROM node:22');
+
+        $metrics = app(MetricsCollector::class)->collect($path)['metrics'];
+        File::deleteDirectory($path);
+
+        $this->assertSame([
+            'error_monitoring' => true,
+            'linter' => true,
+            'static_analysis' => true,
+            'formatter' => true,
+            'env_example' => true,
+            'dockerized' => true,
+        ], $metrics['tooling']);
+    }
 }

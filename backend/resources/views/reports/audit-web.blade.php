@@ -95,6 +95,16 @@
                     {{ $langs->map(fn ($stats, $ext) => strtoupper($ext).' '.number_format($stats['loc']).' loc')->implode(' · ') }}
                 </p>
             @endif
+            @isset($metrics['tooling'])
+                <p class="muted" style="margin-top: 8px;">
+                    {{ __('Engineering setup') }}:
+                    {{ __('error monitoring') }} {{ $metrics['tooling']['error_monitoring'] ? '✓' : '✗' }} ·
+                    {{ __('linter') }} {{ $metrics['tooling']['linter'] ? '✓' : '✗' }} ·
+                    {{ __('static analysis') }} {{ $metrics['tooling']['static_analysis'] ? '✓' : '✗' }} ·
+                    {{ __('.env.example') }} {{ $metrics['tooling']['env_example'] ? '✓' : '✗' }} ·
+                    {{ __('Docker') }} {{ $metrics['tooling']['dockerized'] ? '✓' : '✗' }}
+                </p>
+            @endisset
             @php($largest = array_slice($metrics['largest_files'] ?? [], 0, 5))
             @if ($largest !== [])
                 <table style="margin-top: 12px;">

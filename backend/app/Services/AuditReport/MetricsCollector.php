@@ -93,6 +93,7 @@ class MetricsCollector
             'has_ci' => is_dir($repoPath.'/.github/workflows') || file_exists($repoPath.'/.gitlab-ci.yml') || file_exists($repoPath.'/bitbucket-pipelines.yml'),
             'has_readme' => count(glob($repoPath.'/README*') ?: []) > 0,
             'manifests' => $this->manifests($repoPath),
+            'tooling' => $this->tooling($repoPath),
             'dependency_audit' => $this->dependencyAuditor->audit($repoPath),
             'secret_findings' => array_map(fn ($f) => ['count' => $f['count'], 'files' => array_values(array_unique($f['files']))], $secretFindings),
             'git' => $this->gitInfo($repoPath),
@@ -133,6 +134,36 @@ class MetricsCollector
         }
 
         return $manifests;
+    }
+
+    private function tooling(string $repoPath): array
+    {
+        $deps = [];
+
+        foreach (['composer.json', 'package.json'] as $manifest) {
+            if (! file_exists($repoPath.'/'.$manifest)) {
+                continue;
+            }
+            $data = json_decode((string) file_get_contents($repoPath.'/'.$manifest), true) ?? [];
+            $deps = array_merge(
+                $deps,
+                array_keys($data['require'] ?? []),
+                array_keys($data['require-dev'] ?? []),
+                array_keys($data['dependencies'] ?? []),
+                array_keys($data['devDependencies'] ?? []),
+            );
+        }
+
+        $has = fn (array $names): bool => array_intersect($names, $deps) !== [];
+
+        return [
+            'error_monitoring' => $has(['sentry/sentry', 'sentry/sentry-laravel', '@sentry/browser', '@sentry/node', '@sentry/react', '@sentry/nextjs', '@sentry/vue', 'bugsnag/bugsnag', 'bugsnag/bugsnag-laravel', '@bugsnag/js', 'rollbar/rollbar', 'rollbar', 'honeybadger-io/honeybadger-php', '@honeybadger-io/js']),
+            'linter' => $has(['laravel/pint', 'friendsofphp/php-cs-fixer', 'squizlabs/php_codesniffer', 'eslint', '@biomejs/biome', 'oxlint']),
+            'static_analysis' => $has(['phpstan/phpstan', 'larastan/larastan', 'vimeo/psalm', 'typescript']),
+            'formatter' => $has(['prettier', 'laravel/pint', '@biomejs/biome']),
+            'env_example' => file_exists($repoPath.'/.env.example'),
+            'dockerized' => file_exists($repoPath.'/Dockerfile') || file_exists($repoPath.'/docker-compose.yml') || file_exists($repoPath.'/compose.yaml'),
+        ];
     }
 
     private function gitInfo(string $repoPath): array
