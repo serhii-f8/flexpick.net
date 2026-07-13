@@ -36,13 +36,31 @@ class LoginController extends Controller
 
     public function showLoginForm()
     {
-        if (url()->previous() != route('register') && Redirect::getIntendedUrl() === null) {
+        if (Redirect::getIntendedUrl() === null && $this->isReturnablePreviousUrl(url()->previous())) {
             Redirect::setIntendedUrl(url()->previous()); // make sure we redirect back to the page we came from
         }
 
         return view('auth.login', [
             'isOtpLoginEnabled' => config('app.otp_login_enabled'),
         ]);
+    }
+
+    private function isReturnablePreviousUrl(?string $previousUrl): bool
+    {
+        if (empty($previousUrl)) {
+            return false;
+        }
+
+        if (parse_url($previousUrl, PHP_URL_HOST) !== parse_url(config('app.url'), PHP_URL_HOST)) {
+            return false; // external referer (e.g. the landing site) — never "return" there after login
+        }
+
+        $excluded = array_map(
+            fn (string $url): string => rtrim($url, '/'),
+            [route('home'), route('login'), route('register')],
+        );
+
+        return ! in_array(rtrim($previousUrl, '/'), $excluded, true);
     }
 
     protected function authenticated(Request $request, User $user)
