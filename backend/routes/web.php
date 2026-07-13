@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuditReportController;
 use App\Http\Controllers\AuditRequestController;
 use App\Http\Controllers\Auth\OAuthController;
+use App\Http\Controllers\AuthStatusController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PaymentProviders\PaddleController;
@@ -50,6 +51,8 @@ Route::get('/pricing', function () {
 Route::get('/dashboard', function (UserDashboardService $dashboardService) {
     return redirect($dashboardService->getUserDashboardUrl(Auth::user()));
 })->name('dashboard')->middleware('auth');
+
+Route::get('/api/auth/status', AuthStatusController::class)->name('auth.status');
 
 Auth::routes();
 
