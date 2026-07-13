@@ -138,7 +138,7 @@ const hotspots = [
           <a href="#process" class="fp-navlink" data-nav="process">Process</a>
           <a href="#report" class="fp-navlink" data-nav="report">The audit</a>
           <a href="#faq" class="fp-navlink" data-nav="faq">FAQ</a>
-          <a href={`${PRODUCT_APP.url}/login`} class="fp-navlink" rel="nofollow">Log in</a>
+          <a href={`${PRODUCT_APP.url}/login`} class="fp-navlink" rel="nofollow" data-auth-entry>Log in</a>
           <button type="button" class="fp-btn" data-audit-open style="font-size: 14px; padding: 10px 20px;"
             >Get a free audit</button
           >
@@ -1058,8 +1058,12 @@ const hotspots = [
             CONTACT
           </p>
           <a href="mailto:hello@flexpick.net" class="fp-footlink">hello@flexpick.net</a>
-          <a href={`${PRODUCT_APP.url}/login`} class="fp-footlink" style="margin-top: 10px;" rel="nofollow"
-            >Client login</a
+          <a
+            href={`${PRODUCT_APP.url}/login`}
+            class="fp-footlink"
+            style="margin-top: 10px;"
+            rel="nofollow"
+            data-auth-entry>Client login</a
           >
           <p class="fp-mono" style="margin: 14px 0 0; font-size: 11px; line-height: 1.7; color: rgba(232,230,222,0.5);">
             NDA-FRIENDLY<br />REPLY WITHIN 1 BUSINESS DAY
@@ -2328,4 +2332,29 @@ const hotspots = [
 
   initLanding();
   document.addEventListener('astro:page-load', initLanding);
+</script>
+
+<script>
+  import { PRODUCT_APP } from 'flexpick:config';
+
+  async function swapAuthLinks() {
+    try {
+      const res = await fetch(`${PRODUCT_APP.url}/api/auth/status`, {
+        credentials: 'include',
+        signal: AbortSignal.timeout(4000),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.authenticated) return;
+      document.querySelectorAll('[data-auth-entry]').forEach((el) => {
+        el.textContent = 'Dashboard';
+        el.setAttribute('href', `${PRODUCT_APP.url}/dashboard`);
+      });
+    } catch {
+      // Leave the default "Log in" links on any failure or timeout.
+    }
+  }
+
+  swapAuthLinks();
+  document.addEventListener('astro:after-swap', swapAuthLinks);
 </script>
