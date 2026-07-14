@@ -20,4 +20,15 @@ class LayoutBrandingTest extends FeatureTest
             $response->assertSee('bg-ink', false);
         }
     }
+
+    public function test_focus_layout_pages_render_flexpick_branding_on_dark_canvas(): void
+    {
+        foreach ([route('login'), route('register'), route('password.request')] as $url) {
+            $response = $this->get($url);
+
+            $response->assertOk();
+            $response->assertSee('data-brand="flexpick"', false);
+            $response->assertSee('bg-ink', false);
+        }
+    }
 }
