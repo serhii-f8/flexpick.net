@@ -41,6 +41,7 @@ class AuditRequestResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
+            // @phpstan-ignore-next-line method.notFound (forUser is AuditRequest's own scope; Larastan can't see it through the parent's generic Builder<Model> return type)
             ->forUser(auth()->user())
             ->with('report');
     }

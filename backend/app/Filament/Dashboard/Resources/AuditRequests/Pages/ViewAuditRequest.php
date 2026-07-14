@@ -16,14 +16,14 @@ class ViewAuditRequest extends ViewRecord
         return [
             Action::make('viewOnline')
                 ->label(__('View online'))
-                ->url(fn (): string => app(AuditReportService::class)->signedUrl($this->record->report))
+                ->url(fn (): string => app(AuditReportService::class)->signedUrl($this->getRecord()->report))
                 ->openUrlInNewTab()
-                ->visible(fn (): bool => $this->record->report !== null),
+                ->visible(fn (): bool => $this->getRecord()->report !== null),
             Action::make('downloadPdf')
                 ->label(__('Download PDF'))
-                ->url(fn (): string => route('reports.download', $this->record->report))
+                ->url(fn (): string => route('reports.download', $this->getRecord()->report))
                 ->openUrlInNewTab()
-                ->visible(fn (): bool => $this->record->report !== null),
+                ->visible(fn (): bool => $this->getRecord()->report !== null),
         ];
     }
 }
