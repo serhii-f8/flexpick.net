@@ -104,6 +104,8 @@ class DemoDatabaseSeeder extends Seeder
 
         // enable google oauth
         OauthLoginProvider::where('provider_name', 'google')->update(['enabled' => true]);
+
+        $this->call(AuditDemoSeeder::class);
     }
 
     private function seedDemoData(): void
