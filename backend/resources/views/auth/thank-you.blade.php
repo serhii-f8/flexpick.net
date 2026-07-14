@@ -1,7 +1,7 @@
 <x-layouts.focus>
     <x-slot name="left">
         <div class="flex flex-col py-2 px-4 md:p-0 gap-4 justify-center h-full items-center">
-            <div class="card w-full md:max-w-xl bg-base-100 shadow-xl p-4 md:p-8">
+            <div class="card w-full md:max-w-xl bg-base-100 border border-white/10 p-4 md:p-8">
 
                 <div class="flex flex-row gap-3">
 

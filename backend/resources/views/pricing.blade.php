@@ -7,7 +7,7 @@
         <x-heading.h6 class="text-center mt-10 text-primary-500">
             {{ __('Plans & Pricing') }}
         </x-heading.h6>
-        <x-heading.h2 class="text-primary-900 text-center">
+        <x-heading.h2 class="text-cream-100 text-center">
             {{ __('Pick the plan that fits') }}
         </x-heading.h2>
 

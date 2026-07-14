@@ -7,7 +7,7 @@
                    value="{{ old('email') }}" required autofocus="true"
                    autocomplete="email" max-width="w-full"/>
     @error('email')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
             {{ $message }}
         </span>
     @enderror
@@ -15,7 +15,7 @@
     <x-input.field label="{{ __('Password') }}" type="password" name="password" required  max-width="w-full"/>
 
     @error('password')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
             {{ $message }}
         </span>
     @enderror
@@ -26,7 +26,7 @@
         </div>
 
         @error('g-recaptcha-response')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
                 {{ $message }}
             </span>
         @enderror

@@ -4,7 +4,7 @@
         <x-heading.h6 class="text-primary-500">
             {{ __('Pay securely, cancel any time.') }}
         </x-heading.h6>
-        <x-heading.h2 class="text-primary-900">
+        <x-heading.h2 class="text-cream-100">
             {{ __('Update Subscription') }}
         </x-heading.h2>
     </div>
@@ -13,7 +13,7 @@
     <x-section.columns class="max-w-none md:max-w-6xl flex-wrap-reverse">
 
         <x-section.column>
-            <x-heading.h2 class="text-primary-900 text-xl!">
+            <x-heading.h2 class="text-cream-100 text-xl!">
                 {{ __('New Plan details') }}
             </x-heading.h2>
 
@@ -49,7 +49,7 @@
                     </div>
                 </div>
 
-                <div class="text-primary-900 my-4">
+                <div class="text-cream-100 my-4">
                     {{ __('What you get:') }}
                 </div>
                 <div>
@@ -69,41 +69,41 @@
                     <hr class="mb-6 mt-2 text-neutral-200">
                     @if ($newPlan->type === \App\Constants\PlanType::SEAT_BASED->value && $totals->basePrice !== null)
                         <div class="flex flex-row justify-between">
-                            <div class="text-primary-900">
+                            <div class="text-cream-100">
                                 {{ __('Base price') }} <span class="text-xs text-neutral-400">({{ __('includes :count seats', ['count' => $totals->includedSeats]) }})</span>
                             </div>
-                            <div class="text-primary-900">
+                            <div class="text-cream-100">
                                 @money($totals->basePrice, $totals->currencyCode)
                             </div>
                         </div>
                         @if ($totals->extraSeats > 0)
                             <div class="flex flex-row justify-between mt-2">
-                                <div class="text-primary-900">
+                                <div class="text-cream-100">
                                     {{ __('Extra seats') }} <span class="text-xs text-neutral-400">({{ $totals->extraSeats }} &times; @money($totals->extraSeatPrice, $totals->currencyCode))</span>
                                 </div>
-                                <div class="text-primary-900">
+                                <div class="text-cream-100">
                                     @money($totals->extraSeats * $totals->extraSeatPrice, $totals->currencyCode)
                                 </div>
                             </div>
                         @endif
                         <hr class="my-4 text-neutral-200">
                         <div class="flex flex-row justify-between">
-                            <div class="text-primary-900">
+                            <div class="text-cream-100">
                                 {{ __('New Subscription price') }}
                             </div>
-                            <div class="text-primary-900">
+                            <div class="text-cream-100">
                                 @money($totals->subtotal, $totals->currencyCode)
                             </div>
                         </div>
                     @else
                         <div class="flex flex-row justify-between">
-                            <div class="text-primary-900">
+                            <div class="text-cream-100">
                                 {{ __('New Subscription price') }}
                                 @if ($newPlan->type === \App\Constants\PlanType::SEAT_BASED->value)
                                     ({{ $totals->quantity }} x @money($totals->pricePerSeat, $totals->currencyCode) / {{ __(' seat') }})
                                 @endif
                             </div>
-                            <div class="text-primary-900">
+                            <div class="text-cream-100">
                                 @money($totals->subtotal, $totals->currencyCode)
                             </div>
                         </div>
@@ -140,7 +140,7 @@
 
                 <p class="text-xs text-neutral-600 p-4">
                     {{ __('Cancel anytime in account settings at least one day before each renewal date. Plan automatically renews until cancelled. Your billing date may not line up with your apprenticeship start date.') }}
-                    {{ __('By continuing, you agree to our') }} <a href="#" class="text-primary-900 underline">{{ __('Terms of Service') }}</a> {{ __('and') }} <a href="#" class="text-primary-900 underline">{{ __('Privacy Policy') }}</a>.
+                    {{ __('By continuing, you agree to our') }} <a href="#" class="text-cream-100 underline">{{ __('Terms of Service') }}</a> {{ __('and') }} <a href="#" class="text-cream-100 underline">{{ __('Privacy Policy') }}</a>.
                 </p>
 
                 <x-button-link.primary class="inline-block w-full! my-4" elementType="button" type="submit">

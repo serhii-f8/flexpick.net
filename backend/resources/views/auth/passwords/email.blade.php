@@ -1,7 +1,7 @@
 <x-layouts.focus>
     <x-slot name="left">
         <div class="flex flex-col py-2 px-4 md:p-0 gap-4 justify-center h-full items-center">
-            <div class="card w-full md:max-w-xl bg-base-100 shadow-xl p-4 md:p-8">
+            <div class="card w-full md:max-w-xl bg-base-100 border border-white/10 p-4 md:p-8">
 
                 @if (session('status'))
                     <div role="alert" class="alert my-4 text-sm">
@@ -19,7 +19,7 @@
                     <div class="my-2 ms-1 text-xs text-neutral-400">{{ __('Enter your email address.') }}</div>
 
                     @error('email')
-                        <span class="text-xs text-red-500" role="alert">
+                        <span class="text-xs text-error" role="alert">
                             {{ $message }}
                         </span>
                     @enderror
@@ -30,7 +30,7 @@
                         </div>
 
                         @error('g-recaptcha-response')
-                            <span class="text-xs text-red-500" role="alert">
+                            <span class="text-xs text-error" role="alert">
                                 {{ $message }}
                             </span>
                         @enderror

@@ -8,7 +8,7 @@
         <x-heading.h6 class="text-primary-500">
             {{ __('Try it out for free, no strings attached.') }}
         </x-heading.h6>
-        <x-heading.h2 class="text-primary-900">
+        <x-heading.h2 class="text-cream-100">
             {{ __('Complete Subscription') }}
         </x-heading.h2>
     </div>

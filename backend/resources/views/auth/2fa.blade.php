@@ -1,7 +1,7 @@
 <x-layouts.focus>
     <x-slot name="left">
         <div class="flex flex-col py-2 md:p-10 gap-4 justify-center h-full items-center mx-4">
-            <div class="card w-full md:max-w-xl bg-base-100 shadow-xl p-4 md:p-8">
+            <div class="card w-full md:max-w-xl bg-base-100 border border-white/10 p-4 md:p-8">
                 <form method="POST">
                     @csrf
 
@@ -11,7 +11,7 @@
 
                     @if($errors->isNotEmpty())
                         @foreach ($errors->all() as $error)
-                            <span class="text-xs text-red-500" role="alert">
+                            <span class="text-xs text-error" role="alert">
                                 {{ $error }}
                             </span>
                         @endforeach

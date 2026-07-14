@@ -8,7 +8,7 @@
                    autocomplete="name" max-width="w-full"/>
 
     @error('name')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
             {{ $message }}
         </span>
     @enderror
@@ -17,7 +17,7 @@
                    value="{{ old('email') }}" required
                    autocomplete="email" max-width="w-full"/>
     @error('email')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
             {{ $message }}
         </span>
     @enderror
@@ -25,7 +25,7 @@
     <x-input.field label="{{ __('Password') }}" type="password" name="password" required max-width="w-full"/>
 
     @error('password')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
             {{ $message }}
         </span>
     @enderror
@@ -33,7 +33,7 @@
     <x-input.field label="{{ __('Confirm Password') }}" type="password" name="password_confirmation" required  max-width="w-full"/>
 
     @error('password')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
             {{ $message }}
         </span>
     @enderror
@@ -44,7 +44,7 @@
         </div>
 
         @error('g-recaptcha-response')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
                                 {{ $message }}
                             </span>
         @enderror
