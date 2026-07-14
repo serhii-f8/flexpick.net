@@ -184,6 +184,9 @@ return [
         'dark' => 'images/logo-dark.png',
     ],
 
+    // Public marketing/landing site (static Astro app; separate origin from this backend)
+    'frontend_url' => env('FRONTEND_URL', 'https://flexpick.net'),
+
     'roadmap_enabled' => env('ROADMAP_ENABLED', true),
 
     'recaptcha_enabled' => env('RECAPTCHA_ENABLED', false),

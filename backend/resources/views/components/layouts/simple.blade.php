@@ -8,7 +8,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     @include('components.layouts.partials.head')
 </head>
-<body class="text-primary-900" x-data>
+<body class="bg-ink text-cream-200 font-sans" x-data>
     <div id="app">
         <x-layouts.app.header />
 
