@@ -8,12 +8,12 @@
                 <x-input.field label="{{ __('One-time Password') }}" type="text" id="one_time_password" wire:model="oneTimePassword" required max-width="w-full"/>
 
                 @error('oneTimePassword')
-                    <span class="text-xs text-red-500" role="alert">
+                    <span class="text-xs text-error" role="alert">
                         {{ $message }}
                     </span>
                 @enderror
 
-                <p class="mt-2 text-sm text-gray-600">
+                <p class="mt-2 text-sm text-cream-200/60">
                     {{ __('Enter the one-time password sent to your email address.') }}
                 </p>
             </div>
@@ -38,7 +38,7 @@
                     }, 2000);
                 }
             "
-                class="text-sm text-gray-600 dark:text-gray-400 cursor-pointer bg-transparent border-0 p-0 m-0 text-left transition-opacity duration-300"
+                class="text-sm text-cream-200/60 cursor-pointer bg-transparent border-0 p-0 m-0 text-left transition-opacity duration-300"
                 :class="{ 'underline': !isResending }"
                 x-text="resendText"
             ></button>

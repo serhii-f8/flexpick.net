@@ -1,7 +1,7 @@
 <div>
     @inject('roadmapService', 'App\Services\RoadmapService')
 
-    <div class="border border-neutral-200 rounded-lg p-4">
+    <div class="border border-white/10 rounded-lg p-4">
         <div class="flex gap-3">
 
             <x-roadmap.upvote-box :item="$item"></x-roadmap.upvote-box>
@@ -22,7 +22,7 @@
 
         </div>
         <div class="flex flex-col gap-1">
-            <p class="py-4 text-neutral-500">
+            <p class="py-4 text-cream-200/60">
                 {!!  $roadmapService->prepareForDisplay($item->description) ?? __('No extra description.') !!}
             </p>
 

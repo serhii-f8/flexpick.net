@@ -4,7 +4,7 @@
 </fieldset>
 
 @error('email')
-<span class="text-xs text-red-500" role="alert">
+<span class="text-xs text-error" role="alert">
     {{ $message }}
 </span>
 @enderror
@@ -17,16 +17,16 @@
     </fieldset>
 
     @error('password')
-    <span class="text-xs text-red-500 ms-1" role="alert">
+    <span class="text-xs text-error ms-1" role="alert">
         {{ $message }}
     </span>
     @enderror
 @endif
 
 @if ($userExists)
-    <div class="my-2 ms-1 text-xs text-neutral-400">{{ __('You are already registered, enter your password.') }}</div>
+    <div class="my-2 ms-1 text-xs text-cream-200/60">{{ __('You are already registered, enter your password.') }}</div>
 @elseif(!empty($email))
-    <div class="my-2 ms-1 text-xs text-neutral-400">{{ __('Enter a password for your new account.') }}</div>
+    <div class="my-2 ms-1 text-xs text-cream-200/60">{{ __('Enter a password for your new account.') }}</div>
 @endif
 
 @if($userExists)
@@ -48,7 +48,7 @@
     </fieldset>
 
     @error('name')
-    <span class="text-xs text-red-500" role="alert">
+    <span class="text-xs text-error" role="alert">
         {{ $message }}
     </span>
     @enderror

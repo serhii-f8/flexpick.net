@@ -17,10 +17,10 @@
                 {{ __('New Plan details') }}
             </x-heading.h2>
 
-            <div class="rounded-2xl border border-neutral-300 mt-4 overflow-hidden p-6">
+            <div class="rounded-2xl border border-white/10 mt-4 overflow-hidden p-6">
 
                 <div class="flex flex-row gap-3">
-                    <div class="rounded-2xl text-5xl bg-primary-50 p-2 text-center w-24 h-24 text-primary-500 flex items-center justify-center">
+                    <div class="rounded-2xl text-5xl bg-primary-500/10 p-2 text-center w-24 h-24 text-primary-500 flex items-center justify-center">
                         {{ substr($newPlan->name, 0, 1) }}
                     </div>
                     <div class="flex flex-col gap-1">
@@ -66,11 +66,11 @@
 
                 <div>
 
-                    <hr class="mb-6 mt-2 text-neutral-200">
+                    <hr class="mb-6 mt-2 border-white/10">
                     @if ($newPlan->type === \App\Constants\PlanType::SEAT_BASED->value && $totals->basePrice !== null)
                         <div class="flex flex-row justify-between">
                             <div class="text-cream-100">
-                                {{ __('Base price') }} <span class="text-xs text-neutral-400">({{ __('includes :count seats', ['count' => $totals->includedSeats]) }})</span>
+                                {{ __('Base price') }} <span class="text-xs text-cream-200/60">({{ __('includes :count seats', ['count' => $totals->includedSeats]) }})</span>
                             </div>
                             <div class="text-cream-100">
                                 @money($totals->basePrice, $totals->currencyCode)
@@ -79,14 +79,14 @@
                         @if ($totals->extraSeats > 0)
                             <div class="flex flex-row justify-between mt-2">
                                 <div class="text-cream-100">
-                                    {{ __('Extra seats') }} <span class="text-xs text-neutral-400">({{ $totals->extraSeats }} &times; @money($totals->extraSeatPrice, $totals->currencyCode))</span>
+                                    {{ __('Extra seats') }} <span class="text-xs text-cream-200/60">({{ $totals->extraSeats }} &times; @money($totals->extraSeatPrice, $totals->currencyCode))</span>
                                 </div>
                                 <div class="text-cream-100">
                                     @money($totals->extraSeats * $totals->extraSeatPrice, $totals->currencyCode)
                                 </div>
                             </div>
                         @endif
-                        <hr class="my-4 text-neutral-200">
+                        <hr class="my-4 border-white/10">
                         <div class="flex flex-row justify-between">
                             <div class="text-cream-100">
                                 {{ __('New Subscription price') }}
@@ -110,7 +110,7 @@
                     @endif
 
                     @if (!$isProrated)
-                        <hr class="my-6 text-neutral-200">
+                        <hr class="my-6 border-white/10">
                         <div class="flex flex-row justify-between">
                             <div class="text-primary-500 text-xl font-bold">
                                 {{ __('Due now') }}
@@ -138,7 +138,7 @@
             <form action="" method="post">
                 @csrf
 
-                <p class="text-xs text-neutral-600 p-4">
+                <p class="text-xs text-cream-200/50 p-4">
                     {{ __('Cancel anytime in account settings at least one day before each renewal date. Plan automatically renews until cancelled. Your billing date may not line up with your apprenticeship start date.') }}
                     {{ __('By continuing, you agree to our') }} <a href="#" class="text-cream-100 underline">{{ __('Terms of Service') }}</a> {{ __('and') }} <a href="#" class="text-cream-100 underline">{{ __('Privacy Policy') }}</a>.
                 </p>

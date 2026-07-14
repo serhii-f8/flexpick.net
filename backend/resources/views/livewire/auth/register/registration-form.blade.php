@@ -10,7 +10,7 @@
                    autocomplete="name" max-width="w-full"/>
 
             @error('name')
-                <span class="text-xs text-red-500" role="alert">
+                <span class="text-xs text-error" role="alert">
                     {{ $message }}
                 </span>
             @enderror
@@ -22,12 +22,12 @@
                    autocomplete="email" max-width="w-full"/>
 
             @error('email')
-                <span class="text-xs text-red-500" role="alert">
+                <span class="text-xs text-error" role="alert">
                     {{ $message }}
                 </span>
             @enderror
 
-            <p class="mt-2 text-sm text-gray-600">
+            <p class="mt-2 text-sm text-cream-200/60">
                 {{ __('We will send you a one-time login code to the email address provided.') }}
             </p>
 

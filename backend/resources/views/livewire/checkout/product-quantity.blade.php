@@ -16,7 +16,7 @@
         </div>
 
         @error('quantity')
-            <span class="text-xs text-red-500 mt-1" role="alert">
+            <span class="text-xs text-error mt-1" role="alert">
                 {{ $message }}
             </span>
         @enderror

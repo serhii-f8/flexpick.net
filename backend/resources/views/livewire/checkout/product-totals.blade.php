@@ -7,7 +7,7 @@
         </div>
 
         <div class="my-6" x-show="discountFormVisible">
-            <hr class="my-4 text-neutral-200"/>
+            <hr class="my-4 border-white/10"/>
 
             @if (session('success'))
                 <div class="text-xs flex flex-row gap-2 my-2">
@@ -50,40 +50,40 @@
     </div>
 
 
-    <hr class="mb-6 mt-2 text-neutral-200">
+    <hr class="mb-6 mt-2 border-white/10">
     <div class="flex flex-row justify-between">
-        <div class="text-primary-900">
+        <div class="text-cream-100">
             {{ __('Price') }}
         </div>
-        <div class="text-primary-900">
+        <div class="text-cream-100">
             @money($subtotal, $currencyCode)
         </div>
     </div>
 
     @if($discountAmount > 0)
         <div class="flex flex-row justify-between">
-            <div class="text-primary-900">
+            <div class="text-cream-100">
                 {{ __('Discount') }}
             </div>
-            <div class="text-primary-900">
+            <div class="text-cream-100">
                 @money($discountAmount, $currencyCode)
             </div>
         </div>
 
-        <hr class="my-6 text-neutral-200">
+        <hr class="my-6 border-white/10">
 
         <div class="flex flex-row justify-between">
-            <div class="text-primary-900">
+            <div class="text-cream-100">
                 {{ __('Total') }}
             </div>
-            <div class="text-primary-900">
+            <div class="text-cream-100">
                 @money($amountDue, $currencyCode)
             </div>
         </div>
 
     @endif
 
-    <hr class="my-6 text-neutral-200">
+    <hr class="my-6 border-white/10">
     <div class="flex flex-row justify-between">
         <div class="text-primary-500 text-xl font-bold">
             {{ __('Due now') }}

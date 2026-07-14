@@ -1,11 +1,11 @@
 <div>
     <div class="mx-4">
-        <div class="card max-w-3xl bg-base-100 shadow-xl mx-auto">
+        <div class="card max-w-3xl bg-base-100 border border-white/10 mx-auto">
             <div class="card-body">
                 @svg('info', 'w-16 h-16 mx-auto text-primary-500 stroke-primary-500')
 
                 <div class="text-center">
-                    <x-heading.h3 class="text-primary-900">
+                    <x-heading.h3 class="text-cream-100">
                         {{ __('Verify Your Phone Number To Continue') }}
                     </x-heading.h3>
                     <p>
@@ -28,7 +28,7 @@
                             </label>
 
                             @error('phone')
-                                <span class="text-xs text-red-500" role="alert">
+                                <span class="text-xs text-error" role="alert">
                                     {{ $message }}
                                 </span>
                             @enderror
@@ -49,7 +49,7 @@
                                 </label>
 
                                 @error('code')
-                                <span class="text-xs text-red-500" role="alert">
+                                <span class="text-xs text-error" role="alert">
                                     {{ $message }}
                                 </span>
                                 @enderror

@@ -10,7 +10,7 @@
     </div>
 
     @error('g-recaptcha-response')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
             {{ $message }}
         </span>
     @enderror

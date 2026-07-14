@@ -11,7 +11,7 @@
                     <option value="{{ $type }}">{{ \App\Mapper\RoadmapMapper::mapTypeForDisplay($type) }}</option>
                 @endforeach
             </select>
-            <div class="text-sm text-red-500 mt-1">
+            <div class="text-sm text-error mt-1">
                 @error('form.type') <span class="error">{{ $message }}</span> @enderror
             </div>
         </div>
@@ -19,7 +19,7 @@
         <div>
             <input type="text" wire:model="form.title" placeholder="{{__('What do you want to suggest?')}}" class="input input-bordered w-full " />
 
-            <div class="text-sm text-red-500 mt-1">
+            <div class="text-sm text-error mt-1">
                 @error('form.title') <span class="error">{{ $message }}</span> @enderror
             </div>
         </div>
@@ -27,7 +27,7 @@
         <div>
             <textarea rows="7" wire:model="form.description" class="textarea textarea-bordered w-full " placeholder="{{ __('Provide more description.') }}"></textarea>
 
-            <div class="text-sm text-red-500 mt-1">
+            <div class="text-sm text-error mt-1">
                 @error('form.description') <span class="error">{{ $message }}</span> @enderror
             </div>
         </div>

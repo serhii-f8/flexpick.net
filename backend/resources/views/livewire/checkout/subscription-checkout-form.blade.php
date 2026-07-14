@@ -13,13 +13,13 @@
             </x-section.column>
         </x-section.columns>
 
-        <div class="fixed bottom-0 w-full bg-white shadow-black shadow-2xl z-50 py-4">
+        <div class="fixed bottom-0 w-full bg-base-100 shadow-black shadow-2xl z-50 py-4">
             <div class="flex flex-row flex-wrap justify-center items-center gap-2 md:gap-4">
-                <p class="text-xxs text-neutral-600 text-center mx-6">
+                <p class="text-xxs text-cream-200/50 text-center mx-6">
                     {{ __('By continuing, you agree to our') }} <a target="_blank" href="{{route('terms-of-service')}}"
-                       class="text-primary-900 underline">{{ __('Terms of Service') }}</a> {{ __('and') }}
+                       class="text-cream-100 underline">{{ __('Terms of Service') }}</a> {{ __('and') }}
                     <a target="_blank" href="{{route('privacy-policy')}}"
-                       class="text-primary-900 underline">{{ __('Privacy Policy') }}</a>.
+                       class="text-cream-100 underline">{{ __('Privacy Policy') }}</a>.
                 </p>
 
                 <x-button-link.primary

@@ -9,12 +9,12 @@
                    autocomplete="email" max-width="w-full"/>
 
             @error('email')
-                <span class="text-xs text-red-500" role="alert">
+                <span class="text-xs text-error" role="alert">
                     {{ $message }}
                 </span>
             @enderror
 
-            <p class="mt-2 text-sm text-gray-600">
+            <p class="mt-2 text-sm text-cream-200/60">
                 {{ __('Enter your email address and we will send you a one-time login code.') }}
             </p>
 

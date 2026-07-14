@@ -6,7 +6,7 @@
     </fieldset>
 
     @error('email')
-    <span class="text-xs text-red-500" role="alert">
+    <span class="text-xs text-error" role="alert">
         {{ $message }}
     </span>
     @enderror
@@ -19,7 +19,7 @@
         </fieldset>
 
         @error('name')
-        <span class="text-xs text-red-500" role="alert">
+        <span class="text-xs text-error" role="alert">
             {{ $message }}
         </span>
         @enderror
@@ -43,9 +43,9 @@
     </div>
 
     @if($userExists)
-        <div class="my-2 ms-1 text-xs text-neutral-400">{{ __('Click to receive a one-time password via email.') }}</div>
+        <div class="my-2 ms-1 text-xs text-cream-200/60">{{ __('Click to receive a one-time password via email.') }}</div>
     @else
-        <div class="my-2 ms-1 text-xs text-neutral-400">{{ __('Enter your name, then click to create your account and receive a login code.') }}</div>
+        <div class="my-2 ms-1 text-xs text-cream-200/60">{{ __('Enter your name, then click to create your account and receive a login code.') }}</div>
     @endif
 
 @elseif($showOtpForm)
@@ -55,7 +55,7 @@
     </fieldset>
 
     @error('email')
-    <span class="text-xs text-red-500" role="alert">
+    <span class="text-xs text-error" role="alert">
         {{ $message }}
     </span>
     @enderror
@@ -67,12 +67,12 @@
     </fieldset>
 
     @error('oneTimePassword')
-    <span class="text-xs text-red-500" role="alert">
+    <span class="text-xs text-error" role="alert">
         {{ $message }}
     </span>
     @enderror
 
-    <div class="my-2 ms-1 text-xs text-neutral-400">{{ __('Enter the one-time password sent to your email address.') }}</div>
+    <div class="my-2 ms-1 text-xs text-cream-200/60">{{ __('Enter the one-time password sent to your email address.') }}</div>
 
     {{-- Resend Code Button --}}
     <div class="mt-2 text-end" x-data="{ resendText: '{{ __('Resend Code') }}', isResending: false }">

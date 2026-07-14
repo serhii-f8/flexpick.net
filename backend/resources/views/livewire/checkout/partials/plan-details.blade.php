@@ -4,14 +4,14 @@
         $isTrialSkipped = $isTrialSkipped ?? false;
         $isTenantPickerEnabled = $isTenantPickerEnabled ?? true;
     @endphp
-    <x-heading.h2 class="text-primary-900 text-xl!">
+    <x-heading.h2 class="text-cream-100 text-xl!">
         {{ __('Plan details') }}
     </x-heading.h2>
 
-    <div class="rounded-2xl border border-neutral-200 mt-4 overflow-hidden p-6">
+    <div class="rounded-2xl border border-white/10 mt-4 overflow-hidden p-6">
 
         <div class="flex flex-row gap-3">
-            <div class="rounded-2xl text-5xl bg-primary-50 p-2 text-center w-24 h-24 text-primary-500 min-w-20 flex items-center justify-center">
+            <div class="rounded-2xl text-5xl bg-primary-500/10 p-2 text-center w-24 h-24 text-primary-500 min-w-20 flex items-center justify-center">
                 {{ substr($plan->name, 0, 1) }}
             </div>
             <div class="flex flex-col gap-1">
@@ -52,7 +52,7 @@
 
         </div>
 
-        <div class="text-primary-900 my-4">
+        <div class="text-cream-100 my-4">
             {{ __('What you get:') }}
         </div>
         <div>

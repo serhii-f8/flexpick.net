@@ -6,7 +6,7 @@
                     {!! str($announcement->content)->sanitizeHtml() !!}
                 </span>
                 @if ($announcement->is_dismissible)
-                <a wire:click="dismiss({{ $announcement->id }})" class="cursor-pointer text-primary-900 hover:scale-103 hover:text-primary-900 transition announcement-close-button" aria-label="{{ __('Close') }}" @click="isVisible = !isVisible">
+                <a wire:click="dismiss({{ $announcement->id }})" class="cursor-pointer text-cream-100 hover:scale-103 hover:text-cream-100 transition announcement-close-button" aria-label="{{ __('Close') }}" @click="isVisible = !isVisible">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </a>
                 @endif
