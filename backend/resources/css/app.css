@@ -2,8 +2,9 @@
 @import './colors.css';
 @import './styles.css';
 @plugin "daisyui" {
-    themes: light --default;
+    themes: false;
 }
+@import './flexpick-daisyui.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 

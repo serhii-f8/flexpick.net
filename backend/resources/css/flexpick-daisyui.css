@@ -1,0 +1,30 @@
+/* FlexPick dark theme — shared by the public bundle (app.css) and the
+   Filament dashboard bundle (filament/dashboard/theme.css). */
+@plugin "daisyui/theme" {
+    name: 'flexpick';
+    default: true;
+    color-scheme: dark;
+    --color-base-100: #16130f;
+    --color-base-200: #0f0d0b;
+    --color-base-300: #211c16;
+    --color-base-content: #e8e6de;
+    --color-primary: #d4a853;
+    --color-primary-content: #0b0a09;
+    --color-secondary: #e2694a;
+    --color-secondary-content: #0b0a09;
+    --color-accent: #d4a853;
+    --color-accent-content: #0b0a09;
+    --color-neutral: #262019;
+    --color-neutral-content: #e8e6de;
+    --color-info: #97deff;
+    --color-info-content: #0b0a09;
+    --color-success: #9ac27a;
+    --color-success-content: #0b0a09;
+    --color-warning: #d4a853;
+    --color-warning-content: #0b0a09;
+    --color-error: #dc6b5a;
+    --color-error-content: #0b0a09;
+    --radius-selector: 0.5rem;
+    --radius-field: 0.5rem;
+    --radius-box: 0.75rem;
+}
