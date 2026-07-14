@@ -69,4 +69,13 @@ class AuditEntitlementService
     {
         return max(0, $this->subscriptionAllowance($tenant) - $this->dashboardRunsUsedThisMonth($user));
     }
+
+    public function hasAuditAccess(User $user, ?Tenant $tenant): bool
+    {
+        if (AuditRequest::forUser($user)->exists()) {
+            return true;
+        }
+
+        return $tenant !== null && $this->subscriptionAllowance($tenant) > 0;
+    }
 }

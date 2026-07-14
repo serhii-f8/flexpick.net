@@ -23,4 +23,18 @@ class LinkAuditReportsToUserTest extends FeatureTest
         $this->assertSame($user->id, $report->fresh()->user_id);
         $this->assertNull($other->fresh()->user_id);
     }
+
+    public function test_requests_matching_email_are_linked_on_registration(): void
+    {
+        $request = AuditRequest::factory()->create(['email' => 'newuser2@example.com', 'user_id' => null]);
+        $other = AuditRequest::factory()->create(['email' => 'someoneelse@example.com', 'user_id' => null]);
+
+        $user = $this->createUser();
+        $user->update(['email' => 'newuser2@example.com']);
+
+        event(new Registered($user));
+
+        $this->assertSame($user->id, $request->fresh()->user_id);
+        $this->assertNull($other->fresh()->user_id);
+    }
 }

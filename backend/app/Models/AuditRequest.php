@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -26,6 +27,20 @@ class AuditRequest extends Model
         'free_run' => 'boolean',
         'prepaid' => 'boolean',
     ];
+
+    /**
+     * All audits owned by the given user: linked by id, or submitted with
+     * their email before they registered.
+     *
+     * @param  Builder<AuditRequest>  $query
+     * @return Builder<AuditRequest>
+     */
+    public function scopeForUser(Builder $query, User $user): Builder
+    {
+        return $query->where(function (Builder $query) use ($user): void {
+            $query->where('user_id', $user->id)->orWhere('email', $user->email);
+        });
+    }
 
     public function uniqueIds(): array
     {
