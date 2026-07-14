@@ -1,6 +1,6 @@
 <x-button-link.default
     {{ $attributes }}
-    {{ $attributes->merge(['class' => 'text-secondary-900 bg-secondary-500 hover:bg-secondary-600 focus:ring-secondary-300 dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800'])}}
+    {{ $attributes->merge(['class' => 'text-cream-100 bg-transparent border border-white/15 hover:border-primary-500/60']) }}
 >
     {{ $slot }}
 </x-button-link.default>

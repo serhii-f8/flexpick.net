@@ -247,3 +247,52 @@
         }
     }
 }
+
+/* ===== FlexPick landing design language (public pages) ===== */
+@layer base {
+    h1, h2, h3 {
+        font-family: var(--font-heading);
+        color: var(--color-cream-100);
+    }
+}
+
+@layer components {
+    /* Landing-style form fields — mirrors the landing's .fp-input spec */
+    #app input.input,
+    #app select.select,
+    #app textarea.textarea {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: var(--color-cream-100);
+        border-radius: 0.5rem;
+        transition: border-color 0.2s;
+    }
+
+    #app input.input:focus,
+    #app select.select:focus,
+    #app textarea.textarea:focus {
+        outline: 2px solid rgba(212, 168, 83, 0.7);
+        outline-offset: 2px;
+        border-color: rgba(212, 168, 83, 0.5);
+    }
+
+    /* Landing-style field labels — mirrors .fp-label */
+    #app .fieldset-legend {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgba(232, 230, 222, 0.5);
+    }
+
+    /* Inline links — landing uses gold */
+    #app .link {
+        color: var(--color-primary-500);
+        text-decoration: none;
+    }
+
+    #app .link:hover {
+        color: var(--color-primary-400);
+        text-decoration: underline;
+    }
+}
