@@ -12,6 +12,7 @@ use App\Livewire\AddressForm;
 use App\Models\Tenant;
 use App\Services\TenantPermissionService;
 use Filament\Actions\Action;
+use Filament\Enums\ThemeMode;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -41,8 +42,13 @@ class DashboardPanelProvider extends PanelProvider
             ->id('dashboard')
             ->path('dashboard')
             ->colors([
-                'primary' => Color::Teal,
+                'primary' => Color::hex('#d4a853'),
             ])
+            ->brandName('FlexPick')
+            ->brandLogo(asset('images/flexpick-wordmark.svg'))
+            ->brandLogoHeight('1.75rem')
+            ->defaultThemeMode(ThemeMode::Dark)
+            ->font('DM Sans')
             ->userMenuItems([
                 Action::make('admin-panel')
                     ->label(__('Admin Panel'))

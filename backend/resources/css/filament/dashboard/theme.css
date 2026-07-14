@@ -2,8 +2,9 @@
 @import '../../colors.css';
 
 @plugin "daisyui" {
-    themes: light --default;
+    themes: false;
 }
+@import '../../flexpick-daisyui.css';
 
 @source '../../../../app/Filament';
 @source '../../../../resources/views/filament';
