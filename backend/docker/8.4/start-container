@@ -19,6 +19,11 @@ for dir in /var/www/html/storage /var/www/html/bootstrap/cache; do
     fi
 done
 
+# Test suites that shell out to git (e.g. RepositoryClonerTest) run as root via
+# `docker compose exec`, but repo directories on the bind mount are owned by
+# sail — without this, git's dubious-ownership guard blocks them.
+git config --system --add safe.directory '*'
+
 if [ ! -d /.composer ]; then
     mkdir /.composer
 fi
