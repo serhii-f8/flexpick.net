@@ -129,6 +129,8 @@ class AuditRequestService
 
     public function markFailed(AuditRequest $auditRequest, string $reason): void
     {
+        $auditRequest->appendPipelineLog('failed', $reason);
+
         $auditRequest->update([
             'status' => AuditRequestStatus::FAILED->value,
             'failure_reason' => $reason,

@@ -12,6 +12,7 @@ use App\Models\AuditRequest;
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\AuditPipeline;
 use App\Services\AuditReport\ScoreCalculator;
+use App\Services\AuditRequestService;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
@@ -107,5 +108,46 @@ class AuditPipelineTest extends FeatureTest
 
         $this->assertSame(3, $job->tries);
         $this->assertSame([60, 300], $job->backoff);
+    }
+
+    public function test_pipeline_records_log_and_timing(): void
+    {
+        $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer);
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'file://'.$this->fixtureRepo,
+            'status' => AuditRequestStatus::QUEUED->value,
+        ]);
+
+        (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
+
+        $request->refresh();
+        $this->assertNotNull($request->analysis_started_at);
+        $this->assertNotNull($request->analysis_completed_at);
+
+        $steps = array_column($request->pipeline_log, 'step');
+        $this->assertSame(['started', 'cloned', 'metrics', 'analyzed', 'report'], $steps);
+    }
+
+    public function test_failed_run_appends_failure_log_entry(): void
+    {
+        $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer(throws: new AiAnalysisException('boom')));
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'file://'.$this->fixtureRepo,
+            'status' => AuditRequestStatus::QUEUED->value,
+        ]);
+
+        try {
+            (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
+        } catch (AiAnalysisException) {
+            // the job's failed() handler runs markFailed in production; simulate it
+            app(AuditRequestService::class)->markFailed($request, 'boom');
+        }
+
+        $request->refresh();
+        $log = $request->pipeline_log;
+        $last = end($log);
+        $this->assertSame('failed', $last['step']);
+        $this->assertStringContainsString('boom', $last['message']);
+        $this->assertNull($request->analysis_completed_at);
     }
 }
