@@ -12,10 +12,10 @@ use App\Mail\Audit\AuditRequestReceived;
 use App\Mail\Audit\AuditVerifyEmail;
 use App\Mail\Audit\NewAuditRequestAdminNotification;
 use App\Models\AuditRequest;
+use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\RepositoryCloner;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
@@ -25,6 +25,7 @@ class AuditRequestService
         private AuditEntitlementService $entitlements,
         private RepositoryCloner $cloner,
         private AuditFunnelRecorder $funnel,
+        private AuditMailer $auditMailer,
     ) {}
 
     public function submit(array $data, array $meta = []): AuditRequest
@@ -53,7 +54,7 @@ class AuditRequestService
 
         $this->funnel->record(AuditFunnelRecorder::STAGE_SUBMITTED, $auditRequest);
 
-        Mail::to($auditRequest->email)->send(new AuditVerifyEmail($auditRequest, $this->verificationUrl($auditRequest)));
+        $this->auditMailer->send(new AuditVerifyEmail($auditRequest, $this->verificationUrl($auditRequest)), $auditRequest->email, $auditRequest);
 
         return $auditRequest;
     }
@@ -94,7 +95,7 @@ class AuditRequestService
             $this->cloner->preflight($auditRequest->repo_url, useToken: false);
         } catch (AuditNotAnalyzableException) {
             $auditRequest->update(['status' => AuditRequestStatus::AWAITING_ACCESS->value]);
-            Mail::to($auditRequest->email)->send(new AuditRepoAccessNeeded($auditRequest));
+            $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest), $auditRequest->email, $auditRequest);
             $this->notifyAdmin($auditRequest);
 
             return;
@@ -103,7 +104,7 @@ class AuditRequestService
         if (! $this->entitlements->hasFreeRun($auditRequest->email)) {
             $auditRequest->update(['status' => AuditRequestStatus::AWAITING_PAYMENT->value]);
             $this->funnel->record(AuditFunnelRecorder::STAGE_AWAITING_PAYMENT, $auditRequest);
-            Mail::to($auditRequest->email)->send(new AuditQuotaExhausted($auditRequest, $this->purchaseRunUrl($auditRequest)));
+            $this->auditMailer->send(new AuditQuotaExhausted($auditRequest, $this->purchaseRunUrl($auditRequest)), $auditRequest->email, $auditRequest);
             $this->notifyAdmin($auditRequest);
 
             return;
@@ -113,7 +114,7 @@ class AuditRequestService
         $auditRequest->update(['status' => AuditRequestStatus::QUEUED->value]);
         GenerateAuditReport::dispatch($auditRequest);
         $this->funnel->record(AuditFunnelRecorder::STAGE_QUEUED, $auditRequest);
-        Mail::to($auditRequest->email)->send(new AuditRequestReceived($auditRequest, $this->statusUrl($auditRequest)));
+        $this->auditMailer->send(new AuditRequestReceived($auditRequest, $this->statusUrl($auditRequest)), $auditRequest->email, $auditRequest);
         $this->notifyAdmin($auditRequest);
     }
 
@@ -124,7 +125,7 @@ class AuditRequestService
             'failure_reason' => $reason,
         ]);
 
-        Mail::to($auditRequest->email)->send(new AuditRepoAccessNeeded($auditRequest));
+        $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest), $auditRequest->email, $auditRequest);
     }
 
     public function markFailed(AuditRequest $auditRequest, string $reason): void
@@ -138,7 +139,7 @@ class AuditRequestService
 
         $this->funnel->record(AuditFunnelRecorder::STAGE_FAILED, $auditRequest, ['reason' => $reason]);
 
-        Mail::to($auditRequest->email)->send(new AuditRequestFailed($auditRequest));
+        $this->auditMailer->send(new AuditRequestFailed($auditRequest), $auditRequest->email, $auditRequest);
         $this->notifyAdmin($auditRequest);
     }
 
@@ -147,7 +148,7 @@ class AuditRequestService
         $adminEmail = config('audit.admin_email');
 
         if ($adminEmail) {
-            Mail::to($adminEmail)->send(new NewAuditRequestAdminNotification($auditRequest));
+            $this->auditMailer->send(new NewAuditRequestAdminNotification($auditRequest), $adminEmail, $auditRequest);
         }
     }
 }

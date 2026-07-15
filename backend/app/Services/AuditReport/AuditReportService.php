@@ -9,8 +9,8 @@ use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\AuditMail\AuditMailer;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 
@@ -19,6 +19,7 @@ class AuditReportService
     public function __construct(
         private AuditFunnelRecorder $funnel,
         private AuditDeltaService $deltaService,
+        private AuditMailer $auditMailer,
     ) {}
 
     public function create(AuditRequest $auditRequest, array $payload): AuditReport
@@ -70,14 +71,12 @@ class AuditReportService
             $this->funnel->record(AuditFunnelRecorder::STAGE_UNLOCK_PAID, $report->auditRequest);
         }
 
-        Mail::to($report->auditRequest->email)
-            ->send(new AuditReportUnlocked($report, $this->signedUrl($report)));
+        $this->auditMailer->send(new AuditReportUnlocked($report, $this->signedUrl($report)), $report->auditRequest->email, $report->auditRequest);
     }
 
     public function send(AuditReport $report): void
     {
-        Mail::to($report->auditRequest->email)
-            ->send(new AuditReportReady($report, $this->signedUrl($report), $this->deltaService->deltasFor($report)));
+        $this->auditMailer->send(new AuditReportReady($report, $this->signedUrl($report), $this->deltaService->deltasFor($report)), $report->auditRequest->email, $report->auditRequest);
 
         $report->auditRequest->update(['status' => AuditRequestStatus::SENT->value]);
 
