@@ -21,6 +21,9 @@ class AuditMailer
             'audit_request_id' => $auditRequest?->id,
             'mailable' => class_basename($mailable),
             'recipient' => $recipient,
+            // Illuminate\Mail\Mailable doesn't declare envelope() itself — it's a convention every
+            // class-based mailable in this app follows, but Larastan can't verify it structurally.
+            // @phpstan-ignore-next-line method.notFound
             'subject' => (string) $mailable->envelope()->subject,
             'body' => $mailable->render(),
             'status' => AuditEmailLog::STATUS_PENDING,
