@@ -5,6 +5,7 @@ namespace Tests\Feature\Console;
 use App\Console\Commands\SendAuditUnlockReminders;
 use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Mail\Audit\AuditUnlockReminder;
+use App\Models\AuditEmailLog;
 use App\Models\AuditReport;
 use App\Models\User;
 use App\Models\UserParameter;
@@ -52,6 +53,7 @@ class SendAuditUnlockRemindersTest extends FeatureTest
             'name' => HandleAuditUnlockOrder::INTENT_PARAM,
             'value' => $report->uuid,
         ]);
+        $this->assertSame(1, AuditEmailLog::where('audit_request_id', $report->auditRequest->id)->where('mailable', 'AuditUnlockReminder')->count());
     }
 
     public function test_skips_fresh_intents_and_unlocked_reports(): void

@@ -6,8 +6,8 @@ use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Mail\Audit\AuditUnlockReminder;
 use App\Models\AuditReport;
 use App\Models\UserParameter;
+use App\Services\AuditMail\AuditMailer;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 
 class SendAuditUnlockReminders extends Command
@@ -18,7 +18,7 @@ class SendAuditUnlockReminders extends Command
 
     protected $description = 'Remind users who started a $5 report unlock but abandoned checkout';
 
-    public function handle(): int
+    public function handle(AuditMailer $auditMailer): int
     {
         $sent = 0;
 
@@ -49,7 +49,7 @@ class SendAuditUnlockReminders extends Command
                 }
 
                 $unlockUrl = URL::temporarySignedRoute('reports.unlock', now()->addDays(7), ['auditReport' => $report->uuid]);
-                Mail::to($report->auditRequest->email)->send(new AuditUnlockReminder($report, $unlockUrl));
+                $auditMailer->send(new AuditUnlockReminder($report, $unlockUrl), $report->auditRequest->email, $report->auditRequest);
 
                 UserParameter::create([
                     'user_id' => $intent->user_id,

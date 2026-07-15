@@ -5,9 +5,9 @@ namespace App\Console\Commands;
 use App\Constants\AuditRequestStatus;
 use App\Mail\Audit\AuditVerifyReminderEmail;
 use App\Models\AuditRequest;
+use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditRequestService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Mail;
 
 class SendAuditVerificationReminders extends Command
 {
@@ -15,7 +15,7 @@ class SendAuditVerificationReminders extends Command
 
     protected $description = 'Remind unverified audit requesters before their verification window closes';
 
-    public function handle(AuditRequestService $auditRequestService): int
+    public function handle(AuditRequestService $auditRequestService, AuditMailer $auditMailer): int
     {
         $pending = AuditRequest::query()
             ->where('status', AuditRequestStatus::PENDING_VERIFICATION->value)
@@ -26,8 +26,10 @@ class SendAuditVerificationReminders extends Command
             ->get();
 
         foreach ($pending as $auditRequest) {
-            Mail::to($auditRequest->email)->send(
-                new AuditVerifyReminderEmail($auditRequest, $auditRequestService->verificationUrl($auditRequest))
+            $auditMailer->send(
+                new AuditVerifyReminderEmail($auditRequest, $auditRequestService->verificationUrl($auditRequest)),
+                $auditRequest->email,
+                $auditRequest,
             );
             $auditRequest->update([
                 'meta' => array_merge($auditRequest->meta ?? [], ['verification_reminder_sent_at' => now()->toIso8601String()]),

@@ -4,6 +4,7 @@ namespace Tests\Feature\Console;
 
 use App\Constants\AuditRequestStatus;
 use App\Mail\Audit\AuditVerifyReminderEmail;
+use App\Models\AuditEmailLog;
 use App\Models\AuditRequest;
 use Illuminate\Support\Facades\Mail;
 use Tests\Feature\FeatureTest;
@@ -33,6 +34,7 @@ class SendAuditVerificationRemindersTest extends FeatureTest
 
         Mail::assertQueued(AuditVerifyReminderEmail::class, 1);
         $this->assertNotNull($stale->refresh()->meta['verification_reminder_sent_at'] ?? null);
+        $this->assertSame(1, AuditEmailLog::where('audit_request_id', $stale->id)->where('mailable', 'AuditVerifyReminderEmail')->count());
     }
 
     public function test_ignores_fresh_verified_and_expired_requests(): void
