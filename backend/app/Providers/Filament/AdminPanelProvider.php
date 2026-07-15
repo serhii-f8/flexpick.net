@@ -40,6 +40,12 @@ class AdminPanelProvider extends PanelProvider
                     )
                     ->url(fn () => route('dashboard'))
                     ->icon('heroicon-s-face-smile'),
+                Action::make('open-mailcoach')
+                    ->label(__('Open Mailcoach'))
+                    ->url(fn (): string => (string) config('services.mailcoach.ui_url'))
+                    ->openUrlInNewTab()
+                    ->visible(fn (): bool => (string) config('services.mailcoach.ui_url') !== '')
+                    ->icon('heroicon-o-envelope'),
             ])
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\\Filament\\Admin\\Pages')
