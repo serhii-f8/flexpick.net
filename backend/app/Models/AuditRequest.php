@@ -16,6 +16,7 @@ class AuditRequest extends Model
     protected $fillable = [
         'name', 'email', 'repo_url', 'message', 'status', 'failure_reason', 'meta', 'metrics',
         'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'user_id', 'prepaid',
+        'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at',
     ];
 
     protected $casts = [
@@ -26,6 +27,9 @@ class AuditRequest extends Model
         'consented_at' => 'datetime',
         'free_run' => 'boolean',
         'prepaid' => 'boolean',
+        'pipeline_log' => 'array',
+        'analysis_started_at' => 'datetime',
+        'analysis_completed_at' => 'datetime',
     ];
 
     /**
@@ -66,5 +70,13 @@ class AuditRequest extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function appendPipelineLog(string $step, string $message): void
+    {
+        $log = $this->pipeline_log ?? [];
+        $log[] = ['step' => $step, 'message' => $message, 'at' => now()->toIso8601String()];
+
+        $this->forceFill(['pipeline_log' => $log])->save();
     }
 }
