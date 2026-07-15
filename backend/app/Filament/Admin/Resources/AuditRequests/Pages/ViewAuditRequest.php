@@ -20,13 +20,13 @@ class ViewAuditRequest extends ViewRecord
             EditAction::make(),
             Action::make('editResults')
                 ->label(__('Edit results'))
-                ->visible(fn (): bool => $this->record->report !== null)
+                ->visible(fn (): bool => $this->getRecord()->report !== null)
                 ->schema([
                     Textarea::make('payload')
                         ->label(__('Report payload (JSON)'))
                         ->helperText(__('The hosted web report reads this live. The PDF stays unchanged until the audit is re-run.'))
                         ->rows(20)
-                        ->default(fn (): string => json_encode($this->record->report->payload, JSON_PRETTY_PRINT))
+                        ->default(fn (): string => json_encode($this->getRecord()->report->payload, JSON_PRETTY_PRINT))
                         ->required()
                         ->rules([
                             function () {
@@ -47,7 +47,7 @@ class ViewAuditRequest extends ViewRecord
                         ]),
                 ])
                 ->action(function (array $data): void {
-                    $this->record->report->update(['payload' => json_decode($data['payload'], true)]);
+                    $this->getRecord()->report->update(['payload' => json_decode($data['payload'], true)]);
 
                     Notification::make()
                         ->title(__('Report payload updated'))
