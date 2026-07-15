@@ -2,7 +2,9 @@
 
 namespace App\Filament\Admin\Resources\AuditRequests\Pages;
 
+use App\Exceptions\AiAnalysisException;
 use App\Filament\Admin\Resources\AuditRequests\AuditRequestResource;
+use App\Services\AuditReport\ReportPayload;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -39,8 +41,10 @@ class ViewAuditRequest extends ViewRecord
                                         return;
                                     }
 
-                                    if (! is_int(data_get($decoded, 'scores.overall'))) {
-                                        $fail(__('The payload must keep an integer scores.overall value.'));
+                                    try {
+                                        ReportPayload::validate($decoded);
+                                    } catch (AiAnalysisException $e) {
+                                        $fail($e->getMessage());
                                     }
                                 };
                             },
