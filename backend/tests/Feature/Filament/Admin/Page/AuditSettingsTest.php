@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament\Admin\Page;
 
+use App\Filament\Admin\Pages\AuditSettings as AuditSettingsPage;
 use App\Livewire\Filament\AuditSettings;
 use App\Services\ConfigService;
 use Livewire\Livewire;
@@ -9,6 +10,19 @@ use Tests\Feature\FeatureTest;
 
 class AuditSettingsTest extends FeatureTest
 {
+    public function test_admin_can_access_audit_settings_page(): void
+    {
+        config(['app.admin_settings.enabled' => true]);
+
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+
+        $response = $this->get(AuditSettingsPage::getUrl([], true, 'admin'));
+
+        $response->assertSuccessful();
+        $response->assertSee('Audit Settings');
+    }
+
     public function test_admin_can_save_valid_template(): void
     {
         $admin = $this->createAdminUser();
