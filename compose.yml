@@ -8,9 +8,38 @@ services:
         working_dir: /app
         command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
         environment:
-            PUBLIC_APP_URL: 'http://localhost:8080'
+            PUBLIC_APP_URL: 'http://localhost:8091'
         volumes:
             - ./frontend:/app
         ports:
             - '4321:4321'
         restart: unless-stopped
+    mailcoach:
+        image: sail-8.4/app
+        environment:
+            WWWUSER: '${WWWUSER:-1000}'
+            LARAVEL_SAIL: 1
+        volumes:
+            - './mailcoach:/var/www/html'
+        ports:
+            - '8090:80'
+        restart: unless-stopped
+        networks:
+            - sail
+        depends_on:
+            - mysql
+            - redis
+            - mailpit
+    mailcoach.horizon:
+        image: sail-8.4/app
+        command: php artisan horizon
+        environment:
+            WWWUSER: '${WWWUSER:-1000}'
+            LARAVEL_SAIL: 1
+        volumes:
+            - './mailcoach:/var/www/html'
+        restart: unless-stopped
+        networks:
+            - sail
+        depends_on:
+            - mailcoach

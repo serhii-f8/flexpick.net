@@ -1,0 +1,8 @@
+{
+    "http-basic": {
+        "satis.spatie.be": {
+            "username": "<your-spatie-account-email>",
+            "password": "<your-mailcoach-license-key>"
+        }
+    }
+}
