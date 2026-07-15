@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources\AuditRequests;
 
 use App\Constants\AuditRequestStatus;
+use App\Filament\Admin\Resources\AuditRequests\Pages\EditAuditRequest;
 use App\Filament\Admin\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Filament\Admin\Resources\AuditRequests\Pages\ViewAuditRequest;
 use App\Jobs\GenerateAuditReport;
@@ -10,15 +11,24 @@ use App\Mapper\AuditRequestStatusMapper;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\AuditReport\PromptComposer;
 use Filament\Actions\Action;
+use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class AuditRequestResource extends Resource
 {
@@ -41,7 +51,30 @@ class AuditRequestResource extends Resource
 
     public static function canEdit($record): bool
     {
-        return false;
+        return true;
+    }
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make(__('Audit request'))->schema([
+                Select::make('status')
+                    ->options(
+                        collect(AuditRequestStatus::cases())
+                            ->mapWithKeys(fn (AuditRequestStatus $status) => [$status->value => app(AuditRequestStatusMapper::class)->mapForDisplay($status->value)])
+                            ->all()
+                    )
+                    ->required(),
+                TextInput::make('repo_url')->url()->maxLength(2048),
+                TextInput::make('name')->required()->maxLength(255),
+                TextInput::make('email')->email()->required()->maxLength(255),
+                Textarea::make('message')->rows(4),
+                Textarea::make('admin_context')
+                    ->label(__('Additional analysis context'))
+                    ->helperText(__('Appended to the AI prompt on the next run of this audit.'))
+                    ->rows(4),
+            ]),
+        ]);
     }
 
     public static function infolist(Schema $schema): Schema
@@ -58,6 +91,37 @@ class AuditRequestResource extends Resource
                 TextEntry::make('marketing_consent'),
                 TextEntry::make('source'),
                 TextEntry::make('report.uuid')->label(__('Report')),
+                TextEntry::make('tenants')
+                    ->label(__('Company / workspaces'))
+                    ->state(fn (AuditRequest $record): string => $record->user?->tenants()->pluck('name')->implode(', ') ?: '—'),
+                TextEntry::make('admin_context')
+                    ->label(__('Additional analysis context'))
+                    ->placeholder('—'),
+            ]),
+            Section::make(__('Next-run prompt preview'))->collapsed()->schema([
+                TextEntry::make('prompt_preview')
+                    ->label('')
+                    ->state(fn (AuditRequest $record): string => app(PromptComposer::class)->preview($record))
+                    ->markdown(false)
+                    ->extraAttributes(['style' => 'white-space: pre-wrap; font-family: monospace;']),
+            ]),
+            Section::make(__('Processing log'))->schema([
+                TextEntry::make('pipeline_log')
+                    ->label('')
+                    ->state(function (AuditRequest $record): string {
+                        $log = $record->pipeline_log ?? [];
+
+                        if ($log === []) {
+                            return __('No processing activity recorded yet.');
+                        }
+
+                        return collect($log)
+                            ->map(fn (array $entry): string => "[{$entry['at']}] {$entry['step']}: {$entry['message']}")
+                            ->implode("\n");
+                    })
+                    ->extraAttributes(['style' => 'white-space: pre-wrap; font-family: monospace;']),
+                TextEntry::make('analysis_started_at')->dateTime(config('app.datetime_format'))->placeholder('—'),
+                TextEntry::make('analysis_completed_at')->dateTime(config('app.datetime_format'))->placeholder('—'),
             ]),
         ]);
     }
@@ -69,7 +133,7 @@ class AuditRequestResource extends Resource
                 TextColumn::make('created_at')->dateTime(config('app.datetime_format'))->sortable(),
                 TextColumn::make('name')->searchable(),
                 TextColumn::make('email')->searchable(),
-                TextColumn::make('repo_url')->limit(40),
+                TextColumn::make('repo_url')->limit(40)->searchable(),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))
@@ -80,8 +144,28 @@ class AuditRequestResource extends Resource
                 TextColumn::make('source'),
             ])
             ->defaultSort('created_at', 'desc')
+            ->filters([
+                SelectFilter::make('status')
+                    ->multiple()
+                    ->options(
+                        collect(AuditRequestStatus::cases())
+                            ->mapWithKeys(fn (AuditRequestStatus $status) => [$status->value => app(AuditRequestStatusMapper::class)->mapForDisplay($status->value)])
+                            ->all()
+                    ),
+                Filter::make('submitted')
+                    ->schema([
+                        DatePicker::make('submitted_from')->label(__('Submitted from')),
+                        DatePicker::make('submitted_until')->label(__('Submitted until')),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when($data['submitted_from'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('created_at', '>=', $date))
+                            ->when($data['submitted_until'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('created_at', '<=', $date));
+                    }),
+            ])
             ->recordActions([
                 ViewAction::make(),
+                EditAction::make(),
                 Action::make('retry')
                     ->label(__('Retry pipeline'))
                     ->requiresConfirmation()
@@ -127,6 +211,7 @@ class AuditRequestResource extends Resource
         return [
             'index' => ListAuditRequests::route('/'),
             'view' => ViewAuditRequest::route('/{record}'),
+            'edit' => EditAuditRequest::route('/{record}/edit'),
         ];
     }
 }
