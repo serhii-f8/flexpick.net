@@ -67,7 +67,9 @@ PROMPT;
         'additionalProperties' => false,
     ];
 
-    public function analyze(array $metrics, array $excerpts): array
+    public function __construct(private PromptComposer $promptComposer) {}
+
+    public function analyze(array $metrics, array $excerpts, ?string $adminContext = null): array
     {
         $client = new Client(apiKey: (string) config('services.anthropic.api_key'));
 
@@ -76,7 +78,7 @@ PROMPT;
             maxTokens: 16000,
             thinking: ['type' => 'adaptive'],
             system: self::SYSTEM_PROMPT,
-            messages: [['role' => 'user', 'content' => $this->buildPrompt($metrics, $excerpts)]],
+            messages: [['role' => 'user', 'content' => $this->promptComposer->compose($metrics, $excerpts, $adminContext)]],
             outputConfig: ['format' => ['type' => 'json_schema', 'schema' => self::SCHEMA]],
         );
 
@@ -91,19 +93,5 @@ PROMPT;
         }
 
         throw new AiAnalysisException('Analysis returned no text content');
-    }
-
-    private function buildPrompt(array $metrics, array $excerpts): string
-    {
-        $excerptText = '';
-        foreach ($excerpts as $excerpt) {
-            $excerptText .= "\n===== {$excerpt['path']} =====\n{$excerpt['content']}\n";
-        }
-
-        return "Repository metrics (JSON):\n"
-            .json_encode($metrics, JSON_PRETTY_PRINT)
-            ."\n\nFile excerpts (largest files, truncated):\n"
-            .$excerptText
-            ."\n\nProduce the codebase health report.";
     }
 }

@@ -13,5 +13,5 @@ interface AiAnalyzer
      *
      * @throws AiAnalysisException
      */
-    public function analyze(array $metrics, array $excerpts): array;
+    public function analyze(array $metrics, array $excerpts, ?string $adminContext = null): array;
 }

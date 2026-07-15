@@ -8,17 +8,20 @@ class FakeAiAnalyzer implements AiAnalyzer
 {
     public ?array $receivedMetrics = null;
 
+    public ?string $receivedAdminContext = null;
+
     public function __construct(
         public ?\Throwable $throws = null,
     ) {}
 
-    public function analyze(array $metrics, array $excerpts): array
+    public function analyze(array $metrics, array $excerpts, ?string $adminContext = null): array
     {
         if ($this->throws) {
             throw $this->throws;
         }
 
         $this->receivedMetrics = $metrics;
+        $this->receivedAdminContext = $adminContext;
 
         return [
             'summary' => 'Fake analysis summary.',

@@ -32,7 +32,7 @@ class AuditPipeline
             $metrics['computed_scores'] = $scores;
             $auditRequest->update(['metrics' => $metrics]);
 
-            $payload = $this->analyzer->analyze($metrics, $collected['excerpts']);
+            $payload = $this->analyzer->analyze($metrics, $collected['excerpts'], $auditRequest->admin_context);
             $payload['scores'] = $scores;
 
             $report = $this->reportService->create($auditRequest, $payload);

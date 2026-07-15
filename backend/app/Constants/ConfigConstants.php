@@ -175,5 +175,8 @@ class ConfigConstants
         'app.referral.trigger',
         'app.referral.reward_type',
         'app.referral.discount_id',
+
+        // Audits
+        'audit.prompt_template',
     ];
 }
