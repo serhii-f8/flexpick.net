@@ -164,8 +164,8 @@ class AuditRequestResource extends Resource
                     }),
             ])
             ->recordActions([
-                ViewAction::make(),
                 EditAction::make(),
+                ViewAction::make(),
                 Action::make('retry')
                     ->label(__('Retry pipeline'))
                     ->requiresConfirmation()
