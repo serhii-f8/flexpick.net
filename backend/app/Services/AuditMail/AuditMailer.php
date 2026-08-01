@@ -17,15 +17,36 @@ class AuditMailer
 
     public function send(Mailable $mailable, string $recipient, ?AuditRequest $auditRequest = null): AuditEmailLog
     {
-        $log = AuditEmailLog::create([
-            'audit_request_id' => $auditRequest?->id,
-            'mailable' => class_basename($mailable),
-            'recipient' => $recipient,
+        $mailableName = class_basename($mailable);
+
+        try {
             // Illuminate\Mail\Mailable doesn't declare envelope() itself — it's a convention every
             // class-based mailable in this app follows, but Larastan can't verify it structurally.
             // @phpstan-ignore-next-line method.notFound
-            'subject' => (string) $mailable->envelope()->subject,
-            'body' => $mailable->render(),
+            $subject = (string) $mailable->envelope()->subject;
+            $body = $mailable->render();
+        } catch (Throwable $e) {
+            AuditEmailLog::create([
+                'audit_request_id' => $auditRequest?->id,
+                'mailable' => $mailableName,
+                'recipient' => $recipient,
+                'subject' => '',
+                'body' => '',
+                'status' => AuditEmailLog::STATUS_FAILED,
+                'attempts' => 1,
+                'last_error' => 'Render failed: '.$e->getMessage(),
+                'sent_at' => now(),
+            ]);
+
+            throw $e;
+        }
+
+        $log = AuditEmailLog::create([
+            'audit_request_id' => $auditRequest?->id,
+            'mailable' => $mailableName,
+            'recipient' => $recipient,
+            'subject' => $subject,
+            'body' => $body,
             'status' => AuditEmailLog::STATUS_PENDING,
             'attempts' => 1,
             'sent_at' => now(),

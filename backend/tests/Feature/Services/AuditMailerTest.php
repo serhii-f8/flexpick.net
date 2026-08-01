@@ -10,6 +10,8 @@ use App\Services\AuditRequestService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Tests\Feature\FeatureTest;
+use Tests\Feature\Services\Fixtures\UnrenderableMailable;
+use Throwable;
 
 class AuditMailerTest extends FeatureTest
 {
@@ -75,5 +77,27 @@ class AuditMailerTest extends FeatureTest
         ]);
 
         $this->assertSame(1, AuditEmailLog::where('audit_request_id', $request->id)->where('mailable', 'AuditVerifyEmail')->count());
+    }
+
+    public function test_render_failure_logs_failed_row_and_rethrows(): void
+    {
+        Mail::fake();
+
+        $request = AuditRequest::factory()->create(['email' => 'render-fail@example.com']);
+
+        try {
+            app(AuditMailer::class)->send(new UnrenderableMailable, $request->email, $request);
+            $this->fail('Expected the render failure to be rethrown.');
+        } catch (Throwable $e) {
+            // Expected — the mailer must rethrow after recording the failure.
+        }
+
+        $log = AuditEmailLog::where('audit_request_id', $request->id)->sole();
+
+        $this->assertSame(AuditEmailLog::STATUS_FAILED, $log->status);
+        $this->assertSame('UnrenderableMailable', $log->mailable);
+        $this->assertSame('render-fail@example.com', $log->recipient);
+        $this->assertStringStartsWith('Render failed: ', (string) $log->last_error);
+        Mail::assertNothingOutgoing();
     }
 }
