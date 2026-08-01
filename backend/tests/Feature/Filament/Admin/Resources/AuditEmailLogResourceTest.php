@@ -45,6 +45,8 @@ class AuditEmailLogResourceTest extends FeatureTest
         Mail::assertSent(StoredAuditEmail::class, function (StoredAuditEmail $mail): bool {
             $mail->build();
 
+            $mail->assertSeeInHtml('<p>stored body</p>', false);
+
             return $mail->subject === 'Your codebase health report is ready'
                 && $mail->hasTo('resend-target@example.com');
         });
