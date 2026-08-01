@@ -122,10 +122,4 @@ return [
         'model' => env('AUDIT_AI_MODEL', 'claude-opus-4-8'),
     ],
 
-    'mailcoach' => [
-        'endpoint' => env('MAILCOACH_ENDPOINT'),
-        'api_token' => env('MAILCOACH_API_TOKEN'),
-        'ui_url' => env('MAILCOACH_UI_URL'),
-    ],
-
 ];

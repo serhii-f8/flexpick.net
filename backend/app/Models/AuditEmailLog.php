@@ -22,7 +22,7 @@ class AuditEmailLog extends Model
 
     protected $fillable = [
         'audit_request_id', 'mailable', 'recipient', 'subject', 'body',
-        'mailcoach_uuid', 'status', 'attempts', 'last_error', 'sent_at',
+        'status', 'attempts', 'last_error', 'sent_at',
     ];
 
     protected $casts = [

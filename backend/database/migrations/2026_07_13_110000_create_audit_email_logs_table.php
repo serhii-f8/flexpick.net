@@ -15,7 +15,6 @@ return new class extends Migration
             $table->string('recipient');
             $table->string('subject');
             $table->longText('body');
-            $table->string('mailcoach_uuid')->nullable()->index();
             $table->string('status')->default('pending')->index();
             $table->unsignedInteger('attempts')->default(0);
             $table->text('last_error')->nullable();
