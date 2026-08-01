@@ -65,10 +65,31 @@ php artisan horizon                  # Redis-backed queue worker/monitor
 php artisan test --compact                       # run tests (preferred)
 php artisan test --filter=TestName               # single test / filter
 vendor/bin/phpstan analyse                       # Larastan static analysis
-vendor/bin/pint                                  # code formatter (PSR-12)
+vendor/bin/pint --dirty --format agent           # format only changed files (run before finalizing)
 ```
 
 Deploy: `php dep deploy` (Deployer, see `backend/deploy.php`).
+
+The suite is **PHPUnit** (`^11`, classic `TestCase`-based classes under `backend/tests/`; there is no `Pest.php`). The Filament/Livewire test snippets in `backend/AGENTS.md` are written in Pest syntax from the Boost guidelines — translate them to PHPUnit before use, and create tests with `php artisan make:test --phpunit {name}`.
+
+**Domain skills**: `backend/.claude/skills/` holds curated skills (`laravel-best-practices`, `livewire-development`, `configuring-horizon`, `socialite-development`, `tailwindcss-development`, `debug-using-debugbar`). Per the Boost guidelines in `AGENTS.md`, activate the relevant one when working in its domain.
+
+### The Audit pipeline (the product built on top of the boilerplate)
+
+SaaSykit is the *boilerplate*; the actual product is a **code-audit service** layered on top — the backend counterpart to the frontend's "vibecode rescue" landing. A visitor submits a `repo_url` (`AuditRequest`, UUID-keyed, claimable by email before signup via `scopeForUser`); a pipeline clones and analyzes the repo and emails back a gated report. Almost all of this lives in `app/Services/AuditReport/`, orchestrated by `AuditPipeline::run()`, whose stages are:
+
+1. `RepositoryCloner` — `preflight()` then `clone()` into a temp path (cleaned up in `finally`).
+2. `MetricsCollector::collect()` — returns `metrics` + code `excerpts`; runs `DependencyAuditor` internally.
+3. `ScoreCalculator::calculate($metrics)` — computed scores, stored on the request *before* the AI step.
+4. `AiAnalyzer::analyze($metrics, $excerpts, $adminContext)` — `AiAnalyzer` is an **interface**; `ClaudeAnalyzer` is the impl (bound in `AppServiceProvider`), and it composes prompts via `PromptComposer` and returns a `ReportPayload`-shaped array.
+5. `AuditReportService::create()` then `send()` — persists the `AuditReport` and emails it.
+
+Failures throw `AuditNotAnalyzableException` → `AuditRequestService::markNeedsFollowup()`. Note `AuditDeltaService` / `AuditBenchmarkService` are **not** part of this run — they're applied at report *view* time in `AuditReportController`.
+
+- Access is gated by `AuditEntitlementService`: a free-run quota (`config('audit.free_reports_limit')` + per-user `audit_bonus_free_runs` bonus) and a subscription allowance (`audit_analyses_per_month` from the plan's product metadata, metered per calendar month for `source = dashboard` runs).
+- Delivery via `app/Services/AuditMail/` (`AuditMailer`, which logs every message to `AuditEmailLog` and sends directly through the framework mailer); the acquisition funnel is tracked through `AuditFunnelRecorder` / `AuditFunnelEvent`.
+- Models: `AuditRequest`, `AuditReport`, `AuditEmailLog`, `AuditFunnelEvent`, `AuditSchedule`.
+- Scheduled in `routes/console.php`: `app:run-scheduled-audits` (daily, `withoutOverlapping()->onOneServer()`), `app:purge-unverified-audit-requests`, `app:send-audit-verification-reminders`, `app:send-audit-unlock-reminders` — these need Horizon running. When touching the audit flow, trace it here rather than through the generic subscription/order services.
 
 ### Key architecture notes
 

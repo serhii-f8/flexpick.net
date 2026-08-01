@@ -59,7 +59,7 @@ class AuditAdminStatsWidget extends BaseWidget
 
     private function emailFailures(): int
     {
-        // audit_email_logs ships with the Mailcoach workstream; render 0 until it lands
+        // Tolerate the table being absent so the widget still renders on a partial schema
         if (! Schema::hasTable('audit_email_logs')) {
             return 0;
         }

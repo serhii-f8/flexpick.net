@@ -265,8 +265,11 @@ public function test_send_failure_logs_failed_row_and_rethrows(): void
 {
     $request = AuditRequest::factory()->create(['email' => 'send-fail@example.com']);
 
-    Mail::shouldReceive('to')->once()->andReturnSelf();
-    Mail::shouldReceive('send')->once()->andThrow(new RuntimeException('transport down'));
+    // Every audit mailable implements ShouldQueue, so AuditMailer's Mail::to()->send()
+    // hands the message to the queue rather than straight to the transport. Pointing the
+    // queue at a connection that does not exist makes that dispatch throw synchronously —
+    // no mocks, no network, and it mirrors a real failure mode (queue backend unavailable).
+    config(['queue.default' => 'no-such-connection']);
 
     try {
         app(AuditMailer::class)->send(
@@ -275,22 +278,23 @@ public function test_send_failure_logs_failed_row_and_rethrows(): void
             $request
         );
         $this->fail('Expected the send failure to be rethrown.');
-    } catch (RuntimeException $e) {
-        $this->assertSame('transport down', $e->getMessage());
+    } catch (InvalidArgumentException $e) {
+        $this->assertStringContainsString('no-such-connection', $e->getMessage());
     }
 
     $log = AuditEmailLog::where('audit_request_id', $request->id)->sole();
 
     $this->assertSame(AuditEmailLog::STATUS_FAILED, $log->status);
-    $this->assertSame('transport down', $log->last_error);
+    $this->assertStringContainsString('no-such-connection', (string) $log->last_error);
+    $this->assertNotSame('', $log->body, 'the message rendered before the dispatch failed');
 }
 ```
 
-Add `use RuntimeException;` to the imports.
+Add `use InvalidArgumentException;` to the imports. Do **not** call `Mail::fake()` in this test — the real mail stack is wanted; only the queue is broken. Laravel rebuilds the application per test method, so the `config()` change cannot leak into other tests.
 
 **Be straight about what this test is:** it passes the moment it is written, because the current code already logs on the send path. It is a characterization test closing a real coverage gap — there is no send-failure test today, yet spec A11 requires "a send failure is recorded with its reason." It is not a TDD driver, and the plan does not ask you to watch it fail.
 
-`Mail::fake()` cannot express a throw, which is why this uses the facade's Mockery seam instead.
+**Why not mock the `Mail` facade:** `Mail::shouldReceive(...)` replaces the whole `MailManager`, and Task 1's restructure calls `$mailable->render()` — which resolves the same `mailer` binding — *before* the send. A facade mock therefore breaks rendering and the test dies with `BadMethodCallException` long before reaching the branch under test. `Mail::partialMock()` fails too: Mockery skips the constructor, leaving `$this->app` null inside `MailManager`. And a real transport cannot be used from the host, where `MAIL_HOST=mailpit` does not resolve and the connection attempt hangs. Breaking the queue is the one seam that is synchronous, offline, and mock-free.
 
 - [ ] **Step 4: Run the test class against the unchanged implementation**
 
@@ -462,6 +466,7 @@ public function test_resend_sends_stored_subject_and_body(): void
 
     Mail::assertSent(StoredAuditEmail::class, function (StoredAuditEmail $mail): bool {
         $mail->build();
+        $mail->assertSeeInHtml('<p>stored body</p>', false);
 
         return $mail->subject === 'Your codebase health report is ready'
             && $mail->hasTo('resend-target@example.com');

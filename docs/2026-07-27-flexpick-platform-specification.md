@@ -1,8 +1,13 @@
 # FlexPick — Platform Specification
 
-**Date:** 2026-07-27
+**Date:** 2026-07-27 (revised 2026-08-01)
 **Status:** Specification for review
-**Scope:** The complete FlexPick platform — marketing site, product application, automated code-audit pipeline, freemium monetization, growth/retention loops, administrative tooling, and transactional email infrastructure.
+**Scope:** The complete FlexPick platform — marketing site, product application, automated code-audit pipeline, tiered audit products, freemium monetization, growth/retention loops, administrative tooling, and transactional email infrastructure.
+
+**Revision 2026-08-01 — two owner decisions incorporated throughout:**
+
+- **D1 — Standalone email platform removed.** The licensed transactional email service (Mailcoach) is dropped from the architecture: its license expired 2025-10-15, composer access to the private repository is closed, and the live path was never exercised. All audit email is sent directly from the product application through the framework mailer, keeping the single mailer entry point and the per-message email log. Delivery/open/click tracking moves to a deferred phase via an email-provider's event webhooks (§4.2, §5.8). The Mailcoach client code currently in the repository is scheduled for removal (§17, Phase 10).
+- **D2 — Tiered audit products.** The single automated pipeline becomes tier 1 of three sellable products per the 2026-08 company pitch: **Automated Health Report ($49)** built on open-source scanners, **Deep AI Code Review ($199)** adding AI source review of the riskiest files, and **Expert Audit (from $999)** adding a human review stage with its own workflow status and operator tooling. The free funnel remains as a free diagnostic entry step. New §5.12; roadmap Phases 10–13; Appendix A pricing superseded.
 **Supersedes in role (not in detail):** the seven feature-scoped design specs under `docs/superpowers/specs/` and `frontend/docs/superpowers/specs/`. Those remain the authoritative record of individual feature decisions; this document is the single overarching description of what the system is and how it must be structured.
 
 ## How to read this document
@@ -94,7 +99,7 @@ Differentiators the system must preserve:
 - **T4 [R]** Business logic must live in service classes, not controllers, models, or Livewire components.
 - **T5 [R]** Payment integration must remain provider-abstracted; no provider-specific logic may leak into audit or entitlement code.
 - **T6 [R]** Tenant-scoped data must be unreachable across tenant boundaries through any query path.
-- **T7 [R]** Transactional email must never silently stop. Delivery through the tracking platform must degrade to direct send with a logged reason.
+- **T7 [R]** Transactional email must never silently stop. Every audit message goes out through one mailer entry point and produces a log row recording the outcome; a send failure is recorded with its reason, never swallowed.
 - **T8 [R]** Secrets — API keys, repository access tokens, license credentials — must never be committed, logged, or echoed in user-facing error text.
 
 ### 2.4 Measurable success criteria
@@ -219,14 +224,14 @@ Differentiators the system must preserve:
 - Freemium entitlement: lifetime free allowance per email, referral bonus, one-time unlock, prepaid single run, subscription allowance metered per calendar month.
 - Provider-abstracted checkout and webhook-driven order fulfilment.
 - Customer dashboard: audit list and detail, usage statistics, recent audits, launch, schedules, repository trends.
-- Operator admin: audit resource with list, view, and edit; retry, manual launch, grant unlock, mark handled, and validated results override; prompt-template settings and per-audit context; pipeline step log and timing; funnel report; audit statistics and by-plan usage widgets; email log with resend and status refresh.
+- Operator admin: audit resource with list, view, and edit; retry, manual launch, grant unlock, mark handled, and validated results override; prompt-template settings and per-audit context; pipeline step log and timing; funnel report; audit statistics and by-plan usage widgets; email log with resend *(status refresh removed by D1)*.
 - Recovery and retention: verification reminder, abandoned-unlock reminder, unverified-request purge, scheduled re-audits.
 - Unified dark visual identity across all backend-served public pages and the customer dashboard.
 
-**Email infrastructure** **[R]**
+**Email infrastructure** **[R]** *(revised by D1)*
 
-- A dedicated transactional email service as a separate application.
-- A single mailer entry point through which all audit email is routed, with per-message logging and automatic fallback to direct send.
+- All audit email sent directly from the product application through the framework mailer; no separate email application.
+- A single mailer entry point through which all audit email is routed, with per-message logging of the rendered subject, body, and send outcome.
 
 ### 4.2 Later phases
 
@@ -239,8 +244,7 @@ Differentiators the system must preserve:
 | Repository-host invite instructions beyond the primary supported host | Other hosts fall back to a contact-us path. |
 | Deep host-app integration (automatic invite detection, pull-request diff audits) | Substantial third-party integration surface. |
 | Shareable health-score badge | Growth feature dependent on public score semantics. |
-| Single sign-on into the email platform | Operators use an external link and a separate login. |
-| Provider webhook ingestion for delivery events into the product database | Delivery state is read from the email platform's API instead. |
+| Delivery, open, and click tracking via an email provider's event webhooks | Requires an ESP with event webhooks (e.g. Postmark, Resend, SES). Delivered/bounced/opened/clicked states would populate the existing email log and feed the funnel. Deferred until after launch (D1). |
 | PDF regeneration after a results override | The hosted report reads results live; the PDF remains stale until a re-run. Must be stated in the override interface. |
 | Churn-versus-complexity risk-map visualization | Hotspot lists ship now; the grid is a later design task. |
 | Full custom admin panel theme | Operator panel remains stock; only the customer dashboard is brand-aligned. |
@@ -272,7 +276,7 @@ Differentiators the system must preserve:
 - **[R]** Report generation must be idempotent with respect to retries. A retry must never produce a duplicate report, and must never revoke an entitlement already granted.
 - **[R]** Git must be available in the application runtime.
 - **[R]** PDF rendering must not require a headless browser in the application container.
-- **[R]** The transactional email service is licensed third-party software. Its credentials are supplied out of band and must never be committed. **[Q]** Its live boot is currently gated on credential resolution (§19).
+- **[R]** *(revised by D1)* Outbound email uses whatever transport is configured by environment (SMTP or an email service provider). No licensed self-hosted email software is part of the stack.
 - **[R]** All static analysis must be implemented without executing repository code, which constrains metric fidelity: coverage is approximated by test-file ratio rather than measured, and duplication is heuristic rather than semantic.
 
 ---
@@ -498,7 +502,7 @@ A report showing counts per funnel stage over seven-day and thirty-day windows, 
 Total audits; submitted today, this week, this month; pending; analyzing; completed; failed; requiring manual action; average processing time (dash when no data); email failures; and audit queue depth linking to the queue monitor. Plus current-month audits grouped by the requester's active plan, with a free/no-plan bucket. Widget queries must not assume the presence of tables owned by other modules; a missing table must render zero rather than error.
 
 **F5.6.8 — Email log** **[R]**
-Read-only rows showing recipient, notification type, status, attempts, last attempt, and latest error, filterable by status and type and searchable by recipient. A per-row resend action must state when and to whom the message was last sent before proceeding — a duplicate-send safeguard. A header action refreshes delivery statuses for the visible rows. An external link opens the email platform.
+Read-only rows showing recipient, notification type, status, attempts, last attempt, and latest error, filterable by status and type and searchable by recipient. A per-row resend action must state when and to whom the message was last sent before proceeding — a duplicate-send safeguard. *(Revised by D1: the delivery-status refresh action and the external email-platform link are removed with the platform; delivered/bounced states return only if provider webhooks are later integrated per §4.2.)*
 
 **Access control** **[R]** The entire operator panel is gated at the panel level by administrator status. Because of that gate, operator queries are deliberately not ownership-scoped — unlike the customer dashboard. This asymmetry is intentional and must be preserved rather than "fixed".
 
@@ -526,20 +530,22 @@ Privacy and terms pages; a real social preview image; structured data; a product
 
 ### 5.8 Email delivery
 
+*(Section revised by D1, 2026-08-01. The previously specified standalone transactional email platform is removed. The single-entry-point mailer and the per-message log — the parts that carry the accountability guarantee — are retained unchanged. The Mailcoach client, its configuration gate, and the status-refresh feature are to be deleted from the codebase in Phase 10.)*
+
 **F5.8.1 — Single entry point** **[R]**
 All audit email — every one of the ten message types, including the operator notification and both reminder types — must be sent through one mailer service. No audit message may be dispatched directly. Non-audit messages (orders, invitations, subscription notices) are out of scope for this routing and must remain untouched.
 
 **F5.8.2 — Send behavior** **[R]**
-For each message the mailer renders subject and body, records a pending log row, attempts delivery through the transactional platform's API, and updates the row to sent with the platform's message identifier. On any API failure — connection, client error, or server error — it must fall back to direct send and record the row with no platform identifier and the error noted. Audit email must never silently stop.
+For each message the mailer renders subject and body, records a pending log row, sends through the framework mailer using the environment-configured transport, and updates the row to sent. On a send failure the row is marked failed with the error recorded, and the failure propagates to the caller's normal retry/failure handling. Audit email must never silently stop: every attempt leaves a log row with an outcome.
 
-**F5.8.3 — Configuration gate** **[R]**
-Platform delivery must be attempted only when both endpoint and credential are configured. This gate must be structural: it must be impossible to construct an API call against an unconfigured platform through any code path.
+**F5.8.3 — Transport configuration** **[R]**
+The mail transport (SMTP host or email service provider) is configured entirely by environment. Local development uses the mail catcher. No code path may depend on which transport is configured.
 
 **F5.8.4 — Log contract** **[R]**
-Each row records the related request (nullable, to allow future non-request mail), the message type, the recipient, the rendered subject and body (retained so a resend needs no re-render), the platform identifier where present, a status progressing from pending to sent or failed and onward to delivered or bounced when reported, an attempt counter, the latest error, and the last attempt time.
+Each row records the related request (nullable, to allow future non-request mail), the message type, the recipient, the rendered subject and body (retained so a resend needs no re-render), a status progressing from pending to sent or failed, an attempt counter, the latest error, and the last attempt time. The delivered and bounced statuses remain defined in the vocabulary but are populated only if provider webhooks are later integrated (§4.2); a provider-message-identifier column may be retained nullable for that future use.
 
-**F5.8.5 — Resend and status refresh** **[R]**
-Rows with a platform identifier resend through the platform API; rows without resend directly. Attempts increment. Status refresh maps platform statuses onto rows, giving bounce precedence over delivery, and must leave rows untouched when the platform reports nothing.
+**F5.8.5 — Resend** **[R]**
+Resend reconstructs the message from the stored subject and body rather than re-rendering, so the resent message matches what was originally sent. Attempts increment. Resend requires explicit operator confirmation showing the last recipient and send time.
 
 **F5.8.6 — Message set** **[R]**
 Verification link; request received; repository access needed; quota exhausted; report ready; report unlocked; request failed; verification reminder; unlock reminder; operator notification of a new request.
@@ -548,10 +554,9 @@ Verification link; request received; repository access needed; quota exhausted; 
 
 | Case | Required behavior |
 | --- | --- |
-| Platform unreachable | Fall back to direct send; log the fallback with its error. |
+| Transport unreachable or rejects the message | Mark the row failed with the error; the caller's queue retry policy governs any retry; resend remains available to the operator. |
 | Rendering fails | **[REC]** A render failure currently prevents any log row from existing. Rendering should be attempted before the row is created so that a render failure is itself recorded (§18). |
-| Resend of a stale row | Reconstruct from the stored subject and body rather than re-rendering, so the resent message matches what was originally sent. |
-| Platform reports an unknown status | Leave the row unchanged. |
+| Resend of a stale row | Reconstruct from the stored subject and body rather than re-rendering. |
 
 ### 5.9 Public site and session awareness
 
@@ -600,6 +605,55 @@ All user-facing strings in the product application must pass through the transla
 
 **F5.11.4 — Failure messaging** **[R]**
 No user-facing failure may expose stack traces, internal identifiers, credentials, or repository access tokens.
+
+### 5.12 Tiered audit products *(added by D2, 2026-08-01)*
+
+**Purpose.** Turn the single automated pipeline into three sellable tiers per the 2026-08 company pitch, with the existing free funnel retained as the free diagnostic entry step. Target pricing (all **[Q]** pending cost-per-audit validation, §19 Q5): Automated Health Report $49; Deep AI Code Review $199 (flagship); Expert Audit from $999. Subscription grid per pitch: Starter $59 / Growth $149 / Agency $499 / Enterprise from $1,500 monthly.
+
+**F5.12.1 — Tier attribute** **[R]**
+Every audit request carries a tier — `diagnostic` (free funnel), `automated`, `deep_ai`, or `expert`. The tier determines pipeline composition, resource budgets (excerpt limits, token budget, scanner set), prompt template, report rendering, and price. All budgets are configuration-driven per tier, never hardcoded.
+
+**F5.12.2 — Tier 1: scanner platform** **[R]**
+The automated tier replaces or augments the home-grown heuristics with established open-source analyzers, all executed **without running repository code** (§4.3 stands). The set below is **decided** for the first release, optimized for cost-to-quality: every tool is a stateless CLI binary — no analyzer servers to operate — so per-run cost is compute-seconds, and the model call remains the dominant cost, bounded by grouping.
+
+**Committed scanner set, in fixed execution order** (cheap and universal first, expensive last, so early output feeds later stages and an early failure loses the least):
+
+| # | Tool | License | Produces | Bound by |
+| --- | --- | --- | --- | --- |
+| 1 | **scc** | MIT | Size, language breakdown, per-file complexity estimate | Seconds; always first — its output sizes the budgets for the rest |
+| 2 | **Gitleaks** | MIT | Secret findings — supersedes the in-house pattern set; same counts-and-paths-only contract (F5.2.6) | Own timeout |
+| 3 | **OSV querybatch** *(existing integration, retained as-is)* | — | Dependency vulnerabilities | Existing degrade-to-zero behavior |
+| 4 | **jscpd** | MIT | Cross-language duplication — supersedes the heuristic | Own timeout; capped file set |
+| 5 | **Semgrep CE** | LGPL-2.1 engine | Quality and security SAST findings | Own timeout; the most expensive scanner, runs last. **Only permissively-licensed rulesets or in-house rules** — the Semgrep Registry license forbids use in competing commercial products |
+
+Existing collectors that stay: git facts, hotspots, tooling detection, manifest summaries.
+
+**Deferred, recorded as deliberate deferrals:** SonarQube Community Build (a server to operate; its signal overlaps Semgrep+jscpd — revisit only if report quality shows a gap); Trivy (IaC/Docker misconfig and license scanning — additive, not core); import-graph/SCIP indexing (needed only for tier-2 file selection, moved to Phase 12 as an optional enhancement); Lizard (scc's complexity estimate suffices initially). CodeQL is excluded permanently: its license prohibits use in a commercial service.
+
+- **[R]** All scanner output is normalized into one internal findings model (SARIF as the interchange format where the tool supports it), deduplicated, and **grouped into problem families** (rule family × directory) before analysis. The AI receives metrics plus the top problem groups ranked by severity×count — never the raw finding list — and narrates each group: what it is, what it affects, and what fixing it buys the client. One lint error must never become one report item, and grouping is also the prompt-size cost control.
+- **[R]** Each tool runs under its own timeout inside the pipeline's existing guardrails; a failed scanner contributes no findings and is recorded in the pipeline log; it never fails the run on its own.
+- **[R]** Deterministic scoring (F5.2.8) continues to own the numbers; scanner findings feed the formulas and the narrative, not the other way around.
+
+**F5.12.3 — Tier 2: deep AI review** **[R]**
+Everything in tier 1, plus AI review of the source of the 20–40 riskiest files only — never the whole repository:
+
+- **[R]** Risk-file selection is deterministic and logged. First release uses three signals the pipeline already has or gets cheaply: churn×size hotspots (existing), scanner-finding density (from Phase 11's findings model), and sensitive-domain path heuristics (authentication, authorization, payments, uploads, secrets handling). Import-graph centrality is a deferred fourth signal — added only if selection quality proves insufficient, so tier 2 does not wait on graph tooling.
+- **[R]** The review examines file contents with cross-module context and returns findings bound to files, covering business logic, authorization, and architectural risks, each with evidence, recommendation, and effort sizing — validated by an extension of the canonical payload contract (F5.2.9).
+- **[R]** A per-run token budget bounds cost; exceeding it truncates the file list, never the contract.
+
+**F5.12.4 — Tier 3: expert review workflow** **[R]**
+Everything in tiers 1–2, plus a human review stage:
+
+- **[R]** For expert-tier runs only, the pipeline stops after persistence in a new status (working name `expert_review`, added to the closed enumeration in F5.11.1 with display mapping). The report is **not** auto-sent.
+- **[R]** The operator panel gains an expert-review queue: reports awaiting review, where a reviewer edits findings through the canonical payload validator, removes false positives, adjusts priorities, and fills a dedicated expert section of the payload (expert summary, review notes, reviewed-by, reviewed-at). A publish action sends the report, regenerates the PDF, and transitions the status to sent.
+- **[R]** Reviewing requires a reviewer permission distinct from full administrator rights.
+- **[R]** The report template renders the expert section and a human-verified marker for this tier only. §4.3's "no human review gate" exclusion is hereby narrowed: it continues to apply to the diagnostic, automated, and deep-AI tiers; the expert tier's review gate is the product being sold.
+
+**F5.12.5 — Catalog and entitlement rework** **[R]**
+The purchasable catalog is rebuilt around the tiers: three one-time tier products plus the pitch subscription grid, seeded idempotently per F5.4.9. The free diagnostic keeps the existing freemium mechanics (allowance, locked rendering, $-unlock deprecated or repositioned **[Q]** — decide whether the legacy $5 unlock survives as a diagnostic-tier upsell or is retired). Subscription allowances meter tier-1 runs; higher-tier runs and any included Deep AI credits are read from plan metadata. Marketing copy, checkout, and quota claims must continue to mirror backend configuration exactly (F5.7.6).
+
+**F5.12.6 — Cost telemetry** **[R]**
+Every run records its direct cost drivers — model tokens in/out, scanner wall time, repository size — so cost per audit is measurable per tier from the first paid runs (pitch requires validation on the first 20–30).
 
 ---
 
@@ -706,7 +760,7 @@ Detailed in §11. Headline obligations:
 
 ### 7.1 High-level shape
 
-Three cooperating applications over shared infrastructure, deployed as one repository with independent build and release paths.
+Two cooperating applications over shared infrastructure, deployed as one repository with independent build and release paths. *(Revised by D1: the third application — the standalone transactional email service — is removed; outbound mail goes directly to the environment-configured transport.)*
 
 ```
                  ┌──────────────────────────────┐
@@ -747,13 +801,8 @@ Three cooperating applications over shared infrastructure, deployed as one repos
                      └──────┬───────┘──▶ vulnerability database API
                             │
                             ▼
-                 ┌──────────────────────────────┐
-                 │  Transactional email service │──▶ email service provider
-                 │  (separate application)      │
-                 └──────────────────────────────┘
-                            ▲
-                            │ transactional send / resend / status read
-                            └── product application
+                   mail transport (SMTP / email service provider,
+                   environment-configured; every send logged)
 ```
 
 ### 7.2 Components and responsibilities
@@ -769,7 +818,7 @@ Three cooperating applications over shared infrastructure, deployed as one repos
 | **Relational database** | All durable domain state. | Store secret values or cloned source. |
 | **Queue and cache store** | Job transport and cached derived values such as benchmark position. | Be the source of truth for anything. |
 | **File storage** | Generated PDFs and transient clone working directories. | Retain working directories past a run. |
-| **Transactional email service** | Message dispatch, delivery-state tracking, provider integration. | Own audit domain state; the product application keeps its own log mirror. |
+| **Mail transport (external SMTP/ESP)** | Physical message delivery. | Hold any domain state; the product application's email log is the sole record of audit mail. |
 | **Payment providers** | Checkout and billing lifecycle. | Be referenced directly by audit or entitlement logic. |
 
 ### 7.3 Communication
@@ -784,7 +833,7 @@ Three cooperating applications over shared infrastructure, deployed as one repos
 | Pipeline → git remote | Synchronous, outbound | **[R]** Shallow read-only clone under timeout and size limits. |
 | Pipeline → model provider | Synchronous, outbound | **[R]** Bounded input; validated structured output; one corrective retry. |
 | Pipeline → vulnerability database | Synchronous, outbound, batched | **[R]** Failure degrades to zero findings. |
-| Application → email service | Synchronous API call with fallback | **[R]** Configuration-gated; falls back to direct send. |
+| Application → mail transport | Synchronous send via framework mailer | **[R]** Every send produces a log row with its outcome; failure is recorded, never swallowed. |
 | Payment provider → application | **Asynchronous** inbound webhook | **[R]** Order-level idempotency mandatory. |
 | Scheduler → work | **Asynchronous** | **[R]** Non-overlapping; single-node for fan-out tasks. |
 | Domain events → listeners | In-process events | **[R]** Order completion, referral reward, and user registration drive entitlement and linking through listeners, not inline branches. |
@@ -818,7 +867,6 @@ Three cooperating applications over shared infrastructure, deployed as one repos
 | Product application | Application server behind TLS | **[R]** Deployed by a repeatable release process with zero-downtime symlink switching and post-release migration and cache steps. |
 | Queue workers | Long-running processes | **[R]** Must run continuously; audit features are non-functional without them. |
 | Scheduler | Cron-driven single entry | **[R]** One scheduler entry per environment. |
-| Email service | Separate application | **[R]** Own dependency stack and worker; may share the database server with its own database and the cache with its own namespace. |
 | Local development | Container composition | **[R]** One command must boot every surface plus database, cache, and a mail catcher. Container-created files must not be root-owned on the host. |
 
 ### 7.7 Architectural patterns and rationale
@@ -845,7 +893,7 @@ Three cooperating applications over shared infrastructure, deployed as one repos
 - *Credit ledger for runs and unlocks* — rejected for now; subscription metering plus a single-purpose one-time product covers the demonstrated need without a bespoke ledger.
 - *Recomputing entitlement at render time* — rejected; couples rendering to billing state and can revoke paid access.
 - *Per-action authorization policies on the customer dashboard* — rejected in favor of query scoping, which has no bypass path.
-- *Embedding the email platform as a library* — rejected; its framework requirements conflict with the product application's. Running it as a separate application removes the constraint entirely.
+- *Embedding the email platform as a library* — rejected at design time for framework conflicts; the separate-application alternative was then itself superseded by D1 (2026-08-01), which removed the email platform entirely in favor of direct framework sending.
 - *Merging container definitions into one root file* — rejected; it forks the upstream convention and breaks the standard tooling. Composition by inclusion keeps both usable.
 - *A marker cookie for signed-in navigation state* — rejected; it goes stale after sign-out and introduces a second source of truth.
 
@@ -979,13 +1027,13 @@ Each module states purpose, responsibilities, operations, inputs and outputs, de
 ### 8.12 Mail routing
 
 - **Purpose.** Guarantee every audit message is both sent and accounted for.
-- **Responsibilities.** Render; log; attempt platform delivery; fall back to direct send; record outcome; support resend and status refresh.
-- **Operations.** `send`, `resend`, `refreshStatuses`.
+- **Responsibilities.** Render; log; send through the framework mailer; record outcome; support resend from the stored rendering. *(Revised by D1: platform delivery and status refresh removed.)*
+- **Operations.** `send`, `resend`.
 - **Inputs.** A message object; recipient; related request.
 - **Outputs.** Delivered mail; a log row.
-- **Dependencies.** Email platform client; mail transport.
+- **Dependencies.** Mail transport.
 - **Owns.** Email log rows.
-- **Failure handling.** **[R]** Any platform failure falls back and logs the reason. **[R]** Platform calls must be structurally unreachable when unconfigured. **[REC]** Render failure should be recorded rather than preventing a row from existing; resend and refresh paths should have explicit exception handling; the attempt counter should be incremented atomically (§18).
+- **Failure handling.** **[R]** A send failure marks the row failed with the reason recorded. **[REC]** Render failure should be recorded rather than preventing a row from existing; the resend path should have explicit exception handling; the attempt counter should be incremented atomically (§18).
 
 ### 8.13 Customer dashboard
 
@@ -1005,7 +1053,7 @@ Each module states purpose, responsibilities, operations, inputs and outputs, de
 - **Operations.** Browse, edit, retry, launch, grant unlock, mark handled, override results, save settings, resend, refresh statuses.
 - **Inputs.** Administrator session; audit and email-log records; configuration.
 - **Outputs.** Mutated records; dispatched runs; granted entitlements; resent mail.
-- **Dependencies.** Pipeline dispatch; report lifecycle; analysis module's validator and prompt preview; configuration service; email platform client; funnel statistics.
+- **Dependencies.** Pipeline dispatch; report lifecycle; analysis module's validator and prompt preview; configuration service; mail routing; funnel statistics.
 - **Owns.** The operator prompt-template setting and per-audit operator context (through the request record).
 - **Failure handling.** **[R]** Override input must be rejected by the canonical validator before any write. **[R]** Settings pages must be permission-gated, and that gating must be exercised by tests at the route level, not only at the component level. **[R]** Statistics that read another module's table must tolerate its absence. **[R]** Resend must require explicit confirmation showing last recipient and time.
 
@@ -1155,7 +1203,7 @@ Required: unique indexes on both public identifiers; indexes on requester email,
 | **Public** | Anyone | None | Sample report; pricing; legal |
 | **Authenticated web** | Customers | Session | Checkout, subscription management, both panels |
 | **Inbound webhooks** | Payment providers | Provider signature verification | Order and subscription lifecycle events |
-| **Outbound integrations** | The platform itself | Per-provider credentials | Model provider; vulnerability database; email platform; git remotes |
+| **Outbound integrations** | The platform itself | Per-provider credentials | Model provider; vulnerability database; mail transport; git remotes |
 
 **[R]** The public HTTP API surface is deliberately minimal: one write endpoint and one read endpoint. Everything else is either signature-gated, session-gated, or an inbound webhook. **[R]** There is no general-purpose public API in this phase.
 
@@ -1166,7 +1214,7 @@ Required: unique indexes on both public identifiers; indexes on requester email,
 | **Git remotes** | Outbound | Preflight and shallow clone | **[R]** Failure is a lead-generating not-analyzable condition, never a run failure. Access tokens redacted from all error text. |
 | **Model provider** | Outbound | Narrative analysis | **[R]** Structured output enforced; one corrective retry on invalid payload; then stage failure. Credential from environment only. |
 | **Vulnerability database** | Outbound, batched | Real dependency findings | **[R]** Degrades to zero findings; never fails a run. |
-| **Email platform** | Outbound | Transactional send, resend, status read | **[R]** Configuration-gated; falls back to direct send with the failure logged. |
+| **Mail transport (SMTP/ESP)** | Outbound | Transactional send | **[R]** A send failure marks the log row failed with the reason; resend is an explicit operator action. Audit email must never silently stop. |
 | **Payment providers** (five, abstracted) | Outbound checkout, inbound webhooks | Billing | **[R]** Order-level idempotency; no provider specifics in domain code. |
 | **Analytics vendor** | Client-side | Funnel events on the marketing site | **[R]** Absent configuration renders no code and breaks nothing. |
 
@@ -1227,7 +1275,7 @@ Required: unique indexes on both public identifiers; indexes on requester email,
 | Pipeline job | **[R]** Bounded attempts with increasing backoff; final failure marks the request failed with a reason, appends a log entry, records the funnel failure, and notifies the requester softly. |
 | Model analysis | **[R]** One corrective retry on contract violation, then fail the stage. |
 | Vulnerability database | **[R]** Degrade to zero findings. No pipeline-visible retry delay. |
-| Email platform | **[R]** No retry; immediate fallback to direct send, with the reason logged. Resend is an explicit operator action. |
+| Mail transport | **[R]** No bespoke retry inside the mailer; failure is recorded on the log row and surfaces to the caller's queue retry policy. Resend is an explicit operator action. |
 | Repository operations | **[R]** No retry for deterministic failures (missing, private, oversized). Bounded retry for transient network conditions. |
 | Provider webhooks | **[R]** Idempotent handling makes provider-side retries safe. |
 | Client submission | **[R]** No automatic retry; a class-specific message with entered data preserved, so the visitor retries deliberately. |
@@ -1272,9 +1320,8 @@ Required: unique indexes on both public identifiers; indexes on requester email,
 | --- | --- |
 | Model provider credential | **[R]** Environment only. Never logged, never displayed. |
 | Repository access token | **[R]** Configuration only; injected for supported hosts only; **redacted from every stored and displayed error message**. |
-| Email platform credential | **[R]** Environment only; presence gates all platform calls structurally. |
+| Mail transport credential | **[R]** Environment only. |
 | Payment provider credentials | **[R]** Environment only, per provider. |
-| Email platform license credential | **[R]** Supplied out of band; stored in a git-ignored file; never committed. **[Q]** Currently unresolved (§19). |
 | Application key, database and cache credentials | **[R]** Environment only. |
 | Seeded provider identifiers | **[R]** Must be unmistakably marked as test placeholders so they can never be confused with live credentials. |
 
@@ -1458,12 +1505,11 @@ Audits           List (search, filters) → View (request · organization ·
                  and timing · report · actions) → Edit
                  Actions: retry · launch · grant unlock · mark handled ·
                           override results
-Audit emails     Log (read-only) · Resend · Refresh statuses
+Audit emails     Log (read-only) · Resend
 Audit funnel     Stage counts, 7 and 30 day, with conversion shares
 Audit settings   Prompt template (validated) with built-in default shown
 Platform         Users · tenants · plans · products · orders · subscriptions ·
                  transactions · discounts · referrals · roles · providers
-External         Open email platform
 ```
 
 ### 13.2 Key flows
@@ -1545,7 +1591,7 @@ External         Open email platform
 | Queue workers | **[R]** Long-running supervised processes. Non-optional. |
 | Scheduler | **[R]** One cron entry per environment. |
 | Database and cache | **[R]** Managed or dedicated instances. |
-| Email service | **[R]** Separate application with its own worker; may share the database server via its own database and the cache via its own namespace. |
+| Mail transport | **[R]** External SMTP or email service provider; no self-hosted mail application. |
 | File storage | **[R]** Persistent for PDFs; ephemeral local disk for clone working directories. |
 
 ### 14.3 Containerization
@@ -1572,7 +1618,6 @@ External         Open email platform
 - **[R]** Operator-adjustable settings must persist through the platform's configuration-override mechanism, and each such key must be explicitly registered as overridable.
 - **[R]** Example environment files must document every required variable, using values that are obviously placeholders.
 - **[R]** The marketing site's product-application URL must be environment-overridable at build time.
-- **[R]** Licensed-software credentials live in a git-ignored file with a committed example alongside.
 
 ### 14.6 Backup and disaster recovery
 
@@ -1582,7 +1627,6 @@ External         Open email platform
 | --- | --- | --- |
 | Database | Automated daily full plus continuous incremental; restore rehearsed quarterly | **[REC]** RPO ≤ 1 hour, RTO ≤ 4 hours |
 | Report PDFs | Replicated storage | **[REC]** Regenerable from stored payloads, so lower priority |
-| Email platform database | Same regime as the primary | **[REC]** Same objectives |
 | Configuration and secrets | Held in a secret manager with versioning | **[REC]** Recoverable without a database |
 | Cloned repositories | **[R]** None — intentionally transient | — |
 | Cache and queue | **[REC]** None; queue loss means re-dispatching in-flight audits, which is acceptable and operator-recoverable via retry |
@@ -1628,7 +1672,7 @@ External         Open email platform
 
 **[R]** Domain metrics already required: per-stage funnel counts; audit volume by period; status distribution; average processing time; email failure count; audit queue depth.
 
-**[REC]** Add: pipeline duration distribution rather than only the mean; per-stage duration, derived from the existing step log; model provider latency, token consumption, and cost per audit; vulnerability-database failure rate; email platform failure and fallback rate; HTTP error rates by route class; queue oldest-pending age; worker utilization.
+**[REC]** Add: pipeline duration distribution rather than only the mean; per-stage duration, derived from the existing step log; model provider latency, token consumption, and cost per audit; vulnerability-database failure rate; mail send failure rate; per-scanner failure rate once the tiered scanner set lands (§5.12); HTTP error rates by route class; queue oldest-pending age; worker utilization.
 
 **[REC]** Cost per audit is the most commercially important missing metric. Unit economics for a freemium product with a per-run external model cost cannot be managed without it.
 
@@ -1653,7 +1697,7 @@ External         Open email platform
 | Readiness | Database and cache reachable; configuration and routes cached |
 | Worker health | A worker has processed or polled recently |
 | Scheduler health | Scheduled tasks ran within their expected window |
-| Dependency health | Model provider, vulnerability database, and email platform reachable — reported, not gating |
+| Dependency health | Model provider, vulnerability database, and mail transport reachable — reported, not gating |
 
 **[R]** A dependency health check must never gate application readiness. Every external dependency has a defined degradation path, and the application must stay up when they are down.
 
@@ -1665,7 +1709,7 @@ External         Open email platform
 | --- | --- |
 | **Critical** | Application unreachable; database unreachable; no worker has processed a job within a defined window; audit queue depth or oldest-pending age beyond threshold |
 | **High** | Pipeline failure rate above threshold; email failure rate above threshold; model provider errors sustained; unhandled exception rate spike |
-| **Medium** | Scheduled task missed; vulnerability database failing; email platform in sustained fallback; average processing time degraded |
+| **Medium** | Scheduled task missed; vulnerability database failing; sustained mail send failures; average processing time degraded |
 | **Low** | Requests awaiting manual action above threshold; free-allowance consumption anomaly; benchmark sample below the display minimum |
 
 **[R]** The "no worker processing" alert is the highest-value single alert in the system: without workers, audits silently never run, submissions still succeed, and no customer-facing error appears.
@@ -1705,7 +1749,7 @@ External         Open email platform
 - Entitlement and purchase: order completion sets the unlock exactly once; wrong or missing intent metadata is a no-op; duplicate webhooks grant nothing twice; prepaid run queues once and produces an unlocked report; retry preserves an existing unlock.
 - Account resolution: a guest with no account is created and signed in; an existing account is never auto-signed-in; an unsigned request is refused.
 - Rendering: locked versus unlocked sections; PDF refused for locked reports; sample renders; expired link renders the friendly page.
-- Mail routing: successful platform send logs with an identifier; platform failure falls back and logs the reason; every one of the ten message types routes through the mailer; resend and status refresh behave per contract.
+- Mail routing: every one of the ten message types routes through the mailer; a successful send logs as sent and a failure logs its reason; resend reproduces the stored rendering. *(Revised by D1.)*
 - Reminders: sent once per subject; a batch survives a bad row.
 - Scheduled tasks: purge removes only unverified requests past the window; scheduled audits respect remaining allowance.
 - Customer dashboard: cross-user isolation, email-matched ownership, registration backfill, correct widget values across subscribed, free-quota, and exhausted users, and complete hiding for a user with neither audits nor allowance.
@@ -1828,14 +1872,13 @@ Operator context, pipeline log, and analysis timing; configurable prompt templat
 **Delivers:** full operator control without a deployment.
 **Depends on:** Phase 2's pipeline and validator.
 
-### Phase 8 — Email infrastructure
+### Phase 8 — Email infrastructure *(revised by D1)*
 
-Standalone email service; transactional client; single mailer entry point with logging and fallback; operator email log with resend and status refresh; complete routing of all ten message types.
+Single mailer entry point with logging; operator email log with resend; complete routing of all ten message types. *(As originally executed, this phase also delivered a standalone email service and its transactional client; D1 removes them — see Phase 10. The mailer, log, and routing guarantee are unchanged and remain delivered.)*
 
 **Delivers:** communication accountability.
 **Depends on:** Phase 2's message set; independent of Phases 6 and 7.
-**Milestone M5 — Every audit message accounted for, with a working fallback.**
-**[Q]** Live verification is gated on license credential resolution (§19).
+**Milestone M5 — Every audit message accounted for.**
 
 ### Phase 9 — Production readiness
 
@@ -1844,6 +1887,37 @@ Error tracking; health checks; alerting; operations dashboard; backup and recove
 **Delivers:** an operable production service.
 **Depends on:** Phases 1–8.
 **Milestone M6 — Production readiness criteria in §20.3 satisfied.**
+
+### Phase 10 — Email simplification *(added by D1)*
+
+Remove the Mailcoach application directory, its compose services, database bootstrap, and environment variables; remove the platform client, its exception, the configuration gate, and the status-refresh admin action; simplify the mailer to log-then-direct-send; drop or repurpose the platform-identifier column; update tests currently asserting the platform API contract against fakes. The email log, resend from stored rendering, and the ten-message routing guarantee are untouched.
+
+**Delivers:** one less application to operate; the specified §5.8 shape matches the code.
+**Depends on:** nothing; small and immediately executable.
+
+### Phase 11 — Scanner platform and findings model *(added by D2)*
+
+Tier attribute on audit requests with per-tier configuration; scanner harness executing the committed F5.12.2 set in its fixed order inside the pipeline's existing guardrails; SARIF/native output normalization into one findings model; deduplication and problem-family grouping; prompt and template rework so the AI narrates groups; scoring formulas extended to consume scanner signal (versioned per Q14); cost telemetry per run (F5.12.6); catalog rebuilt around tier products and the pitch subscription grid; marketing pricing surface updated to match. SonarQube, Trivy, and graph tooling are explicitly out of this phase (deferred per F5.12.2).
+
+**Delivers:** the sellable Automated Health Report ($49) and the new commercial baseline.
+**Depends on:** Phases 2 and 9 (launchable operations); supersedes Appendix A pricing.
+**Milestone M7 — First paid tier-1 report sold at the new price.**
+
+### Phase 12 — Deep AI review *(added by D2)*
+
+Risk-file selection (hotspots × finding density × sensitive-domain paths; graph centrality deferred), logged and deterministic; file-content AI review with cross-module context under a per-run token budget; payload contract extension for file-bound findings; report rendering for the deep section; Deep AI product and plan-metadata credits.
+
+**Delivers:** the flagship Deep AI Code Review ($199).
+**Depends on:** Phase 11's findings model.
+**Milestone M8 — First paid tier-2 report delivered within its token budget.**
+
+### Phase 13 — Expert review workflow *(added by D2)*
+
+`expert_review` status with display mapping everywhere; delivery hold for expert-tier runs; operator review queue with canonical-validator editing, false-positive removal, and the expert payload section; reviewer permission; publish action (send + PDF regeneration + status transition); human-verified report rendering; Expert product.
+
+**Delivers:** the Expert Audit tier (from $999) and the upsell path into remediation work.
+**Depends on:** Phase 12; reviewer staffing decision (§19 Q8).
+**Milestone M9 — First expert-reviewed report published through the workflow.**
 
 ### 17.1 Minimum viable product
 
@@ -1865,9 +1939,11 @@ Error tracking; health checks; alerting; operations dashboard; backup and recove
 
 **[REC]** The one deviation from strict phase order worth making is pulling worker-liveness alerting forward into the MVP. It is a small amount of work guarding against the failure mode where the funnel looks healthy and no audits run.
 
+**Post-revision ordering (2026-08-01).** With Phases 1–8 executed, the remaining work orders as: **Phase 10** first (small, removes dead architecture and makes the code match §5.8); **Phase 9's** error tracking, worker-liveness alerting, and health checks next (launch blockers); **Phase 11** before public launch, because the pitch's $49 price point is only defensible with the scanner-backed report and the reworked catalog; **Phase 12** immediately after launch (flagship revenue tier); **Phase 13** when the first expert order justifies the workflow — until then expert audits can be fulfilled manually via the existing results-override tooling; remainder of Phase 9 before scale.
+
 ### 17.3 Safely postponable
 
-**[R]** Per §4.2: the credit ledger, marketing campaigns, additional repository-host invite paths, deep host-app integration, the score badge, email-platform single sign-on, provider webhook ingestion, PDF regeneration after override, the risk-map visualization, and the custom operator panel theme.
+**[R]** Per §4.2: the credit ledger, marketing campaigns, additional repository-host invite paths, deep host-app integration, the score badge, ESP-webhook delivery/open/click tracking, PDF regeneration after override, the risk-map visualization, and the custom operator panel theme. Per §5.12: SonarQube evaluation, Trivy, import-graph/SCIP tooling, and Lizard.
 
 **[REC]** Additionally postponable without risk: a dedicated search index, read replicas, distributed tracing, application-level encryption, and team-wide audit visibility — pending the decision in §19.
 
@@ -1909,7 +1985,7 @@ Error tracking; health checks; alerting; operations dashboard; backup and recove
 | --- | --- | --- | --- |
 | O1 | Workers stop; submissions still succeed | Silent total failure of the core product | **[R]** Queue depth visible; **[REC]** worker-liveness alerting is the highest-value missing control |
 | O2 | Scheduled tasks silently stop | Reminders and re-audits quietly cease | **[REC]** Scheduler health check and missed-task alert |
-| O3 | Email platform credential unresolved at launch | Fallback path carries all mail; no delivery tracking | **[R]** Fallback keeps mail flowing; **[Q]** credential resolution is an open blocker (§19) |
+| O3 | *Resolved by D1 (2026-08-01).* Direct send is now the specified path, not a fallback | Delivery/open/click tracking absent until ESP webhooks (§4.2) | **[R]** Accepted; email log records every send outcome |
 | O4 | Operator override introduces a bad payload | Wrong customer-facing content | **[R]** Canonical validation; **[REC]** actor-attributed change log so the change is traceable |
 | O5 | PDF diverges from the hosted report after an override | Customer sees two versions | **[R]** Must be stated in the override interface; **[REC]** offer re-run as the resolution |
 | O6 | No staging environment | Provider, email, and cross-origin flows verified only in production | **[REC]** Staging is the largest infrastructure gap |
@@ -1942,8 +2018,8 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 | Signed links over accounts | Frictionless free funnel | Link forwarding grants report access | **[R]** Correct, with bounded lifetimes and the no-auto-sign-in rule as guards. |
 | Static analysis only | Never executing untrusted code | Approximated coverage; heuristic duplication | **[R]** Correct and non-negotiable. Must be honest about it in the report. |
 | Deterministic scores over model scores | Comparability and defensibility | Model nuance in the numbers | **[R]** Correct. Model narrates, measurement decides. |
-| Separate email application | No framework version conflict; full platform features | A third application to operate; no single sign-on | **[R]** Correct. The alternative was a dependency conflict with no clean resolution. |
-| Local mirror of email state | Native operator experience; no cross-application dependency for the log view | Two sources of delivery truth requiring reconciliation | **[R]** Acceptable, given refresh is an explicit action. |
+| Separate email application | No framework version conflict; full platform features | A third application to operate; no single sign-on | *Superseded by D1 (2026-08-01): the platform is removed entirely — license expiry plus a never-exercised live path outweighed the tracking features, which move to ESP webhooks later.* |
+| Application-owned email log as sole mail record | One source of truth; nothing to reconcile or operate | No delivery/open/click state until ESP webhooks are integrated | **[R]** Correct under D1. |
 | Accepted static analysis baseline | Velocity | Some framework-inference noise permanently present | **[R]** Acceptable only while no new category is introduced. |
 | Three applications in one repository | Atomic cross-surface changes; one review surface | Independent versioning; larger checkout | **[R]** Correct at this team size. |
 | Deferred derivation of deltas and benchmarks | Stored payload stays an immutable run record | Recomputation per view | **[R]** Correct, with caching for the population query. |
@@ -2002,7 +2078,7 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 | Q2 | Is the current lock boundary — verdict and scores free, evidence and plan paid — the right split? | Directly determines revenue and trust. | Ship as specified; revisit using P1 and P2 funnel data. |
 | Q3 | Should the free allowance stay lifetime-per-email, or become periodic? | Lifetime caps total cost per address but blocks legitimate returning users. | Keep lifetime for now; revisit if returning-user friction appears. |
 | Q4 | Should audits be visible to all members of a tenant? | Changes the ownership boundary; agencies likely want it. | Defer. The ownership scope is the single change point when needed. |
-| Q5 | Are the tier prices and allowances final, and do they hold at expected model cost? | Unit economics depend on cost per audit, which is unmeasured. | Measure cost per audit before committing publicly. |
+| Q5 | Are the tier prices and allowances final, and do they hold at expected cost? *(Restated by D2: the pitch prices — $49 / $199 / $999+, subscriptions $59–$499 — supersede the Appendix A figures.)* | Unit economics depend on cost per audit, which is unmeasured; the pitch requires validation on the first 20–30 paid runs. | Implement F5.12.6 cost telemetry in Phase 11; confirm margins before advertising prices as standard rather than launch pricing. |
 | Q6 | Should the one-time unlock ever become a credit usable for a run? | Currently a deliberate simplification. | Hold until the funnel shows the demand. |
 | Q7 | What is the accessibility conformance target? | Determines contrast, focus, and announcement obligations. | WCAG 2.1 AA. |
 | Q8 | What is the support commitment for a failed or follow-up audit? | These states imply a human response that is not staffed. | Define an owner and a response window before launch. |
@@ -2037,9 +2113,16 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 | Q27 | Bounded excerpts are transmitted to the model provider, and this is disclosed. | Privacy non-compliance. |
 | Q28 | English-only reports are acceptable for the target market. | Localization becomes a launch dependency. |
 | Q29 | A single application node plus workers serves expected volume. | Scaling work moves earlier. |
-| Q30 | The email platform license credential will be resolved. | Without it the platform never boots; all mail runs on the fallback path with no delivery tracking, no resend through the platform, and no status refresh. The mailer's fallback keeps mail flowing, but the operator log's platform-dependent features stay inert. |
+| Q30 | *Resolved by D1 (2026-08-01).* The license expired 2025-10-15 and is not being renewed; the email platform is removed from the architecture. Direct framework send is the specified path (§5.8); delivery/open/click tracking is deferred to ESP webhooks (§4.2). | — |
 
-**[R]** Q30 is the one open item that gates a specified capability rather than a decision. The fallback design means audit email still works, and that was the point of the design — but the delivery-tracking features in §5.8.5 cannot be verified end to end until it is resolved.
+**New questions raised by the 2026-08-01 revision:**
+
+| # | Question | Why it matters | Recommendation |
+| --- | --- | --- | --- |
+| Q31 | Which SMTP/ESP transport for production mail? | Deliverability (SPF/DKIM/DMARC) is now entirely this transport's job; an ESP with event webhooks also unlocks the deferred tracking item cheaply. | Pick an ESP with webhooks (e.g. Postmark/Resend/SES) rather than bare SMTP, so §4.2's tracking deferral stays a config change, not a migration. |
+| Q32 | Does the legacy $5 unlock survive once tier products launch? | Two overlapping monetization models confuse copy and funnel math. | Retire it at Phase 11: the free diagnostic converts directly to the $49 tier; grandfather existing unlocks. |
+| Q33 | Which in-house/permissive Semgrep rulesets ship in tier 1? | Registry-licensed rules are unusable commercially; rule quality drives report quality. | Start from permissively-licensed community packs plus a small in-house pack per supported ecosystem; review licenses rule-by-rule before launch. |
+| Q34 | Expert-tier reviewer staffing and SLA (extends Q8). | The $999 tier sells engineering time; an unstaffed queue is a refund generator. | Current engineering team fulfils per pitch; publish a review SLA on the product page only after the first three are delivered on time. |
 
 ---
 
@@ -2061,7 +2144,7 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 | A8 | Cloned code is never executed, and working directories are removed on every path including failure. |
 | A9 | No user can see another user's audit or report through any path. A foreign identifier yields not-found. |
 | A10 | An operator can search, inspect, edit, retry, launch, grant unlock, mark handled, and override results, and can change the prompt template without a deployment. |
-| A11 | Every audit message is sent through the single mailer and produces a log row. Platform failure falls back to direct send with the reason logged. |
+| A11 | Every audit message is sent through the single mailer and produces a log row recording the outcome. A send failure is recorded with its reason; audit email never silently stops. |
 | A12 | Every funnel stage is recorded and visible in the operator funnel report, with acquisition stages uninflated by internal runs. |
 | A13 | Retries and duplicate webhooks never produce a duplicate report, a duplicate entitlement, a duplicate run, or a revoked unlock. |
 | A14 | The marketing site and every backend-served public page share one visual identity, and navigation reflects session state without a wrong-state flash. |
@@ -2094,7 +2177,7 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 
 **Scheduling** — Schedules persist per repository. Due runs respect remaining allowance. Insufficient allowance skips without consuming or failing the batch. Task non-overlapping and single-node.
 
-**Mail routing** — All ten message types routed through the mailer, proven by exhaustive search. Successful send logs with an identifier; failure falls back and logs the reason. Platform calls structurally unreachable when unconfigured. Resend reproduces the stored subject and body. Status refresh maps correctly with bounce precedence and leaves unreported rows untouched.
+**Mail routing** — All ten message types routed through the mailer, proven by exhaustive search. Successful send logs as sent; failure logs the reason and marks the row failed. Resend reproduces the stored subject and body and requires confirmation. *(Revised by D1: platform-gate and status-refresh criteria removed.)*
 
 **Customer dashboard** — Cross-user isolation proven live, not only by unit assertion. Email-matched ownership works and is backfilled on registration. Every status has a plain-language description. Action-required states show their callout. Widget values correct across subscribed, free, and exhausted users. Widgets and navigation hidden entirely for a user with neither audits nor allowance. Navigation visible to an entitled subscriber before their first report.
 
@@ -2122,14 +2205,14 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 | PR10 | **[R]** Legal pages published and accurate about collection, third-party transmission, and retention. |
 | PR11 | **[Q]** Retention policies decided and implemented; erasure procedure documented. |
 | PR12 | **[R]** Payment providers configured with live credentials and a real transaction verified end to end. |
-| PR13 | **[Q]** The email platform booted and verified end to end — send, log, status refresh, and resend — or the fallback-only operating mode explicitly accepted in writing, with the platform-dependent features documented as inert. |
+| PR13 | **[R]** Outbound email verified end to end against the production transport — send, log row, and resend — including SPF/DKIM/DMARC alignment for the sending domain. *(Revised by D1.)* |
 | PR14 | **[REC]** Automated browser coverage for the §16.3 flows, or each unverified behavior explicitly listed as such. |
 | PR15 | **[REC]** A performance baseline established against the repository corpus, and every configured limit proven to actually bind. |
 | PR16 | **[R]** Cost per audit measured, and unit economics confirmed against the published prices. |
 | PR17 | **[R]** An owner and a response window defined for requests in failed and follow-up states. |
 | PR18 | **[R]** Every completion claim in this section backed by observed evidence. Any gap stated explicitly rather than assumed. |
 
-**[R]** PR18 is not ceremonial. Several capabilities in this specification are verifiable only in an environment with a real browser, real payment credentials, and a booted email platform. Where that evidence has not been obtained, the correct report is "not verified", never "done".
+**[R]** PR18 is not ceremonial. Several capabilities in this specification are verifiable only in an environment with a real browser, real payment credentials, and the real mail transport. Where that evidence has not been obtained, the correct report is "not verified", never "done".
 
 ---
 
@@ -2137,12 +2220,14 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 
 **[R]** Every value below must live in exactly one configuration entry and be read from there by backend logic, operator interfaces, and marketing copy alike. The figures shown are the specified defaults.
 
+**Pricing note (D2, 2026-08-01).** The pricing rows below are the *currently implemented* seed values. They are superseded as targets by the tier pricing in §5.12 — Automated $49, Deep AI $199, Expert from $999; subscriptions Starter $59 / Growth $149 / Agency $499 / Enterprise from $1,500 — which lands with the Phase 11 catalog rework and is **[Q]** subject to cost-per-audit validation (Q5). The fate of the legacy $5 unlock is Q32.
+
 | Domain | Value |
 | --- | --- |
 | Free allowance | 3 runs per email address, lifetime, plus per-user bonus |
-| One-time unlock | $5, unlocks one existing report only |
-| Prepaid single run | $5, same product, produces an unlocked report |
-| Subscription tiers | $10 / 5 analyses, $30 / 20, $60 / 50 — per month |
+| One-time unlock | $5, unlocks one existing report only *(legacy — see Q32)* |
+| Prepaid single run | $5, same product, produces an unlocked report *(legacy — see Q32)* |
+| Subscription tiers | $10 / 5 analyses, $30 / 20, $60 / 50 — per month *(superseded by §5.12 grid at Phase 11)* |
 | Verification link lifetime | 48 hours |
 | Unverified purge | 7 days |
 | Report link lifetime | 30 days |
