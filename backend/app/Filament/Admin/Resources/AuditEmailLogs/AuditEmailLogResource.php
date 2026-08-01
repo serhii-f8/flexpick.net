@@ -3,15 +3,14 @@
 namespace App\Filament\Admin\Resources\AuditEmailLogs;
 
 use App\Filament\Admin\Resources\AuditEmailLogs\Pages\ListAuditEmailLogs;
+use App\Mail\Audit\StoredAuditEmail;
 use App\Models\AuditEmailLog;
-use App\Services\AuditMail\MailcoachClient;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Mail;
 
 class AuditEmailLogResource extends Resource
@@ -78,26 +77,9 @@ class AuditEmailLogResource extends Resource
                         'date' => $record->sent_at?->format(config('app.datetime_format')) ?? __('unknown'),
                     ]))
                     ->action(function (AuditEmailLog $record): void {
-                        $client = app(MailcoachClient::class);
-
-                        if ($record->mailcoach_uuid !== null && $client->isConfigured()) {
-                            $client->resend($record->mailcoach_uuid);
-                        } else {
-                            Mail::to($record->recipient)->send(
-                                new class($record->subject, $record->body) extends Mailable
-                                {
-                                    public function __construct(
-                                        private readonly string $mailSubject,
-                                        private readonly string $htmlBody,
-                                    ) {}
-
-                                    public function build(): self
-                                    {
-                                        return $this->subject($this->mailSubject)->html($this->htmlBody);
-                                    }
-                                }
-                            );
-                        }
+                        Mail::to($record->recipient)->send(
+                            new StoredAuditEmail($record->subject, $record->body)
+                        );
 
                         $record->update([
                             'attempts' => $record->attempts + 1,
