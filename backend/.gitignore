@@ -22,6 +22,3 @@ yarn-error.log
 .idea
 /.vscode
 .DS_Store
-
-# Licensed Mailcoach archives — never commit (see docs/superpowers/specs/2026-07-13-admin-audit-management-design.md)
-spatie-*.zip
