@@ -7,64 +7,60 @@ use App\Models\AuditEmailLog;
 use App\Models\AuditRequest;
 use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditRequestService;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use InvalidArgumentException;
 use Tests\Feature\FeatureTest;
 use Tests\Feature\Services\Fixtures\UnrenderableMailable;
 use Throwable;
 
 class AuditMailerTest extends FeatureTest
 {
-    public function test_sends_via_mailcoach_when_configured(): void
+    public function test_sends_and_logs_sent_row(): void
     {
-        config()->set('services.mailcoach.endpoint', 'http://mailcoach/api');
-        config()->set('services.mailcoach.api_token', 'token');
-        Http::fake(['http://mailcoach/api/transactional-mails/send' => Http::response(['data' => ['uuid' => 'tm-42']], 200)]);
         Mail::fake();
 
-        $request = AuditRequest::factory()->create(['email' => 'client@example.com']);
-        $mailable = new AuditRequestReceived($request, 'https://status.example');
+        $request = AuditRequest::factory()->create(['email' => 'direct-send@example.com']);
 
-        $log = app(AuditMailer::class)->send($mailable, $request->email, $request);
+        $log = app(AuditMailer::class)->send(
+            new AuditRequestReceived($request, 'https://status.example'),
+            $request->email,
+            $request
+        );
 
         $this->assertSame(AuditEmailLog::STATUS_SENT, $log->status);
-        $this->assertSame('tm-42', $log->mailcoach_uuid);
         $this->assertSame('AuditRequestReceived', $log->mailable);
         $this->assertSame(1, $log->attempts);
         $this->assertNotSame('', $log->body);
-        Mail::assertNothingOutgoing();
-    }
-
-    public function test_falls_back_to_mail_when_mailcoach_unreachable(): void
-    {
-        config()->set('services.mailcoach.endpoint', 'http://mailcoach/api');
-        config()->set('services.mailcoach.api_token', 'token');
-        Http::fake(['http://mailcoach/api/transactional-mails/send' => Http::response('down', 500)]);
-        Mail::fake();
-
-        $request = AuditRequest::factory()->create();
-
-        $log = app(AuditMailer::class)->send(new AuditRequestReceived($request, 'https://s'), $request->email, $request);
-
-        $this->assertSame(AuditEmailLog::STATUS_SENT, $log->status);
-        $this->assertNull($log->mailcoach_uuid);
-        $this->assertStringContainsString('500', (string) $log->last_error);
+        $this->assertNull($log->last_error);
         Mail::assertQueued(AuditRequestReceived::class);
     }
 
-    public function test_sends_directly_when_unconfigured_without_http_calls(): void
+    public function test_send_failure_logs_failed_row_and_rethrows(): void
     {
-        config()->set('services.mailcoach.endpoint', null);
-        Http::fake();
-        Mail::fake();
+        $request = AuditRequest::factory()->create(['email' => 'send-fail@example.com']);
 
-        $request = AuditRequest::factory()->create();
+        // Every audit mailable implements ShouldQueue, so AuditMailer's Mail::to()->send()
+        // hands the message to the queue rather than straight to the transport. Pointing the
+        // queue at a connection that does not exist makes that dispatch throw synchronously —
+        // no mocks, no network, and it mirrors a real failure mode (queue backend unavailable).
+        config(['queue.default' => 'no-such-connection']);
 
-        $log = app(AuditMailer::class)->send(new AuditRequestReceived($request, 'https://s'), $request->email, $request);
+        try {
+            app(AuditMailer::class)->send(
+                new AuditRequestReceived($request, 'https://status.example'),
+                $request->email,
+                $request
+            );
+            $this->fail('Expected the send failure to be rethrown.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('no-such-connection', $e->getMessage());
+        }
 
-        $this->assertSame(AuditEmailLog::STATUS_SENT, $log->status);
-        Http::assertNothingSent();
-        Mail::assertQueued(AuditRequestReceived::class);
+        $log = AuditEmailLog::where('audit_request_id', $request->id)->sole();
+
+        $this->assertSame(AuditEmailLog::STATUS_FAILED, $log->status);
+        $this->assertStringContainsString('no-such-connection', (string) $log->last_error);
+        $this->assertNotSame('', $log->body, 'the message rendered before the dispatch failed');
     }
 
     public function test_call_sites_create_log_rows(): void

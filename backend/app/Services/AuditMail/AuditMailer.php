@@ -2,7 +2,6 @@
 
 namespace App\Services\AuditMail;
 
-use App\Exceptions\MailcoachUnavailableException;
 use App\Models\AuditEmailLog;
 use App\Models\AuditRequest;
 use Illuminate\Mail\Mailable;
@@ -11,10 +10,6 @@ use Throwable;
 
 class AuditMailer
 {
-    public function __construct(
-        private MailcoachClient $mailcoach,
-    ) {}
-
     public function send(Mailable $mailable, string $recipient, ?AuditRequest $auditRequest = null): AuditEmailLog
     {
         $mailableName = class_basename($mailable);
@@ -51,17 +46,6 @@ class AuditMailer
             'attempts' => 1,
             'sent_at' => now(),
         ]);
-
-        if ($this->mailcoach->isConfigured()) {
-            try {
-                $uuid = $this->mailcoach->sendTransactional($recipient, $log->subject, $log->body);
-                $log->update(['status' => AuditEmailLog::STATUS_SENT, 'mailcoach_uuid' => $uuid]);
-
-                return $log;
-            } catch (MailcoachUnavailableException $e) {
-                $log->update(['last_error' => 'Mailcoach unavailable, fell back to direct send: '.$e->getMessage()]);
-            }
-        }
 
         try {
             Mail::to($recipient)->send($mailable);
