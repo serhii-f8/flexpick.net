@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Mail\Audit;
+namespace App\Mail;
 
 use Illuminate\Mail\Mailable;
 

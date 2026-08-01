@@ -4,7 +4,7 @@ namespace Tests\Feature\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\AuditEmailLogs\AuditEmailLogResource;
 use App\Filament\Admin\Resources\AuditEmailLogs\Pages\ListAuditEmailLogs;
-use App\Mail\Audit\StoredAuditEmail;
+use App\Mail\StoredAuditEmail;
 use App\Models\AuditEmailLog;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
@@ -53,5 +53,29 @@ class AuditEmailLogResourceTest extends FeatureTest
 
         $this->assertSame(2, $log->fresh()->attempts);
         $this->assertSame(AuditEmailLog::STATUS_SENT, $log->fresh()->status);
+    }
+
+    public function test_resend_action_is_hidden_for_a_render_failed_row_with_no_stored_body(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $renderFailed = AuditEmailLog::factory()->create([
+            'recipient' => 'render-failed@example.com',
+            'subject' => '',
+            'body' => '',
+            'status' => AuditEmailLog::STATUS_FAILED,
+            'last_error' => 'Render failed: view not found',
+        ]);
+
+        $normal = AuditEmailLog::factory()->create([
+            'recipient' => 'normal@example.com',
+            'subject' => 'Your codebase health report is ready',
+            'body' => '<p>stored body</p>',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(ListAuditEmailLogs::class)
+            ->assertTableActionHidden('resend', $renderFailed)
+            ->assertTableActionVisible('resend', $normal);
     }
 }

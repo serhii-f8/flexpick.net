@@ -3,7 +3,7 @@
 namespace App\Filament\Admin\Resources\AuditEmailLogs;
 
 use App\Filament\Admin\Resources\AuditEmailLogs\Pages\ListAuditEmailLogs;
-use App\Mail\Audit\StoredAuditEmail;
+use App\Mail\StoredAuditEmail;
 use App\Models\AuditEmailLog;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -71,6 +71,7 @@ class AuditEmailLogResource extends Resource
             ->recordActions([
                 Action::make('resend')
                     ->label(__('Resend'))
+                    ->visible(fn (AuditEmailLog $record): bool => $record->body !== '')
                     ->requiresConfirmation()
                     ->modalDescription(fn (AuditEmailLog $record): string => __('This email was last sent to :recipient on :date. Sending again may duplicate it in their inbox.', [
                         'recipient' => $record->recipient,

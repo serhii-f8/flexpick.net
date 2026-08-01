@@ -24,37 +24,40 @@ Everything below is what remains.
 
 ## Phase 10 — Email simplification (D1)
 
+**Status: complete** — implemented on `growth-retention` (commits `f9d192d`..`85643d7`), spec `docs/superpowers/specs/2026-08-01-email-simplification-design.md`, plan `docs/superpowers/plans/2026-08-01-email-simplification.md`.
+
 **Goal:** delete the removed email platform so the code matches spec §5.8. Small, no dependencies, immediately executable. Owner intends to do this by hand.
 **Spec:** §17 Phase 10, §5.8, §18.6, Q30.
 
 ### Delete — infrastructure
-- [ ] `mailcoach/` application directory (**verified present** at repo root)
-- [ ] `mailcoach` and `mailcoach.horizon` services in `compose.yml:17` and `compose.yml:33`, plus the `mailcoach` dependency edge at `compose.yml:45`
-- [ ] `backend/docker/mysql/create-mailcoach-database.sh` (**verified present**; leave `create-testing-database.sh`)
-- [ ] `MAILCOACH_ENDPOINT` / `MAILCOACH_API_TOKEN` / `MAILCOACH_UI_URL` in `backend/.env.example:131-133`, and the local `backend/.env`
-- [ ] `.gitignore` entries for the mailcoach app, if any survive the directory deletion
+- [x] `mailcoach/` application directory (**verified present** at repo root)
+- [x] `mailcoach` and `mailcoach.horizon` services in `compose.yml:17` and `compose.yml:33`, plus the `mailcoach` dependency edge at `compose.yml:45`
+- [x] `backend/docker/mysql/create-mailcoach-database.sh` (**verified present**; leave `create-testing-database.sh`)
+- [x] `MAILCOACH_ENDPOINT` / `MAILCOACH_API_TOKEN` / `MAILCOACH_UI_URL` in `backend/.env.example:131-133`, and the local `backend/.env`
+- [x] `.gitignore` entries for the mailcoach app, if any survive the directory deletion
 
 ### Delete — application code
-- [ ] `backend/app/Services/AuditMail/MailcoachClient.php`
-- [ ] `backend/app/Exceptions/MailcoachUnavailableException.php`
-- [ ] `services.mailcoach` block in `backend/config/services.php:125`
-- [ ] `open-mailcoach` admin nav action, `backend/app/Providers/Filament/AdminPanelProvider.php:43-47`
+- [x] `backend/app/Services/AuditMail/MailcoachClient.php`
+- [x] `backend/app/Exceptions/MailcoachUnavailableException.php`
+- [x] `services.mailcoach` block in `backend/config/services.php:125`
+- [x] `open-mailcoach` admin nav action, `backend/app/Providers/Filament/AdminPanelProvider.php:43-47`
 
 ### Simplify — mailer
-- [ ] `AuditMailer::send()` (`backend/app/Services/AuditMail/AuditMailer.php`) becomes **log → `Mail::send` → record outcome**: drop the constructor dependency, the `isConfigured()` branch, the `sendTransactional` call, and the fallback `last_error` write
-- [ ] Fold in the §18.7 defect while the file is open: `$mailable->render()` is currently evaluated *inside* the `AuditEmailLog::create()` array, so a render failure means **no log row is ever written** — the single gap in the "audit email never silently stops" guarantee (A11). Render before create, or create-then-populate, and record a render failure as a failed row.
+- [x] `AuditMailer::send()` (`backend/app/Services/AuditMail/AuditMailer.php`) becomes **log → `Mail::send` → record outcome**: drop the constructor dependency, the `isConfigured()` branch, the `sendTransactional` call, and the fallback `last_error` write
+- [x] Fold in the §18.7 defect while the file is open: `$mailable->render()` is currently evaluated *inside* the `AuditEmailLog::create()` array, so a render failure means **no log row is ever written** — the single gap in the "audit email never silently stops" guarantee (A11). Render before create, or create-then-populate, and record a render failure as a failed row.
 
 ### Rework — email log
-- [ ] Drop or repurpose `mailcoach_uuid` (`backend/database/migrations/2026_07_13_110000_create_audit_email_logs_table.php:18`, `AuditEmailLog::$fillable`). Repurposing to a provider message id is the cheaper path if the ESP decision (Q31) lands soon.
-- [ ] Remove the status-refresh header action, `backend/app/Filament/Admin/Resources/AuditEmailLogs/Pages/ListAuditEmailLogs.php:26-30`
-- [ ] Remove the platform branch of the resend action, `.../AuditEmailLogResource.php:83-84`; resend keeps working from the stored subject/body
-- [ ] Add explicit exception handling on the resend path (§18.7 — currently unguarded)
+- [x] Drop or repurpose `mailcoach_uuid` (`backend/database/migrations/2026_07_13_110000_create_audit_email_logs_table.php:18`, `AuditEmailLog::$fillable`). Repurposing to a provider message id is the cheaper path if the ESP decision (Q31) lands soon.
+- [x] Remove the status-refresh header action, `backend/app/Filament/Admin/Resources/AuditEmailLogs/Pages/ListAuditEmailLogs.php:26-30`
+- [x] Remove the platform branch of the resend action, `.../AuditEmailLogResource.php:83-84`; resend keeps working from the stored subject/body
+- [ ] **Deferred — not part of D1.** Add explicit exception handling on the resend path (§18.7 — currently unguarded). Design decision D10.5 keeps resend without a try/catch; this stays on the §18.7 backlog.
 
 ### Tests and docs
-- [ ] Delete `backend/tests/Feature/Services/MailcoachClientTest.php` and every `Http::fake` platform-contract assertion
-- [ ] Update `AuditMailerTest` and `AuditEmailLogResourceTest` for the direct-send shape; keep the exhaustive ten-message routing test — that guarantee is untouched
-- [ ] `CLAUDE.md:90` names `MailcoachClient` as part of the delivery path; update it and any `backend/AGENTS.md` reference
-- [ ] Stale comment at `backend/app/Filament/Admin/Widgets/AuditAdminStatsWidget.php:62` ("ships with the Mailcoach workstream") — the table has landed; verify the tile renders real counts
+- [x] Delete `backend/tests/Feature/Services/MailcoachClientTest.php` and every `Http::fake` platform-contract assertion
+- [x] Update `AuditMailerTest` and `AuditEmailLogResourceTest` for the direct-send shape
+- [ ] **Deferred — out of D1's scope (design decision D10.6).** The exhaustive-routing guard test — a regression test proving every audit mailable routes through `AuditMailer` — was not added; §20.2's "proven by exhaustive search" is still satisfied by manual grep only. Recorded as a backlog item in the spec (§18.7-adjacent backlog).
+- [x] `CLAUDE.md:90` names `MailcoachClient` as part of the delivery path; update it and any `backend/AGENTS.md` reference
+- [x] Stale comment at `backend/app/Filament/Admin/Widgets/AuditAdminStatsWidget.php:62` ("ships with the Mailcoach workstream") — the table has landed; verify the tile renders real counts
 
 **Exit:** `grep -ri mailcoach` returns nothing outside historical docs; suite green; §20.2 *Mail routing* criteria hold in their D1-revised form.
 
