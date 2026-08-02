@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Notifications\OperationsAlert;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Health\ResultStores\ResultStore;
 use Spatie\Health\ResultStores\StoredCheckResults\StoredCheckResult;
@@ -34,7 +35,14 @@ class DispatchHealthAlerts extends Command
         }
 
         foreach ($results->storedCheckResults as $result) {
-            $this->dispatchFor($result);
+            try {
+                $this->dispatchFor($result);
+            } catch (Throwable $e) {
+                // Defense in depth: every channel already swallows its own
+                // failures, but if something else in this check's dispatch
+                // throws, it must not stop alerts for the checks after it.
+                Log::warning("Health alert dispatch failed for {$result->name}: ".$e->getMessage());
+            }
         }
 
         return self::SUCCESS;
@@ -42,20 +50,30 @@ class DispatchHealthAlerts extends Command
 
     private function dispatchFor(StoredCheckResult $result): void
     {
-        $isFailing = in_array($result->status, self::FAILING, true);
         $key = "health:alert:{$result->name}";
-        $lastAlertedAt = $this->remember($key);
 
-        if (! $isFailing) {
-            // Recovery: only interesting if we previously alerted.
-            if ($lastAlertedAt !== null) {
-                $this->send($result, 'ok');
-                $this->forget($key);
-            }
+        if (in_array($result->status, self::FAILING, true)) {
+            $this->dispatchFailing($result, $key);
 
             return;
         }
 
+        if ($result->status === 'ok') {
+            $this->dispatchRecovery($result, $key);
+
+            return;
+        }
+
+        // A status such as 'warning' or 'skipped' is neither a failure nor a
+        // recovery: the check is still degraded, so claiming "healthy again"
+        // here would be worse than saying nothing, and clearing the throttle
+        // key would let a later failure bypass the throttle window entirely.
+        // Do nothing: no alert, throttle key untouched.
+    }
+
+    private function dispatchFailing(StoredCheckResult $result, string $key): void
+    {
+        $lastAlertedAt = $this->remember($key);
         $throttleMinutes = (int) config('health.flexpick.alert_throttle_minutes');
 
         if ($lastAlertedAt !== null && now()->diffInMinutes($lastAlertedAt, true) < $throttleMinutes) {
@@ -64,6 +82,15 @@ class DispatchHealthAlerts extends Command
 
         $this->send($result, $result->status);
         $this->store($key);
+    }
+
+    private function dispatchRecovery(StoredCheckResult $result, string $key): void
+    {
+        // Recovery is only interesting if we previously alerted.
+        if ($this->remember($key) !== null) {
+            $this->send($result, 'ok');
+            $this->forget($key);
+        }
     }
 
     private function send(StoredCheckResult $result, string $status): void

@@ -2,9 +2,9 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Channels\MailAlertChannel;
 use App\Notifications\Channels\SlackWebhookChannel;
 use App\Notifications\Channels\TelegramChannel;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class OperationsAlert extends Notification
@@ -22,7 +22,7 @@ class OperationsAlert extends Notification
     public function via(mixed $notifiable): array
     {
         $map = [
-            'mail' => 'mail',
+            'mail' => MailAlertChannel::class,
             'telegram' => TelegramChannel::class,
             'slack' => SlackWebhookChannel::class,
         ];
@@ -45,14 +45,5 @@ class OperationsAlert extends Notification
     public function toAlertText(): string
     {
         return $this->subject()."\n\n".$this->message."\n\n".config('app.url');
-    }
-
-    public function toMail(mixed $notifiable): MailMessage
-    {
-        return (new MailMessage)
-            ->subject($this->subject())
-            ->line($this->message)
-            ->line('Check: '.$this->checkName)
-            ->line('Severity: '.strtoupper($this->band));
     }
 }

@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Health;
 
+use App\Notifications\Channels\MailAlertChannel;
 use App\Notifications\Channels\SlackWebhookChannel;
 use App\Notifications\Channels\TelegramChannel;
 use App\Notifications\OperationsAlert;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Tests\Feature\FeatureTest;
 
@@ -41,7 +43,7 @@ class OperationsAlertTest extends FeatureTest
 
         $via = $this->alert()->via(Notification::route('mail', 'ops@example.com'));
 
-        $this->assertContains('mail', $via);
+        $this->assertContains(MailAlertChannel::class, $via);
         $this->assertContains(TelegramChannel::class, $via);
         $this->assertNotContains(SlackWebhookChannel::class, $via);
     }
@@ -102,6 +104,40 @@ class OperationsAlertTest extends FeatureTest
 
         (new TelegramChannel)->send(
             Notification::route(TelegramChannel::class, null),
+            $this->alert()
+        );
+    }
+
+    /**
+     * Mail must be just as self-guarding as Telegram/Slack: an unconfigured
+     * destination logs a warning instead of silently dropping the alert, and
+     * a transport failure is caught rather than rethrown (the framework's
+     * MailChannel/NotificationSender otherwise rethrows mail failures, which
+     * would kill the remaining channels and every later check in the run).
+     */
+    public function test_mail_channel_without_destination_is_skipped_and_logged_not_thrown(): void
+    {
+        config()->set('health.flexpick.mail.to', null);
+
+        Log::shouldReceive('warning')->once()->withArgs(
+            fn (string $message) => str_contains($message, 'Mail')
+        );
+
+        (new MailAlertChannel)->send(
+            Notification::route(MailAlertChannel::class, null),
+            $this->alert()
+        );
+    }
+
+    public function test_mail_channel_transport_failure_is_swallowed(): void
+    {
+        Mail::shouldReceive('raw')->andThrow(new \RuntimeException('smtp down'));
+        Log::shouldReceive('warning')->once()->withArgs(
+            fn (string $message) => str_contains($message, 'Mail')
+        );
+
+        (new MailAlertChannel)->send(
+            Notification::route(MailAlertChannel::class, null),
             $this->alert()
         );
     }

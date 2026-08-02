@@ -4,8 +4,11 @@ namespace Tests\Feature\Health;
 
 use App\Notifications\OperationsAlert;
 use Carbon\Carbon;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Health\ResultStores\ResultStore;
 use Spatie\Health\ResultStores\StoredCheckResults\StoredCheckResult;
@@ -142,5 +145,72 @@ class DispatchHealthAlertsTest extends FeatureTest
         $this->artisan('app:health-alerts')->assertSuccessful();
 
         Notification::assertSentOnDemand(OperationsAlert::class);
+    }
+
+    /**
+     * A 'warning' (or 'skipped') status is still degraded, not recovered —
+     * claiming "healthy again" there would be worse than saying nothing. It
+     * must also leave the throttle key alone, so a subsequent failure inside
+     * the original window is still suppressed rather than re-alerted.
+     */
+    public function test_a_warning_after_a_failure_sends_no_recovery_and_keeps_the_throttle_key(): void
+    {
+        Notification::fake();
+
+        $this->results([['name' => 'Database', 'status' => 'failed', 'message' => 'unreachable']]);
+        $this->artisan('app:health-alerts');
+
+        $this->results([['name' => 'Database', 'status' => 'warning', 'message' => 'degraded']]);
+        $this->artisan('app:health-alerts');
+
+        Notification::assertSentOnDemandTimes(OperationsAlert::class, 1);
+
+        $this->results([['name' => 'Database', 'status' => 'failed', 'message' => 'unreachable again']]);
+        $this->artisan('app:health-alerts');
+
+        Notification::assertSentOnDemandTimes(OperationsAlert::class, 1);
+    }
+
+    /**
+     * Defense in depth: every channel already swallows its own failures, but
+     * the per-check dispatch itself is wrapped too, so a failure dispatching
+     * one check's alert can never suppress alerts for the checks after it.
+     */
+    public function test_a_checks_alert_dispatch_failure_does_not_block_a_later_check(): void
+    {
+        $this->results([
+            ['name' => 'Database', 'status' => 'failed', 'message' => 'unreachable'],
+            ['name' => 'Redis', 'status' => 'crashed'],
+        ]);
+
+        Log::spy();
+
+        // Notification::route() is a real static method on the facade, so the
+        // interceptable seam is ChannelManager::send() — what the resulting
+        // AnonymousNotifiable::notify() delegates to. Database (the first
+        // check in the run) blows up there; Redis (the second) must still be
+        // dispatched. This cannot be combined with Notification::fake(),
+        // hence the mock and output assertions rather than fake assertions.
+        Notification::shouldReceive('send')->once()->withArgs(
+            fn (AnonymousNotifiable $to, OperationsAlert $alert) => $alert->checkName === 'Database'
+                && $to->routeNotificationFor('mail') === 'ops@example.com'
+        )->andThrow(new \RuntimeException('dispatch exploded'));
+
+        Notification::shouldReceive('send')->once()->withArgs(
+            fn (AnonymousNotifiable $to, OperationsAlert $alert) => $alert->checkName === 'Redis'
+                && $alert->status === 'crashed'
+                && $to->routeNotificationFor('mail') === 'ops@example.com'
+        );
+
+        $this->assertSame(0, Artisan::call('app:health-alerts'));
+
+        $output = Artisan::output();
+        $this->assertStringContainsString('Alerted: Redis', $output);
+        $this->assertStringNotContainsString('Alerted: Database', $output);
+
+        Log::shouldHaveReceived('warning')->once()->withArgs(
+            fn (string $message) => str_contains($message, 'Database')
+                && str_contains($message, 'dispatch exploded')
+        );
     }
 }
