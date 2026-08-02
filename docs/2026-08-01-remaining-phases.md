@@ -93,6 +93,41 @@ deploy, rollback rehearsal, ESP + DNS, support ownership) remains outstanding as
 
 **Exit:** PR4, PR5, PR6, PR8, PR9, PR13, PR17 satisfied with observed evidence (PR18 — "not verified" is the correct report where evidence is absent).
 
+### Carried out of 9A-1 (recorded 2026-08-02, after final review)
+
+**Blocks 9A-2 — these must be done as part of standing up the infrastructure:**
+
+- [ ] **Point Ploi's uptime monitor at `/health` with a real token.** Until this exists, the
+  dead-man's switch is inert: the staleness arm lives *only* at that endpoint, so a dead
+  scheduler is completely silent in-app. Set `HEALTH_ENDPOINT_TOKEN` to a long random value —
+  `.env.example` deliberately ships it blank, and the endpoint 404s on an empty token.
+- [ ] **A database outage cannot be alerted in-app at all.** Both the result store and
+  `app:health-alerts` read MySQL, so `DatabaseCheck` failing means the alerter is blind too, and
+  `/health` returns 500 rather than the designed 503. Ploi's non-2xx rule is the only coverage.
+  Structural, not a bug — but it means the single most important alert depends entirely on 9A-2.
+- [ ] **Fix the suite's Faker email-collision flake before CI exists.** `FeatureTest` never rolls
+  back and seeds once per process, so `users.email` collisions surface intermittently in whichever
+  file happens to run late — observed in `LemonSqueezyControllerTest`, `InvoiceServiceTest`, and
+  `SubscriptionService` tests on different runs. It will fail builds. Unrelated to the audit domain.
+- [ ] `SENTRY_RELEASE` must be injected with the deployed git SHA by the Ploi deploy script, or
+  PR4's release-context requirement is unmet.
+
+**Deferred from 9A-1, non-blocking:**
+
+- [ ] No boundary-value coverage on any of the three custom checks — a `>` → `>=` regression would
+  be invisible. One cheap follow-up covers all three.
+- [ ] `MailFailureRateCheck` counts only `failed`, not `bounced`, so a deliverability collapse
+  manifesting as bounces is invisible. Revisit when the ESP lands (Q31).
+- [ ] The Vite-manifest-missing branch of `app:smoke` is untested; `public_path('build/manifest.json')`
+  is hardcoded rather than injectable.
+- [ ] Spatie's stock `notifications` block is retained but inert in `config/health.php`, and
+  re-reads `HEALTH_SLACK_WEBHOOK_URL` — two config keys per env, against the one-authoritative-entry
+  rule. Prune or mark inert.
+- [ ] Cache-outage behaviour is fail-open by design (alert rather than suppress), which at a
+  5-minute cadence means up to 12 alerts/hour/check with no throttle. Mandated direction, unmitigated.
+- [ ] `/health/ready` is unauthenticated and discloses which subsystem is down. Standard for a
+  probe; noted, not judged worth changing.
+
 ---
 
 ## Phase 11 — Scanner platform, findings model, and catalog rework (D2)

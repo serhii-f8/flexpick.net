@@ -36,9 +36,15 @@ Schedule::command('app:run-scheduled-audits')->dailyAt('06:00')->withoutOverlapp
 // partial batch — a failing check could silently vanish from /health and from
 // alerting. onOneServer is deliberately omitted: this deploys to a single
 // server, so it would only add a lock dependency for no benefit.
-Schedule::command(\Spatie\Health\Commands\RunHealthChecksCommand::class)->everyFiveMinutes()->withoutOverlapping();
+//
+// The 10-minute lock expiry is not incidental. The default is 1440 minutes, so
+// a run killed mid-flight (OOM, deploy restart) would leave the mutex held and
+// silently block every health check for 24 hours — the exact silence this phase
+// exists to eliminate. Ten minutes bounds that to two ticks while still being
+// far longer than a healthy run.
+Schedule::command(\Spatie\Health\Commands\RunHealthChecksCommand::class)->everyFiveMinutes()->withoutOverlapping(10);
 
-Schedule::command('app:health-alerts')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('app:health-alerts')->everyFiveMinutes()->withoutOverlapping(10);
 
 // Must be last: it records that the scheduler itself ran (spec §18.3 O2).
 Schedule::command(\Spatie\Health\Commands\ScheduleCheckHeartbeatCommand::class)->everyMinute();

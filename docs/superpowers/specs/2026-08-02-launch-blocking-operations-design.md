@@ -131,12 +131,22 @@ The reason is that the two paths mean different things. The in-app path says "lo
 the Ploi path is a pager. A cache write failure or 85% disk usage should not page, and if it does,
 the pager stops being trusted — which costs you the Critical alerts too.
 
-### 4.4 `OperationsAlert` notification and two channels
+### 4.4 `OperationsAlert` notification and three channels
 
 `via()` reads a configured channel list, so the channel set is one config entry rather than three
-code paths. Mail uses the framework channel. `TelegramChannel` and `SlackWebhookChannel` are each a
-single `Http::post` with a short timeout — no additional packages. Delivery is to an
-`AnonymousNotifiable`; there is no user to notify.
+code paths. An unresolved channel name is logged as a warning and skipped, never silently dropped —
+a typo in `HEALTH_ALERT_CHANNELS` must not produce an alerting system that is mute and looks fine.
+
+All three channels are ours, and none of them may throw. `TelegramChannel` and `SlackWebhookChannel`
+are each a single `Http::post` with a short timeout — no additional packages. **`MailAlertChannel`
+is a custom channel rather than Laravel's built-in `mail` channel**, because the built-in rethrows:
+`NotificationSender::sendToNotifiable` re-raises after dispatching `NotificationFailed`, so a mail
+transport error would kill the remaining channels for that check *and* every subsequent check's
+alert. A mail outage would suppress the alert about the mail outage. It sends via `Mail::raw()` from
+the same `toAlertText()` rendering the other two use, and it warns-and-skips when no destination is
+configured, symmetric with the other two.
+
+Delivery is to an `AnonymousNotifiable`; there is no user to notify.
 
 ### 4.5 `sentry/sentry-laravel` (vendor)
 
