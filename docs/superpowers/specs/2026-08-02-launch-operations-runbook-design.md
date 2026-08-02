@@ -103,8 +103,8 @@ One Ploi server, four things:
 | Site | Serves | Isolation |
 | --- | --- | --- |
 | `flexpick.net` | Astro `dist/` static output | none needed |
-| `app.flexpick.net` | Laravel production | DB `flexpick`, Redis DB **0**, supervisor `horizon-prod` |
-| `staging.app.flexpick.net` | Laravel staging | DB `flexpick_staging`, Redis DB **1**, supervisor `horizon-staging` |
+| `app.flexpick.net` | Laravel production | DB `flexpick`, Redis DB **0** queue / **1** cache, supervisor `horizon-prod` |
+| `staging.app.flexpick.net` | Laravel staging | DB `flexpick_staging`, Redis DB **2** queue / **3** cache, supervisor `horizon-staging` |
 | Bugsink | Docker, bound to loopback, Ploi-proxied with TLS | own container and volume |
 
 ### 4.1 The isolation that actually matters
@@ -113,6 +113,12 @@ The Redis database index and the Horizon supervisor/prefix split are load-bearin
 one means staging workers dequeue **production audit jobs** — running real users' analyses against
 staging's config, its AI credentials, and its mail transport. Separate `REDIS_DB` and a distinct
 Horizon prefix per environment are not tidiness; they are the boundary.
+
+Note the index arithmetic: `config/database.php` already defaults `REDIS_DB` to `0` and
+`REDIS_CACHE_DB` to `1`, so production consumes both. Staging therefore takes `2` and `3`.
+`REDIS_PREFIX` and `HORIZON_PREFIX` are additionally set per environment, so the namespaces stay
+disjoint even if an index is ever misconfigured. All of this is environment configuration — no
+code change is required for the split.
 
 Postmark gets **two Message Streams**, selected per environment through the mailer's
 `message_stream_id`. PR9 requires staging to prove *live* email delivery — Mailpit cannot satisfy
@@ -153,6 +159,19 @@ The alternative — smoking the release directory before the swap — cannot see
 the served Vite manifest, which is most of what the command checks. So the exposure window is
 accepted, bounded by the rehearsed rollback in runbook step 8, and stated explicitly here rather
 than discovered during an incident.
+
+### 5.2.1 The staging gate is hollow as written
+
+`SmokeCommand::inProduction()` compares `config('app.env') === 'production'`, and five of the eight
+assertions — cache warmth, Horizon liveness, mail transport, Vite manifest, and the `/pricing`
+render — return `true` unconditionally when it is false. On a staging site running
+`APP_ENV=staging`, the gate would pass while asserting almost nothing, and step 3 of the runbook
+would certify a release that production would reject.
+
+9A-1's stated intent for that guard was that `app:smoke` "stays safe to run locally." Staging is
+not local. The guard is therefore broadened to exclude only `local` and `testing`, which preserves
+the original intent exactly and makes the staging gate as strong as production's. This is a change
+to a 9A-1 infrastructure artifact, not to product behaviour, and it is covered by a test.
 
 ### 5.3 GitHub Actions
 
