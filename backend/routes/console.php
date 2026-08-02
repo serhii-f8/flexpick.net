@@ -30,3 +30,8 @@ Schedule::command('app:send-audit-verification-reminders')->dailyAt('09:00');
 Schedule::command('app:send-audit-unlock-reminders')->dailyAt('09:05');
 
 Schedule::command('app:run-scheduled-audits')->dailyAt('06:00')->withoutOverlapping()->onOneServer();
+
+Schedule::command(\Spatie\Health\Commands\RunHealthChecksCommand::class)->everyFiveMinutes();
+
+// Must be last: it records that the scheduler itself ran (spec §18.3 O2).
+Schedule::command(\Spatie\Health\Commands\ScheduleCheckHeartbeatCommand::class)->everyMinute();
