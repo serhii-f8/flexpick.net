@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\HealthReadinessController;
 use App\Http\Middleware\BlockedUser;
 use App\Http\Middleware\Sitemapped;
 use App\Http\Middleware\TrackCouponCode;
@@ -10,6 +11,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
+use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 
@@ -19,6 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            Route::get('/health/ready', HealthReadinessController::class)
+                ->name('health.ready');
+        },
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->appendToGroup('web', [
