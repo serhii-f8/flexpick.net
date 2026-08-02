@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Constants\AuditTier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,7 +16,7 @@ class AuditRequest extends Model
 
     protected $fillable = [
         'name', 'email', 'repo_url', 'message', 'status', 'failure_reason', 'meta', 'metrics',
-        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'user_id', 'prepaid',
+        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'tier', 'user_id', 'prepaid',
         'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at',
     ];
 
@@ -30,6 +31,7 @@ class AuditRequest extends Model
         'pipeline_log' => 'array',
         'analysis_started_at' => 'datetime',
         'analysis_completed_at' => 'datetime',
+        'tier' => AuditTier::class,
     ];
 
     /**
