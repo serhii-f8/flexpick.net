@@ -2,6 +2,7 @@
 
 namespace App\Support\Sentry;
 
+use Sentry\Breadcrumb;
 use Sentry\Event;
 use Sentry\EventHint;
 
@@ -37,7 +38,57 @@ class TokenScrubber
             $event->setTags($scrubbedTags);
         }
 
+        // The path taken by every unhandled `\Throwable` reaching Sentry via
+        // `captureException()` — including Laravel's exception handler.
+        // `ExceptionDataBag::$value` (the exception message) lives entirely
+        // separately from `Event::getMessage()`, which only carries explicit
+        // string captures.
+        foreach ($event->getExceptions() as $exceptionDataBag) {
+            $exceptionDataBag->setValue($this->scrub($exceptionDataBag->getValue()));
+        }
+
+        // Command/SQL breadcrumbs are enabled by default (config/sentry.php),
+        // and the audit pipeline shells out to `git clone` with the
+        // credential embedded in the URL.
+        $breadcrumbs = $event->getBreadcrumbs();
+
+        if ($breadcrumbs !== []) {
+            $event->setBreadcrumb(array_map(
+                fn (Breadcrumb $breadcrumb): Breadcrumb => $this->scrubBreadcrumb($breadcrumb),
+                $breadcrumbs
+            ));
+        }
+
+        $request = $event->getRequest();
+
+        if ($request !== []) {
+            $event->setRequest($this->scrubArray($request));
+        }
+
+        foreach ($event->getContexts() as $name => $data) {
+            $event->setContext($name, $this->scrubArray($data));
+        }
+
         return $event;
+    }
+
+    private function scrubBreadcrumb(Breadcrumb $breadcrumb): Breadcrumb
+    {
+        $message = $breadcrumb->getMessage();
+
+        if ($message !== null) {
+            $breadcrumb = $breadcrumb->withMessage($this->scrub($message));
+        }
+
+        foreach ($breadcrumb->getMetadata() as $key => $value) {
+            if (is_string($value)) {
+                $breadcrumb = $breadcrumb->withMetadata($key, $this->scrub($value));
+            } elseif (is_array($value)) {
+                $breadcrumb = $breadcrumb->withMetadata($key, $this->scrubArray($value));
+            }
+        }
+
+        return $breadcrumb;
     }
 
     private function scrub(string $value): string

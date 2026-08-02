@@ -3,8 +3,10 @@
 namespace Tests\Unit;
 
 use App\Support\Sentry\TokenScrubber;
+use Sentry\Breadcrumb;
 use Sentry\Event;
 use Sentry\EventHint;
+use Sentry\ExceptionDataBag;
 use Tests\TestCase;
 
 class TokenScrubberTest extends TestCase
@@ -79,5 +81,49 @@ class TokenScrubberTest extends TestCase
             'Repository could not be cloned: https://github.com/acme/app.git',
             $scrubbed->getMessage()
         );
+    }
+
+    public function test_strips_a_credential_from_an_exception_captured_the_real_way(): void
+    {
+        // This is the path every unhandled `\Throwable` takes to Sentry via
+        // `captureException()` (including Laravel's exception handler) —
+        // `ExceptionDataBag::$value` is a completely separate storage
+        // location from `Event::getMessage()`, which only carries explicit
+        // string captures.
+        $exception = new \RuntimeException(
+            'Repository could not be cloned: https://x-access-token:'.self::TOKEN.'@github.com/acme/app.git'
+        );
+
+        $event = Event::createEvent();
+        $event->setExceptions([new ExceptionDataBag($exception)]);
+
+        $scrubbed = (new TokenScrubber)($event, new EventHint);
+
+        $value = $scrubbed->getExceptions()[0]->getValue();
+        $this->assertStringNotContainsString(self::TOKEN, $value);
+        $this->assertStringNotContainsString('x-access-token:', $value);
+        $this->assertStringContainsString('[REDACTED]', $value);
+        $this->assertStringContainsString('github.com/acme/app.git', $value);
+    }
+
+    public function test_strips_a_credential_from_a_breadcrumb(): void
+    {
+        $breadcrumb = new Breadcrumb(
+            Breadcrumb::LEVEL_INFO,
+            Breadcrumb::TYPE_DEFAULT,
+            'command',
+            'git clone https://x-access-token:'.self::TOKEN.'@github.com/acme/app.git /tmp/x',
+            ['command' => 'git clone https://x-access-token:'.self::TOKEN.'@github.com/acme/app.git /tmp/x'],
+        );
+
+        $event = Event::createEvent();
+        $event->setBreadcrumb([$breadcrumb]);
+
+        $scrubbed = (new TokenScrubber)($event, new EventHint);
+
+        $scrubbedBreadcrumb = $scrubbed->getBreadcrumbs()[0];
+        $this->assertStringNotContainsString(self::TOKEN, (string) $scrubbedBreadcrumb->getMessage());
+        $this->assertStringNotContainsString('x-access-token:', (string) $scrubbedBreadcrumb->getMessage());
+        $this->assertStringNotContainsString(self::TOKEN, json_encode($scrubbedBreadcrumb->getMetadata()));
     }
 }
