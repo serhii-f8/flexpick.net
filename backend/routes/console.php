@@ -33,5 +33,7 @@ Schedule::command('app:run-scheduled-audits')->dailyAt('06:00')->withoutOverlapp
 
 Schedule::command(\Spatie\Health\Commands\RunHealthChecksCommand::class)->everyFiveMinutes();
 
+Schedule::command('app:health-alerts')->everyFiveMinutes();
+
 // Must be last: it records that the scheduler itself ran (spec §18.3 O2).
 Schedule::command(\Spatie\Health\Commands\ScheduleCheckHeartbeatCommand::class)->everyMinute();
