@@ -35,6 +35,7 @@
         "saasykit/laravel-open-graphy": "^1.2",
         "saasykit/laravel-recaptcha": "^1.0",
         "saasykit/purifier": "^1.0",
+        "sentry/sentry-laravel": "^4.27",
         "spatie/laravel-cookie-consent": "^3.3",
         "spatie/laravel-flash": "^1.9",
         "spatie/laravel-health": "^1.40",

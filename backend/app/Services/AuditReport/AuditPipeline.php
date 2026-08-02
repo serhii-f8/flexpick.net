@@ -26,6 +26,10 @@ class AuditPipeline
         ]);
         $auditRequest->appendPipelineLog('started', 'Analysis started');
 
+        \Sentry\configureScope(function (\Sentry\State\Scope $scope) use ($auditRequest): void {
+            $scope->setTag('audit_request', (string) $auditRequest->uuid);
+        });
+
         try {
             $this->cloner->preflight($auditRequest->repo_url);
             $path = $this->cloner->clone($auditRequest->repo_url, $auditRequest->uuid);
