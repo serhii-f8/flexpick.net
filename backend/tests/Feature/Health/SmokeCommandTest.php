@@ -4,6 +4,7 @@ namespace Tests\Feature\Health;
 
 use Illuminate\Database\Migrations\MigrationRepositoryInterface;
 use Illuminate\Database\Migrations\Migrator;
+use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Mockery;
 use Tests\Feature\FeatureTest;
 
@@ -78,5 +79,47 @@ class SmokeCommandTest extends FeatureTest
         $this->artisan('app:smoke')
             ->expectsOutputToContain('configuration and routes cached')
             ->assertFailed();
+    }
+
+    public function test_horizon_assertion_reflects_supervisor_state_in_production(): void
+    {
+        config()->set('app.env', 'production');
+
+        $noSupervisors = Mockery::mock(MasterSupervisorRepository::class);
+        $noSupervisors->shouldReceive('all')->andReturn([]);
+        $this->app->instance(MasterSupervisorRepository::class, $noSupervisors);
+
+        // Other production-gated assertions (config/routes caching, mail
+        // transport) will also fail here since the testing environment never
+        // has those warmed - that's expected and doesn't weaken this check,
+        // since we pin the exact PASS/FAIL line for the horizon assertion.
+        $this->artisan('app:smoke')
+            ->expectsOutputToContain('FAIL  horizon worker on the audit queue')
+            ->assertFailed();
+
+        $runningSupervisors = Mockery::mock(MasterSupervisorRepository::class);
+        $runningSupervisors->shouldReceive('all')->andReturn(['flexpick-supervisor']);
+        $this->app->instance(MasterSupervisorRepository::class, $runningSupervisors);
+
+        $this->artisan('app:smoke')
+            ->expectsOutputToContain('PASS  horizon worker on the audit queue')
+            ->doesntExpectOutputToContain('FAIL  horizon worker on the audit queue')
+            ->run();
+    }
+
+    public function test_vite_manifest_assertion_passes_in_production_when_manifest_exists(): void
+    {
+        config()->set('app.env', 'production');
+
+        // backend/public/build/manifest.json exists in this working tree, so
+        // this exercises the genuine file_exists() + /pricing check rather
+        // than the `! inProduction()` shortcut the other tests rely on.
+        // FeatureTest::setUp() calls withoutVite(), which only fakes Blade's
+        // @vite directive rendering - it does not touch this file_exists()
+        // check or short-circuit the underlying assertion.
+        $this->artisan('app:smoke')
+            ->expectsOutputToContain('PASS  vite manifest present and a public page renders')
+            ->doesntExpectOutputToContain('FAIL  vite manifest present and a public page renders')
+            ->run();
     }
 }
