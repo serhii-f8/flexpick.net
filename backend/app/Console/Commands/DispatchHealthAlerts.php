@@ -4,11 +4,13 @@ namespace App\Console\Commands;
 
 use App\Notifications\OperationsAlert;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Health\ResultStores\ResultStore;
 use Spatie\Health\ResultStores\StoredCheckResults\StoredCheckResult;
+use Spatie\Health\ResultStores\StoredCheckResults\StoredCheckResults;
 use Throwable;
 
 /**
@@ -29,10 +31,16 @@ class DispatchHealthAlerts extends Command
         $results = $resultStore->latestResults();
 
         if ($results === null) {
+            // Nothing to alert on, but the absence itself is a signal: the
+            // scheduler is running this command while health:check is not
+            // storing anything.
+            Log::error('Health results are stale: no stored results exist, so health:check is not storing results.');
             $this->warn('No stored health results; nothing to dispatch.');
 
             return self::SUCCESS;
         }
+
+        $this->warnIfStale($results);
 
         foreach ($results->storedCheckResults as $result) {
             try {
@@ -46,6 +54,29 @@ class DispatchHealthAlerts extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * If health:check stops storing results while the scheduler keeps running
+     * this command, the same stale "ok" set would be re-read forever with no
+     * in-app signal. Log it, but keep going: the stored results are still the
+     * best information available, and alerting on every check because of one
+     * stale read would be worse than the staleness itself. The /health
+     * endpoint's staleness arm remains the external dead-man's switch.
+     */
+    private function warnIfStale(StoredCheckResults $results): void
+    {
+        $freshnessMinutes = (int) config('health.flexpick.result_freshness_minutes');
+        $ageMinutes = (int) Carbon::instance($results->finishedAt)->diffInMinutes(now(), true);
+
+        if ($ageMinutes > $freshnessMinutes) {
+            Log::error(
+                "Health results are stale: the newest stored run finished {$ageMinutes} minutes ago, "
+                ."beyond the {$freshnessMinutes} minute freshness window. health:check may not be running."
+            );
+
+            $this->warn("Health results are {$ageMinutes} minutes old (limit {$freshnessMinutes}).");
+        }
     }
 
     private function dispatchFor(StoredCheckResult $result): void
@@ -101,6 +132,20 @@ class DispatchHealthAlerts extends Command
         $message = $status === 'ok'
             ? "{$result->name} is healthy again."
             : ($result->notificationMessage ?: "{$result->name} reported {$status}.");
+
+        $channels = array_intersect_key(
+            OperationsAlert::CHANNEL_MAP,
+            array_flip(array_map('strval', (array) config('health.flexpick.alert_channels')))
+        );
+
+        if ($channels === []) {
+            // The alert is still dispatched (so a fake/observer can see it),
+            // but with no channel resolved it reaches nobody. Say so.
+            Log::warning(
+                "No alert channels resolved for {$result->name}; this alert will not reach anyone. "
+                .'Check HEALTH_ALERT_CHANNELS.'
+            );
+        }
 
         Notification::route('mail', (string) config('health.flexpick.mail.to'))
             ->notify(new OperationsAlert($result->name, $band, $status, $message));

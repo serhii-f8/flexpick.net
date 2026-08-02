@@ -35,10 +35,10 @@ class DispatchHealthAlertsTest extends FeatureTest
         parent::tearDown();
     }
 
-    private function results(array $checks): void
+    private function results(array $checks, ?\DateTimeInterface $finishedAt = null): void
     {
         $stored = new StoredCheckResults(
-            finishedAt: now(),
+            finishedAt: $finishedAt ?? now(),
             checkResults: new Collection(array_map(
                 fn (array $c) => new StoredCheckResult(
                     name: $c['name'],
@@ -169,6 +169,67 @@ class DispatchHealthAlertsTest extends FeatureTest
         $this->artisan('app:health-alerts');
 
         Notification::assertSentOnDemandTimes(OperationsAlert::class, 1);
+    }
+
+    /**
+     * If health:check stops storing results, this command would otherwise
+     * re-read the same stale "ok" set forever with no in-app signal at all.
+     */
+    public function test_logs_an_error_when_the_stored_results_are_stale(): void
+    {
+        Notification::fake();
+        config()->set('health.flexpick.result_freshness_minutes', 15);
+        $this->results(
+            [['name' => 'Database', 'status' => 'ok']],
+            finishedAt: now()->subMinutes(60),
+        );
+
+        Log::spy();
+
+        $this->artisan('app:health-alerts')->assertSuccessful();
+
+        Log::shouldHaveReceived('error')->once()->withArgs(
+            fn (string $message) => str_contains($message, 'stale') && str_contains($message, '60')
+        );
+    }
+
+    public function test_logs_an_error_when_no_results_are_stored_at_all(): void
+    {
+        $store = $this->mock(ResultStore::class);
+        $store->shouldReceive('latestResults')->andReturn(null);
+
+        Log::spy();
+
+        $this->artisan('app:health-alerts')->assertSuccessful();
+
+        Log::shouldHaveReceived('error')->once()->withArgs(
+            fn (string $message) => str_contains($message, 'stale')
+        );
+    }
+
+    /**
+     * A typo'd or empty HEALTH_ALERT_CHANNELS resolves to no channels, so the
+     * alert reaches nobody. That must not be silent.
+     */
+    public function test_logs_a_warning_when_no_alert_channel_resolves(): void
+    {
+        Notification::fake();
+        config()->set('health.flexpick.alert_channels', ['telegramm']);
+        $this->results([['name' => 'Database', 'status' => 'failed', 'message' => 'unreachable']]);
+
+        Log::spy();
+
+        $this->artisan('app:health-alerts')->assertSuccessful();
+
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn (string $message) => str_contains($message, 'No alert channels resolved')
+                && str_contains($message, 'Database')
+        )->once();
+
+        // ...and the notification itself names the channel that did not resolve.
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn (string $message) => str_contains($message, 'telegramm')
+        )->once();
     }
 
     /**

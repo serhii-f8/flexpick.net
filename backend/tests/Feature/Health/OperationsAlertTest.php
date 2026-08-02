@@ -48,6 +48,23 @@ class OperationsAlertTest extends FeatureTest
         $this->assertNotContains(SlackWebhookChannel::class, $via);
     }
 
+    /**
+     * A misspelled channel name used to be filtered out silently, so one env
+     * typo produced zero channels, zero log lines and zero alerts.
+     */
+    public function test_via_logs_a_warning_for_an_unknown_channel_name(): void
+    {
+        config()->set('health.flexpick.alert_channels', ['mail', 'telegramm']);
+
+        Log::shouldReceive('warning')->once()->withArgs(
+            fn (string $message) => str_contains($message, 'telegramm')
+        );
+
+        $via = $this->alert()->via(Notification::route('mail', 'ops@example.com'));
+
+        $this->assertSame([MailAlertChannel::class], $via);
+    }
+
     public function test_telegram_channel_posts_the_message(): void
     {
         Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);

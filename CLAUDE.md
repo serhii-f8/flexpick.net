@@ -105,7 +105,7 @@ guaranteed recovery notifications.
 - Thresholds and severity bands: the `flexpick` block of `config/health.php`. Every check
   must have a band — a test enforces this. Only `critical`/`high` bands page (`paging_bands`);
   `medium` (the default) is reported in the body and alerted in-app only.
-- Alerting: four notification channel classes under `app/Notifications/Channels/` —
+- Alerting: three notification channel classes under `app/Notifications/Channels/` —
   `MailAlertChannel`, `TelegramChannel`, `SlackWebhookChannel` — plus the `OperationsAlert`
   notification. `MailAlertChannel` is a custom self-guarding channel, **not** Laravel's built-in
   `mail` channel: the built-in rethrows on failure, which would kill the remaining channels and

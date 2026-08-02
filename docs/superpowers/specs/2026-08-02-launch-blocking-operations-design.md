@@ -111,8 +111,9 @@ Each is one class answering one domain question, depending only on a model and c
   `queued` arm has no dedicated transition timestamp and uses **`updated_at`** as the proxy: a
   request sitting in `queued` receives no writes, so `updated_at` is the moment it entered the
   state. Adding a transition-timestamp column is not in scope for this phase.
-- **`AuditPipelineFailureRateCheck`** — share of runs reaching `failed` or `needs_followup` within
-  the window.
+- **`AuditPipelineFailureRateCheck`** — share of *attempted runs* (requests whose
+  `analysis_started_at` falls inside the window) that ended `failed`. `needs_followup` is excluded
+  from the numerator; see §5.
 - **`MailFailureRateCheck`** — share of `AuditEmailLog` rows in `failed` within the window.
 
 ### 4.3 `HealthResultsController` — one thin controller
@@ -175,11 +176,21 @@ Severity is mapped onto §15.6's priority bands so an alert is triageable from a
 | `HorizonCheck` | built-in | Horizon not active | Critical |
 | `QueueCheck` (`audit`) | built-in | Heartbeat job not round-tripped within 10 min | Critical |
 | `OldestPendingAuditCheck` | custom | Oldest `queued` > 30 min, **or** oldest `analyzing` > 30 min | Critical |
-| `AuditPipelineFailureRateCheck` | custom | > 40% of runs in 24 h ended `failed`/`needs_followup` | High |
+| `AuditPipelineFailureRateCheck` | custom | > 40% of attempted runs in 24 h ended `failed` | High |
 | `MailFailureRateCheck` | custom | > 25% of email log rows in 24 h are `failed` | High |
 | `ScheduleCheck` | built-in | Heartbeat stale > 10 min | Medium |
 | `UsedDiskSpaceCheck` | built-in | > 85% used | Medium |
 | `CacheCheck` | built-in | Cache unwritable | Medium |
+
+**Why `needs_followup` is not a pipeline failure.** `needs_followup` marks *user-caused* outcomes —
+a private repository, a repository over the size limit, a submission with no URL — where the
+pipeline ran and concluded correctly. Counting them as system failures would let three private or
+typo'd repositories out of six submissions read as a 50% failure rate at pre-launch volume, pinning
+`/health` at 503 for up to 24 hours; worse, while the endpoint is already 503 a genuinely dead
+scheduler produces no change in signal, so the false alarm masks the staleness dead-man's switch.
+Such a request still counts in the denominator — the pipeline did attempt it — and the denominator
+is *attempted runs* (`analysis_started_at` inside the window), not all submissions, so statuses like
+`new` and `pending_verification` that never ran cannot dilute the rate.
 
 ### Why the two custom liveness signals both exist
 

@@ -42,7 +42,11 @@ return [
             'encryption' => env('MAIL_ENCRYPTION', 'tls'),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
-            'timeout' => null,
+            // Bounded so a hanging SMTP host cannot stall a scheduled command
+            // for PHP's default_socket_timeout (60s) per message. 15s is the
+            // compromise: this transport is shared with the customer-facing
+            // audit report mailer, so a 5s ceiling would be too aggressive.
+            'timeout' => (int) env('MAIL_TIMEOUT', 15),
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ],
 
