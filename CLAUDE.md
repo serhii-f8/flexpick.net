@@ -91,6 +91,37 @@ Failures throw `AuditNotAnalyzableException` → `AuditRequestService::markNeeds
 - Models: `AuditRequest`, `AuditReport`, `AuditEmailLog`, `AuditFunnelEvent`, `AuditSchedule`.
 - Scheduled in `routes/console.php`: `app:run-scheduled-audits` (daily, `withoutOverlapping()->onOneServer()`), `app:purge-unverified-audit-requests`, `app:send-audit-verification-reminders`, `app:send-audit-unlock-reminders` — these need Horizon running. When touching the audit flow, trace it here rather than through the generic subscription/order services.
 
+### Observability (Phase 9A-1)
+
+`spatie/laravel-health` owns check execution and result storage; alert dispatch is ours
+(`app:health-alerts`, scheduled every five minutes in `routes/console.php`) because Spatie's
+built-in notifications cannot satisfy three requirements at once: a throttle that fails
+*open* (sending, not suppressing, when the cache is down), band-aware messages, and
+guaranteed recovery notifications.
+
+- Checks: `app/Health/Checks/` (three custom — `OldestPendingAuditCheck`,
+  `AuditPipelineFailureRateCheck`, `MailFailureRateCheck`) plus Spatie built-ins, registered in
+  `app/Providers/HealthServiceProvider.php`.
+- Thresholds and severity bands: the `flexpick` block of `config/health.php`. Every check
+  must have a band — a test enforces this. Only `critical`/`high` bands page (`paging_bands`);
+  `medium` (the default) is reported in the body and alerted in-app only.
+- Alerting: four notification channel classes under `app/Notifications/Channels/` —
+  `MailAlertChannel`, `TelegramChannel`, `SlackWebhookChannel` — plus the `OperationsAlert`
+  notification. `MailAlertChannel` is a custom self-guarding channel, **not** Laravel's built-in
+  `mail` channel: the built-in rethrows on failure, which would kill the remaining channels and
+  every subsequent check's alert.
+- Endpoints: `/up` liveness, `/health/ready` readiness (never calls an external dependency),
+  `/health` token-guarded monitoring. `/health` returns 503 when a **critical- or high-band**
+  check is `failed`/`crashed`, or when results are stale — the stale arm is the dead-man's
+  switch for a dead scheduler. Medium-band checks never affect the status code.
+- `php artisan app:smoke` is the post-deploy gate (eight assertions; four are production-gated
+  by design so it stays safe to run locally); its exit code is the contract.
+- Error tracking is self-hosted Bugsink via the Sentry SDK. `app/Support/Sentry/TokenScrubber.php`
+  is mandatory, not optional — see §15.1/§18.4. It scrubs message, extra, tags, exceptions,
+  breadcrumbs, request, and contexts; the exceptions coverage matters because
+  `captureException()` stores the message in `ExceptionDataBag::$value`, a field separate from
+  `Event::getMessage()`.
+
 ### Key architecture notes
 
 - **Two Filament panels**: `app/Filament/Admin/` (SaaS operator admin) and `app/Filament/Dashboard/` (tenant/customer dashboard). Prefer Filament resources and Livewire components over custom controllers.

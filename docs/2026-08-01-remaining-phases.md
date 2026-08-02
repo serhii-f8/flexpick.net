@@ -69,11 +69,23 @@ Everything below is what remains.
 **Spec:** §15, §17 Phase 9, §18.3 O1/O2/O8, §20.3 PR4–PR6, PR8.
 **Blocked on:** Q13 (which error-tracking/metrics/alerting stack — nothing is chosen; §15 is entirely recommendation).
 
-- [ ] **Choose the stack (Q13).** One integrated option covering exceptions, metrics, and alert routing. Everything else in this phase is configuration once this is decided.
-- [ ] **Error tracking** with release context on unhandled exceptions (PR4). No package is installed today — `backend/composer.json` has no sentry/bugsnag/flare/honeybadger entry.
-- [ ] **Health checks** (PR5): liveness, readiness, worker health, scheduler health. Only Laravel's default `/up` exists; no dependency check may gate readiness.
-- [ ] **Worker-liveness alerting** (PR6, mandatory). The spec calls this the highest-consequence silent failure in the system (§18.3 O1, §18.7 top-five #1): submissions keep succeeding while nothing runs. Alert on **oldest-pending age**, not queue depth alone — depth alone hides a stalled queue (§18.5 SC1).
-- [ ] **Scheduler-missed alert** (§18.3 O2) — four scheduled commands in `routes/console.php` silently cease if the scheduler stops.
+**Split (2026-08-02):** 9A-1 (in-repo observability) is specified in
+`docs/superpowers/specs/2026-08-02-launch-blocking-operations-design.md` and implemented per
+`docs/superpowers/plans/2026-08-02-launch-blocking-operations.md`. 9A-2 (staging, CI, first
+deploy, rollback rehearsal, ESP + DNS, support ownership) remains outstanding as a runbook.
+
+- [x] **Choose the stack (Q13).** Resolved as D9A.1–D9A.5: Ploi single server, self-hosted only,
+  `spatie/laravel-health` + self-hosted Bugsink, alerts to Telegram/Slack/mail, Ploi's own
+  off-box monitor as the dead-man's switch.
+- [x] **Error tracking** (PR4) — *in-repo half only.* SDK wired, exceptions tagged with the audit
+  request identifier, token scrubber proven by test. Release context depends on `SENTRY_RELEASE`
+  injection in the Ploi deploy script — **9A-2, not verified.**
+- [x] **Health checks** (PR5) — liveness, readiness, worker, scheduler. No dependency check gates
+  readiness, proven by a `preventStrayRequests` test.
+- [x] **Worker-liveness alerting** (PR6) — `QueueCheck` on the audit queue plus
+  `OldestPendingAuditCheck` on oldest-pending age and stranded `analyzing` runs (§18.5 SC1).
+- [x] **Scheduler-missed alert** (§18.3 O2) — `ScheduleCheck` heartbeat, plus the staleness arm on
+  `/health` so a dead scheduler is audible to the off-box monitor.
 - [ ] **Deploy automation with a post-release smoke gate and a documented, rehearsed rollback** (Q22, PR8, §18.3 O8). `backend/deploy.php` has no smoke or rollback step today; no `.github/workflows` exists at all.
 - [ ] **Staging environment** (Q10, PR9) — the spec's "largest infrastructure gap" (§18.3 O6). Provider checkout, live email delivery, and credentialed cross-origin session probing cannot be verified anywhere else.
 - [ ] **Production mail transport** (Q31, PR13): pick the ESP, configure SPF/DKIM/DMARC, verify send → log row → resend end to end. Choosing an ESP with event webhooks keeps the deferred delivery/open/click tracking a config change rather than a migration.
