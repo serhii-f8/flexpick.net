@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\HealthReadinessController;
+use App\Http\Controllers\HealthResultsController;
 use App\Http\Middleware\BlockedUser;
 use App\Http\Middleware\Sitemapped;
 use App\Http\Middleware\TrackCouponCode;
@@ -24,6 +25,9 @@ return Application::configure(basePath: dirname(__DIR__))
         then: function () {
             Route::get('/health/ready', HealthReadinessController::class)
                 ->name('health.ready');
+
+            Route::get('/health', HealthResultsController::class)
+                ->name('health.results');
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
