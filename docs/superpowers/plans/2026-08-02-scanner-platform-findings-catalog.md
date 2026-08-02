@@ -828,6 +828,28 @@ class FindingTest extends FeatureTest
             path: $overrides['path'] ?? 'app/Http/Controllers/UserController.php',
             line: $overrides['line'] ?? 42,
             message: $overrides['message'] ?? 'SQL built by string interpolation.',
+            dimension: $overrides['dimension'] ?? 'security_hygiene',
+        );
+    }
+
+    public function test_carries_the_score_dimension_it_feeds(): void
+    {
+        $this->assertSame('security_hygiene', $this->finding()->dimension);
+        $this->assertSame('structure', $this->finding(['dimension' => 'structure'])->dimension);
+    }
+
+    public function test_dimension_must_be_one_of_the_five_score_dimensions(): void
+    {
+        $this->assertContains($this->finding()->dimension, Finding::DIMENSIONS);
+    }
+
+    public function test_fingerprint_ignores_the_dimension(): void
+    {
+        // Dimension is routing metadata, not identity — two tools disagreeing
+        // about it must still merge rather than double-count the same defect.
+        $this->assertSame(
+            $this->finding(['dimension' => 'security_hygiene'])->fingerprint(),
+            $this->finding(['dimension' => 'structure'])->fingerprint(),
         );
     }
 
@@ -968,6 +990,9 @@ namespace App\Services\AuditReport\Findings;
  */
 final readonly class Finding
 {
+    /** The five score dimensions a finding may feed. */
+    public const DIMENSIONS = ['structure', 'duplication', 'testing', 'dependencies', 'security_hygiene'];
+
     public function __construct(
         public string $tool,
         public string $ruleId,
@@ -976,6 +1001,13 @@ final readonly class Finding
         public string $path,
         public ?int $line,
         public string $message,
+        /**
+         * Which score dimension this finding feeds. Set by the normalizer:
+         * fixed per tool for Gitleaks, OSV, and jscpd; read from the rule's
+         * metadata.dimension for Semgrep. Carrying it here is what keeps
+         * scoring from needing a second rule-to-dimension mapping (spec §7.1).
+         */
+        public string $dimension,
     ) {}
 
     /** Tool-agnostic, so two tools reporting one defect merge in deduplication. */
@@ -1055,6 +1087,7 @@ class FindingDeduplicatorTest extends FeatureTest
             path: $path,
             line: $line,
             message: 'A credential appears to be committed.',
+            dimension: 'security_hygiene',
         );
     }
 
@@ -1257,8 +1290,13 @@ use Tests\Feature\FeatureTest;
 
 class FindingGrouperTest extends FeatureTest
 {
-    private function deduped(string $family, string $path, Severity $severity, ?int $line = 1): DedupedFinding
-    {
+    private function deduped(
+        string $family,
+        string $path,
+        Severity $severity,
+        ?int $line = 1,
+        string $dimension = 'security_hygiene',
+    ): DedupedFinding {
         return new DedupedFinding(
             new Finding(
                 tool: 'semgrep',
@@ -1268,9 +1306,19 @@ class FindingGrouperTest extends FeatureTest
                 path: $path,
                 line: $line,
                 message: 'Description of the rule.',
+                dimension: $dimension,
             ),
             ['semgrep'],
         );
+    }
+
+    public function test_a_group_carries_the_dimension_of_its_findings(): void
+    {
+        $groups = app(FindingGrouper::class)->group([
+            $this->deduped('common.configuration', 'config/app.php', Severity::MEDIUM, 1, 'structure'),
+        ]);
+
+        $this->assertSame('structure', $groups[0]->dimension);
     }
 
     public function test_groups_by_rule_family_and_directory(): void
@@ -1428,6 +1476,12 @@ final readonly class FindingGroup
         public int $score,
         public array $examples,
         public array $tools,
+        /**
+         * The score dimension this group feeds, taken from its findings.
+         * A rule family always maps to one dimension — a family spanning two
+         * is a ruleset defect, caught by the metadata test in Task 10.
+         */
+        public string $dimension,
     ) {}
 }
 ```
@@ -1481,6 +1535,14 @@ class FindingGrouper
             $tools = array_values(array_unique(array_merge(...array_map(fn (DedupedFinding $d): array => $d->tools, $bucket))));
             sort($tools);
 
+            // Uniform across a rule family by construction; take the lowest
+            // sorted value so a malformed ruleset still groups deterministically.
+            $dimensions = array_unique(array_map(
+                fn (DedupedFinding $d): string => $d->finding->dimension,
+                $bucket,
+            ));
+            sort($dimensions);
+
             $groups[] = new FindingGroup(
                 ruleFamily: $ruleFamily,
                 directory: $directory,
@@ -1489,6 +1551,7 @@ class FindingGrouper
                 score: $score,
                 examples: $this->examples($bucket, $maxExamples),
                 tools: $tools,
+                dimension: $dimensions[0],
             );
         }
 
@@ -1578,6 +1641,7 @@ class AuditFindingGroupTest extends FeatureTest
             score: 1480,
             examples: [['path' => 'app/Http/UserController.php', 'line' => 42]],
             tools: ['semgrep'],
+            dimension: 'security_hygiene',
         );
     }
 
@@ -1654,6 +1718,9 @@ return new class extends Migration
             $table->string('rule_family');
             $table->string('directory');
             $table->string('severity');
+            // Which score dimension this group fed — makes it possible to
+            // explain a score after the fact without re-deriving the mapping.
+            $table->string('dimension');
             $table->unsignedInteger('count');
             $table->unsignedInteger('score');
             $table->json('examples');
@@ -1692,7 +1759,7 @@ class AuditFindingGroup extends Model
     use HasFactory;
 
     protected $fillable = [
-        'audit_request_id', 'rule_family', 'directory', 'severity',
+        'audit_request_id', 'rule_family', 'directory', 'severity', 'dimension',
         'count', 'score', 'examples', 'tools',
     ];
 
@@ -1711,6 +1778,7 @@ class AuditFindingGroup extends Model
             'rule_family' => $group->ruleFamily,
             'directory' => $group->directory,
             'severity' => $group->severity->value,
+            'dimension' => $group->dimension,
             'count' => $group->count,
             'score' => $group->score,
             'examples' => $group->examples,
@@ -1747,6 +1815,7 @@ class AuditFindingGroupFactory extends Factory
             'rule_family' => 'php.injection',
             'directory' => 'app/Http',
             'severity' => 'high',
+            'dimension' => 'security_hygiene',
             'count' => 5,
             'score' => 200,
             'examples' => [['path' => 'app/Http/Controller.php', 'line' => 10]],
@@ -1913,6 +1982,7 @@ class ScannerRunnerTest extends FeatureTest
             path: 'app/A.php',
             line: 1,
             message: 'Description.',
+            dimension: 'security_hygiene',
         );
     }
 
@@ -2198,11 +2268,23 @@ namespace App\Services\AuditReport\Scanners;
 use App\Services\AuditReport\Tiers\TierProfile;
 
 /**
- * Deliberately mutable in one respect: scc runs first and fills `inventory`,
- * which every later scanner reads to cap its file set (spec §3.2).
+ * Per-run state shared across the scanner sequence.
+ *
+ * Mutable by design in two respects: scc runs first and fills `inventory`,
+ * which every later scanner reads to cap its file set (spec §3.2); and any
+ * scanner may `record()` a scalar measurement the pipeline needs afterwards.
+ *
+ * Both live HERE rather than on the scanner instances because Horizon workers
+ * are long-lived: state on a scanner would persist across audit runs in one
+ * process, so a scanner that failed on run B could be read with run A's value.
+ * Scoping it to the context makes that impossible by construction rather than
+ * guarded against.
  */
 final class RepoContext
 {
+    /** @var array<string, float|int> */
+    public private(set) array $measurements = [];
+
     public function __construct(
         public readonly string $path,
         public readonly TierProfile $tier,
@@ -2212,6 +2294,16 @@ final class RepoContext
     public function withInventory(SccInventory $inventory): void
     {
         $this->inventory = $inventory;
+    }
+
+    public function record(string $key, float|int $value): void
+    {
+        $this->measurements[$key] = $value;
+    }
+
+    public function measurement(string $key, float|int $default = 0): float|int
+    {
+        return $this->measurements[$key] ?? $default;
     }
 }
 ```
@@ -2505,6 +2597,7 @@ class GitleaksScannerTest extends FeatureTest
             'gitleaks',
             fn () => Severity::CRITICAL,
             fn () => 'secrets.credential',
+            fn () => 'security_hygiene',
         ));
     }
 }
@@ -2540,10 +2633,16 @@ class SarifNormalizer
     /**
      * @param  callable(array<string, mixed>): Severity  $severityFor
      * @param  callable(array<string, mixed>, string): string  $familyFor
+     * @param  callable(string): string  $dimensionFor  rule id → score dimension
      * @return list<Finding>
      */
-    public function normalize(array $sarif, string $tool, callable $severityFor, callable $familyFor): array
-    {
+    public function normalize(
+        array $sarif,
+        string $tool,
+        callable $severityFor,
+        callable $familyFor,
+        callable $dimensionFor,
+    ): array {
         $findings = [];
 
         foreach ($sarif['runs'] ?? [] as $run) {
@@ -2569,6 +2668,7 @@ class SarifNormalizer
                     line: is_int($line) ? $line : null,
                     // The rule's own description, never the matched snippet.
                     message: $ruleDescriptions[$ruleId] ?? (string) ($result['message']['text'] ?? $ruleId),
+                    dimension: $dimensionFor($ruleId),
                 );
             }
         }
@@ -2665,6 +2765,7 @@ class GitleaksScanner implements Scanner
             // Gitleaks emits no severity; every leak is critical (spec §5.6).
             fn (): Severity => Severity::CRITICAL,
             fn (): string => 'secrets.credential',
+            fn (): string => 'security_hygiene',
         );
     }
 
@@ -3078,6 +3179,16 @@ class SemgrepScannerTest extends FeatureTest
         $this->assertNull(app(SemgrepScanner::class)->dimensionFor('flexpick.nonexistent.rule'));
     }
 
+    public function test_findings_carry_the_dimension_declared_by_their_rule(): void
+    {
+        // This is what ScoreCalculator routes on — a structure-tagged rule
+        // must not end up scoring security_hygiene (spec §5.3, §7.1).
+        $findings = $this->normalize();
+
+        $this->assertSame('security_hygiene', $findings[0]->dimension);
+        $this->assertSame('structure', $findings[1]->dimension);
+    }
+
     public function test_message_is_the_rule_description_not_matched_source(): void
     {
         $this->assertSame('SQL is assembled by string interpolation.', $this->normalize()[0]->message);
@@ -3181,10 +3292,15 @@ class SemgrepScanner implements Scanner
                 default => Severity::MEDIUM,
             },
             fn (array $result, string $ruleId): string => $this->familyFor($ruleId),
+            fn (string $ruleId): string => $this->dimensionFor($ruleId) ?? 'security_hygiene',
         );
     }
 
-    /** The score dimension a rule feeds, from its metadata.dimension (spec §5.3). */
+    /**
+     * The score dimension a rule feeds, from its metadata.dimension (spec §5.3).
+     * This is the ONLY rule-to-dimension mapping in the system: ScoreCalculator
+     * routes on the dimension the finding carries, never on which tool found it.
+     */
     public function dimensionFor(string $ruleId): ?string
     {
         return $this->metadata()[$ruleId]['dimension'] ?? null;
@@ -3677,6 +3793,19 @@ class JscpdScannerTest extends FeatureTest
         $this->assertSame(0.0, app(JscpdScanner::class)->duplicationPercentage([]));
     }
 
+    public function test_the_scanner_holds_no_per_run_state(): void
+    {
+        // Scanners outlive a run inside a Horizon worker. Any per-run value
+        // must travel on RepoContext, never on the scanner instance.
+        $properties = (new \ReflectionClass(JscpdScanner::class))->getProperties();
+
+        $this->assertSame(
+            [],
+            array_map(fn (\ReflectionProperty $p): string => $p->getName(), $properties),
+            'JscpdScanner declares instance state; record it on RepoContext instead.',
+        );
+    }
+
     public function test_reports_unavailable_when_the_binary_is_missing(): void
     {
         config()->set('audit.scanners.jscpd.bin', '/nonexistent/jscpd');
@@ -3750,20 +3879,16 @@ class JscpdScanner implements Scanner
             }
 
             $decoded = json_decode((string) file_get_contents($report), true, flags: JSON_THROW_ON_ERROR);
+            $decoded = is_array($decoded) ? $decoded : [];
 
-            $this->lastPercentage = $this->duplicationPercentage(is_array($decoded) ? $decoded : []);
+            // Recorded on the per-run context, never on $this — the scanner
+            // instance outlives the run inside a Horizon worker.
+            $context->record('duplication_pct', $this->duplicationPercentage($decoded));
 
-            return $this->normalize(is_array($decoded) ? $decoded : []);
+            return $this->normalize($decoded);
         } finally {
             $this->deleteDirectory($outputDir);
         }
-    }
-
-    private float $lastPercentage = 0.0;
-
-    public function lastDuplicationPercentage(): float
-    {
-        return $this->lastPercentage;
     }
 
     /**
@@ -3795,6 +3920,7 @@ class JscpdScanner implements Scanner
                     path: ltrim((string) $file['name'], './'),
                     line: (int) ($file['start'] ?? 0) ?: null,
                     message: "A block of {$lines} lines is duplicated elsewhere in the repository.",
+                    dimension: 'duplication',
                 );
             }
         }
@@ -3825,24 +3951,16 @@ class JscpdScanner implements Scanner
 
 - [ ] **Step 5: Register the binding, config, and jscpd config file**
 
-In `app/Providers/AppServiceProvider.php` — **`singleton`, not `bind`**:
+In `app/Providers/AppServiceProvider.php`:
 
 ```php
-$this->app->singleton('audit.scanner.jscpd', JscpdScanner::class);
+$this->app->bind('audit.scanner.jscpd', JscpdScanner::class);
 ```
 
-`lastDuplicationPercentage()` is per-run state on the instance, and the pipeline reads it
-after `ScannerRunner` has run. A `bind` would hand the pipeline a *fresh* instance whose
-percentage is still `0.0`, silently scoring every repository as duplication-free — the same
-class of trap as §7.2. Go back and change the earlier scanner bindings to `singleton` too, so
-the registration style is uniform and this cannot be reintroduced:
-
-```php
-$this->app->singleton('audit.scanner.scc', SccScanner::class);
-$this->app->singleton('audit.scanner.gitleaks', GitleaksScanner::class);
-$this->app->singleton('audit.scanner.osv', OsvScanner::class);
-$this->app->singleton('audit.scanner.semgrep', SemgrepScanner::class);
-```
+A plain `bind` is correct because scanners hold **no per-run state** — the duplication
+percentage travels on `RepoContext` (Task 8), which is constructed once per run and
+discarded with it. Keeping scanners stateless is what makes that safe inside a long-lived
+Horizon worker.
 
 In `config/audit.php`, extend `scanners`:
 
@@ -4040,9 +4158,6 @@ use App\Services\AuditReport\Findings\Severity;
  */
 class OsvScanner implements Scanner
 {
-    /** @var array<string, mixed> */
-    private array $lastAudit = [];
-
     public function __construct(private DependencyAuditor $auditor) {}
 
     public function name(): string
@@ -4063,15 +4178,13 @@ class OsvScanner implements Scanner
 
     public function scan(RepoContext $context): array
     {
-        $this->lastAudit = $this->auditor->audit($context->path);
+        $audit = $this->auditor->audit($context->path);
 
-        return $this->normalize($this->lastAudit);
-    }
+        // Scanners stay stateless — anything the pipeline needs later goes on
+        // the per-run context (Task 8), never on the instance.
+        $context->record('packages_scanned', (int) ($audit['packages_scanned'] ?? 0));
 
-    /** The raw audit array, still needed by the dependencies score dimension. */
-    public function lastAudit(): array
-    {
-        return $this->lastAudit;
+        return $this->normalize($audit);
     }
 
     /** @return list<Finding> */
@@ -4096,6 +4209,7 @@ class OsvScanner implements Scanner
                 line: null,
                 message: "{$package} {$vulnerability['version']} is affected by {$id}: "
                     .($vulnerability['summary'] ?? 'no summary provided.'),
+                dimension: 'dependencies',
             );
         }
 
@@ -4405,10 +4519,15 @@ git commit -m "build(audit): provision pinned scanner binaries for the host and 
 
 ### Task 15: Extract the collectors
 
-A **behaviour-preserving refactor**. `MetricsCollector`'s eight responsibilities become five
-collectors plus a composer, with no change to the metrics array it returns. Task 16 then
-deletes the superseded parts. Splitting it this way means the refactor and the deletion can
-be reviewed and reverted independently.
+`MetricsCollector`'s eight responsibilities become five collectors plus a composer. This is
+**not** behaviour-preserving: the superseded keys (`secret_findings`, `duplication_pct` from
+the md5 heuristic, extension-based `languages`) disappear with the code that produced them,
+and the surviving non-scanner signals (`has_ci`, `has_readme`, test counting) move into
+`ToolingCollector` so the metrics array is complete when this task ends.
+
+Task 16 then adds the structural guards that stop the deleted heuristics coming back, and
+rewrites the two existing collector tests. Split this way, Task 15 is the restructure and
+Task 16 is the proof — each independently reviewable.
 
 **Files:**
 - Create: `app/Services/AuditReport/Collectors/Collector.php`
@@ -4745,11 +4864,45 @@ class ExcerptCollector implements Collector
 }
 ```
 
+- [ ] **Step 4b: Fold the surviving non-scanner signals into ToolingCollector**
+
+`has_ci`, `has_readme`, and test counting are not superseded by any scanner, but they lived
+in `MetricsCollector`. Move them into `ToolingCollector::collect()` alongside the existing
+tooling detection, so the metrics array stays complete when `MetricsCollector` becomes a
+composer in the next step:
+
+```php
+'has_ci' => is_dir($context->path.'/.github/workflows')
+    || file_exists($context->path.'/.gitlab-ci.yml')
+    || file_exists($context->path.'/bitbucket-pipelines.yml'),
+'has_readme' => count(glob($context->path.'/README*') ?: []) > 0,
+```
+
+Test counting sources from the inventory rather than a second tree walk:
+
+```php
+$files = $context->inventory?->files ?? [];
+$testFiles = count(array_filter(
+    $files,
+    fn (array $f): bool => preg_match('#(^|/)(tests?|spec|__tests__)/#i', $f['path']) === 1
+        || preg_match('/(Test|\.test|\.spec)\.[a-z]+$/i', $f['path']) === 1,
+));
+
+// ... and in the returned array:
+'test_files' => $testFiles,
+'test_ratio_pct' => $files === [] ? 0.0 : round($testFiles / count($files) * 100, 1),
+```
+
+`ScoreCalculator` v2 (Task 17) reads `metrics.tooling.test_ratio_pct` and
+`metrics.tooling.has_ci`, which is why they belong under this collector's key.
+
 - [ ] **Step 5: Reduce MetricsCollector to a composer**
 
-Rewrite `app/Services/AuditReport/MetricsCollector.php` so it delegates. **Keep** the
-existing secret-pattern, duplication, and language code for now — Task 16 deletes it, and
-keeping this task behaviour-preserving is what makes it independently reviewable.
+Rewrite `app/Services/AuditReport/MetricsCollector.php` so it delegates. The secret-pattern
+constants, the md5 duplication loop, the extension-based language counting, the
+`sourceFiles()` walk, and the `DependencyAuditor` dependency all go — every one is superseded
+by a scanner (F5.12.2), and leaving them would mean two implementations of the same
+measurement disagreeing with each other.
 
 ```php
 <?php
@@ -4899,49 +5052,20 @@ class SupersededHeuristicsTest extends FeatureTest
 Run: `php artisan test --filter=SupersededHeuristicsTest`
 Expected: FAIL — the constants and md5 loop are still present from Task 15.
 
-- [ ] **Step 3: Delete the superseded code**
+- [ ] **Step 3: Confirm the deletion is complete**
 
-In `app/Services/AuditReport/MetricsCollector.php`, delete:
+Task 15 removed the superseded code as part of the restructure. Verify none of it survived —
+each of these greps must return nothing from `MetricsCollector.php`:
 
-- the `EXCLUDED_DIRS`, `SOURCE_EXTENSIONS`, and `SECRET_PATTERNS` constants;
-- the `sourceFiles()` method;
-- the `DependencyAuditor` constructor dependency (OSV is a scanner now — Task 13);
-- any residual `$lineHashes` / `$duplicateLines` / `$secretFindings` code;
-- the `duplication_pct`, `test_ratio_pct`, `test_files`, `secret_findings`,
-  `dependency_audit`, `has_ci`, and `has_readme` keys from the metrics array.
-
-`has_ci` and `has_readme` move to `ToolingCollector` — add them there:
-
-```php
-'has_ci' => is_dir($context->path.'/.github/workflows')
-    || file_exists($context->path.'/.gitlab-ci.yml')
-    || file_exists($context->path.'/bitbucket-pipelines.yml'),
-'has_readme' => count(glob($context->path.'/README*') ?: []) > 0,
+```bash
+grep -n "SECRET_PATTERNS\|SOURCE_EXTENSIONS\|EXCLUDED_DIRS" app/Services/AuditReport/MetricsCollector.php
+grep -n "md5(\|lineHashes\|duplicateLines\|secretFindings" app/Services/AuditReport/MetricsCollector.php
+grep -n "sourceFiles\|DependencyAuditor" app/Services/AuditReport/MetricsCollector.php
 ```
 
-Test counting also moves to `ToolingCollector`, sourced from the inventory:
-
-```php
-public function collect(RepoContext $context): array
-{
-    // ... existing tooling detection ...
-
-    $files = $context->inventory?->files ?? [];
-    $testFiles = count(array_filter(
-        $files,
-        fn (array $f): bool => preg_match('#(^|/)(tests?|spec|__tests__)/#i', $f['path']) === 1
-            || preg_match('/(Test|\.test|\.spec)\.[a-z]+$/i', $f['path']) === 1,
-    ));
-
-    return [
-        // ... existing keys ...
-        'test_files' => $testFiles,
-        'test_ratio_pct' => $files === [] ? 0.0 : round($testFiles / count($files) * 100, 1),
-    ];
-}
-```
-
-After this, `MetricsCollector` should be the composer from Task 15 Step 5 and nothing more.
+If any returns a hit, delete that code now — the guard test in Step 1 is asserting exactly
+this, and it is the thing that stops a second, disagreeing implementation of a measurement a
+scanner already owns.
 
 - [ ] **Step 4: Rewrite the existing collector tests**
 
@@ -5094,8 +5218,12 @@ class ScoreCalculatorTest extends FeatureTest
         return new ScannerSuiteResult([], $runs);
     }
 
-    private function group(string $family, Severity $severity, int $count): FindingGroup
-    {
+    private function group(
+        string $family,
+        Severity $severity,
+        int $count,
+        string $dimension = 'security_hygiene',
+    ): FindingGroup {
         return new FindingGroup(
             ruleFamily: $family,
             directory: 'app',
@@ -5104,7 +5232,24 @@ class ScoreCalculatorTest extends FeatureTest
             score: $severity->weight() * $count,
             examples: [],
             tools: ['semgrep'],
+            dimension: $dimension,
         );
+    }
+
+    public function test_a_group_scores_the_dimension_it_declares_not_the_tool_that_found_it(): void
+    {
+        // A Semgrep rule tagged `dimension: structure` must move structure,
+        // not security_hygiene (spec §5.3, §7.1).
+        $calculator = app(ScoreCalculator::class);
+        $runs = $this->runs($this->allScanners());
+
+        $clean = $calculator->calculate($this->metrics(), [], $runs);
+        $structural = $calculator->calculate($this->metrics(), [
+            $this->group('common.configuration', Severity::MEDIUM, 10, 'structure'),
+        ], $runs);
+
+        $this->assertLessThan($clean->scores['structure'], $structural->scores['structure']);
+        $this->assertSame($clean->scores['security_hygiene'], $structural->scores['security_hygiene']);
     }
 
     private function allScanners(): array
@@ -5356,11 +5501,11 @@ class ScoreCalculator
             }
 
             $scores[$dimension] = match ($dimension) {
-                'structure' => $this->structure($metrics),
+                'structure' => $this->structure($metrics, $this->forDimension($groups, 'structure')),
                 'duplication' => $this->duplication($metrics),
                 'testing' => $this->testing($metrics),
-                'dependencies' => $this->dependencies($metrics, $groups),
-                'security_hygiene' => $this->securityHygiene($groups),
+                'dependencies' => $this->dependencies($metrics, $this->forDimension($groups, 'dependencies')),
+                'security_hygiene' => $this->securityHygiene($this->forDimension($groups, 'security_hygiene')),
             };
         }
 
@@ -5406,7 +5551,25 @@ class ScoreCalculator
         return $totalWeight > 0.0 ? (int) round($weighted / $totalWeight) : 0;
     }
 
-    private function structure(array $metrics): int
+    /**
+     * Findings route to a dimension by the dimension THEY declare — never by
+     * which tool produced them. A Semgrep rule tagged `dimension: structure`
+     * scores structure, which is the whole point of the rule metadata
+     * (spec §5.3, §7.1) and keeps one mapping instead of two.
+     *
+     * @param  list<FindingGroup>  $groups
+     * @return list<FindingGroup>
+     */
+    private function forDimension(array $groups, string $dimension): array
+    {
+        return array_values(array_filter(
+            $groups,
+            fn (FindingGroup $group): bool => $group->dimension === $dimension,
+        ));
+    }
+
+    /** @param list<FindingGroup> $groups groups declaring dimension `structure` */
+    private function structure(array $metrics, array $groups): int
     {
         $files = max(1, (int) ($metrics['files_total'] ?? 1));
         $avgLoc = ((int) ($metrics['loc_total'] ?? 0)) / $files;
@@ -5418,12 +5581,16 @@ class ScoreCalculator
             fn (array $f): bool => ($f['loc'] ?? 0) >= 500 && ($f['loc'] ?? 0) < 1000,
         ));
 
+        // Maintainability and correctness rules (dimension: structure) count here.
+        $ruleFindings = array_sum(array_map(fn (FindingGroup $g): int => $g->count, $groups));
+
         return $this->clamp(
             100
             - max(0, $avgLoc - 120) * 0.25
             - max(0, $avgComplexity - 8) * 1.5
             - 8 * $huge
             - 3 * $big
+            - min(20, $ruleFindings)
         );
     }
 
@@ -5440,7 +5607,7 @@ class ScoreCalculator
         );
     }
 
-    /** @param list<FindingGroup> $groups */
+    /** @param list<FindingGroup> $groups groups declaring dimension `dependencies` */
     private function dependencies(array $metrics, array $groups): int
     {
         $score = 100;
@@ -5451,39 +5618,25 @@ class ScoreCalculator
             }
         }
 
-        $score -= 8 * $this->countIn($groups, 'dependencies.vulnerable');
+        $score -= 8 * array_sum(array_map(fn (FindingGroup $g): int => $g->count, $groups));
 
         return $this->clamp($score);
     }
 
-    /** @param list<FindingGroup> $groups */
+    /** @param list<FindingGroup> $groups groups declaring dimension `security_hygiene` */
     private function securityHygiene(array $groups): int
     {
         $score = 100;
 
         foreach ($groups as $group) {
-            if (str_starts_with($group->ruleFamily, 'secrets.')) {
-                $score -= 15 * $group->count;
-
-                continue;
-            }
-
-            // Semgrep rules routed here by their metadata.dimension (spec §5.3).
-            if (in_array('semgrep', $group->tools, true)) {
-                $score -= min(20, $group->count * 2);
-            }
+            // A committed credential is categorically worse than a SAST hit,
+            // so secrets keep their own weight within the same dimension.
+            $score -= str_starts_with($group->ruleFamily, 'secrets.')
+                ? 15 * $group->count
+                : min(20, $group->count * 2);
         }
 
         return $this->clamp($score);
-    }
-
-    /** @param list<FindingGroup> $groups */
-    private function countIn(array $groups, string $ruleFamily): int
-    {
-        return array_sum(array_map(
-            fn (FindingGroup $group): int => $group->ruleFamily === $ruleFamily ? $group->count : 0,
-            $groups,
-        ));
     }
 
     private function clamp(float $value): int
@@ -5584,7 +5737,7 @@ public function test_composes_groups_into_the_prompt(): void
     $prompt = app(PromptComposer::class)->compose(
         ['files_total' => 10],
         [new FindingGroup('php.injection', 'app/Http', Severity::HIGH, 37, 1480,
-            [['path' => 'app/Http/UserController.php', 'line' => 42]], ['semgrep'])],
+            [['path' => 'app/Http/UserController.php', 'line' => 42]], ['semgrep'], 'security_hygiene')],
         [],
     );
 
@@ -5598,7 +5751,7 @@ public function test_group_examples_contribute_paths_but_never_content(): void
     $prompt = app(PromptComposer::class)->compose(
         [],
         [new FindingGroup('secrets.credential', 'config', Severity::CRITICAL, 1, 100,
-            [['path' => 'config/services.php', 'line' => 17]], ['gitleaks'])],
+            [['path' => 'config/services.php', 'line' => 17]], ['gitleaks'], 'security_hygiene')],
         [],
     );
 
@@ -6450,7 +6603,7 @@ public function test_persists_finding_groups_for_the_run(): void
 {
     $request = $this->runPipelineWithFakes(groups: [
         new FindingGroup('php.injection', 'app/Http', Severity::HIGH, 37, 1480,
-            [['path' => 'app/Http/A.php', 'line' => 42]], ['semgrep']),
+            [['path' => 'app/Http/A.php', 'line' => 42]], ['semgrep'], 'security_hygiene'),
     ]);
 
     $this->assertDatabaseHas('audit_finding_groups', [
@@ -6495,7 +6648,7 @@ public function test_narration_is_capped_to_the_tier_budget(): void
 
     $groups = [];
     for ($i = 0; $i < 10; $i++) {
-        $groups[] = new FindingGroup("family.{$i}", 'app', Severity::HIGH, 1, 40, [], ['semgrep']);
+        $groups[] = new FindingGroup("family.{$i}", 'app', Severity::HIGH, 1, 40, [], ['semgrep'], 'security_hygiene');
     }
 
     // The analyzer receives at most the tier's narrated_groups; the full set
@@ -6577,6 +6730,7 @@ use App\Services\AuditReport\Findings\FindingGrouper;
 use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Scanners\ScannerRunner;
+use App\Services\AuditReport\Scanners\ScannerSuiteResult;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use App\Services\AuditRequestService;
 
@@ -6627,7 +6781,8 @@ class AuditPipeline
 
             $collected = $this->metricsCollector->collect($context);
             $metrics = $collected['metrics'];
-            $metrics['duplication_pct'] = $this->duplicationPercentage($suite);
+            // Recorded by JscpdScanner on the per-run context (Task 12).
+            $metrics['duplication_pct'] = (float) $context->measurement('duplication_pct', 0.0);
 
             $scoreSet = $this->scoreCalculator->calculate($metrics, $groups, $suite);
             $metrics['computed_scores'] = $scoreSet->toPayloadScores();
@@ -6665,7 +6820,7 @@ class AuditPipeline
         }
     }
 
-    private function logScannerOutcomes(AuditRequest $request, $suite): void
+    private function logScannerOutcomes(AuditRequest $request, ScannerSuiteResult $suite): void
     {
         foreach ($suite->runs as $run) {
             if ($run->outcome->value === 'ok') {
@@ -6690,15 +6845,10 @@ class AuditPipeline
         }
     }
 
-    private function duplicationPercentage($suite): float
-    {
-        // Resolved by the SAME container key ScannerRunner used, and bound as a
-        // singleton (Task 12) — a fresh instance would report 0.0 and score
-        // every repository as duplication-free.
-        return $suite->ranSuccessfully('jscpd')
-            ? app('audit.scanner.jscpd')->lastDuplicationPercentage()
-            : 0.0;
-    }
+    // No duplicationPercentage() helper: JscpdScanner records the figure on
+    // RepoContext during its own scan, and ScoreCalculator marks the
+    // duplication dimension not-measured when jscpd did not run — so a
+    // missing measurement can never be mistaken for a duplication-free repo.
 }
 ```
 
@@ -7562,15 +7712,21 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->assertSame($firstCount, OneTimeProduct::count() + Plan::count());
     }
 
-    public function test_every_price_comes_from_configuration(): void
+    public function test_the_seeder_holds_no_literal_money_figure(): void
     {
-        // A15: the seeder must hold no literal money figure of its own.
+        // A15: every figure comes from config/pricing.php, so a price change
+        // is one edit and the marketing export cannot drift from the charge.
         $source = (string) file_get_contents(database_path('seeders/AuditMonetizationSeeder.php'));
 
-        $this->assertStringNotContainsString('4900', $source);
-        $this->assertStringNotContainsString('19900', $source);
-        $this->assertStringNotContainsString('config(\'pricing', $source === '' ? '' : $source)
-            ?: $this->assertStringContainsString('pricing', $source);
+        foreach (['4900', '19900', '99900', '5900', '14900', '49900', '150000'] as $literal) {
+            $this->assertStringNotContainsString(
+                $literal,
+                $source,
+                "The seeder contains the literal [{$literal}]; prices must come from config('pricing').",
+            );
+        }
+
+        $this->assertStringContainsString("config('pricing", $source);
     }
 }
 ```
