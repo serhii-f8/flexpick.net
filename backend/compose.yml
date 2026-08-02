@@ -28,6 +28,15 @@ services:
             - redis
     mysql:
         image: 'mysql:8.4'
+        # Durability is relaxed deliberately: this database is disposable, and
+        # every test run rebuilds it with migrate:fresh. The default one-fsync-
+        # per-commit costs ~394s to apply the migration set under WSL2 versus
+        # ~21s with these flags. Never use this configuration for data anyone
+        # needs to survive a crash.
+        command:
+            - '--innodb-flush-log-at-trx-commit=0'
+            - '--skip-log-bin'
+            - '--innodb-doublewrite=0'
         ports:
             - '${FORWARD_DB_PORT:-3306}:3306'
         environment:
