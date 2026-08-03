@@ -22,7 +22,7 @@ class AuditReportService
         private AuditMailer $auditMailer,
     ) {}
 
-    public function create(AuditRequest $auditRequest, array $payload): AuditReport
+    public function create(AuditRequest $auditRequest, array $payload, int $scoringVersion): AuditReport
     {
         $wasUnlocked = false;
         $unlockOrderId = null;
@@ -46,6 +46,8 @@ class AuditReportService
             'pdf_path' => null,
             'unlocked_at' => $unlocked ? now() : null,
             'unlock_order_id' => $wasUnlocked ? $unlockOrderId : null,
+            'scoring_version' => $scoringVersion,
+            'payload_schema_version' => ReportPayload::VERSION,
         ]);
         $report->save();
 

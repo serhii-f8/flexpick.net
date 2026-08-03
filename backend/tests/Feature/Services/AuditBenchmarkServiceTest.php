@@ -4,6 +4,7 @@ namespace Tests\Feature\Services;
 
 use App\Models\AuditReport;
 use App\Services\AuditReport\AuditBenchmarkService;
+use App\Services\AuditReport\ScoreCalculator;
 use Illuminate\Support\Facades\Cache;
 use Tests\Feature\FeatureTest;
 
@@ -21,7 +22,9 @@ class AuditBenchmarkServiceTest extends FeatureTest
         foreach ($scores as $score) {
             $payload = AuditReport::factory()->raw()['payload'];
             $payload['scores']['overall'] = $score;
-            AuditReport::factory()->create(['payload' => $payload]);
+            // percentileFor() defaults to the current ScoreCalculator::VERSION;
+            // these rows must match it or the pooling query excludes them.
+            AuditReport::factory()->create(['payload' => $payload, 'scoring_version' => ScoreCalculator::VERSION]);
         }
     }
 

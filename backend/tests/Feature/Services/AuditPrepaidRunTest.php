@@ -14,6 +14,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserParameter;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\AuditReport\ScoreCalculator;
 use App\Services\AuditRequestService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -110,7 +111,7 @@ class AuditPrepaidRunTest extends FeatureTest
     {
         $request = AuditRequest::factory()->verified()->create(['prepaid' => true]);
 
-        $report = app(AuditReportService::class)->create($request, $this->payload());
+        $report = app(AuditReportService::class)->create($request, $this->payload(), ScoreCalculator::VERSION);
 
         $this->assertNotNull($report->unlocked_at);
         $this->assertNotNull($report->pdf_path);

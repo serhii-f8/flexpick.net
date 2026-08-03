@@ -7,6 +7,7 @@ use App\Mail\Audit\AuditReportReady;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\AuditReport\ScoreCalculator;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\Feature\FeatureTest;
@@ -23,7 +24,7 @@ class AuditReportControllerTest extends FeatureTest
         $user = $this->createUser();
         $request = AuditRequest::factory()->create(['email' => $user->email]);
 
-        $report = app(AuditReportService::class)->create($request, $this->payload());
+        $report = app(AuditReportService::class)->create($request, $this->payload(), ScoreCalculator::VERSION);
 
         $this->assertSame($user->id, $report->user_id);
         $this->assertSame(AuditRequestStatus::REPORT_READY->value, $request->fresh()->status);
@@ -36,11 +37,11 @@ class AuditReportControllerTest extends FeatureTest
         $request = AuditRequest::factory()->dashboardSource()->create();
         $service = app(AuditReportService::class);
 
-        $firstReport = $service->create($request, $this->payload());
+        $firstReport = $service->create($request, $this->payload(), ScoreCalculator::VERSION);
         $firstPdfPath = $firstReport->pdf_path;
         Storage::disk('local')->assertExists($firstPdfPath);
 
-        $secondReport = $service->create($request, $this->payload());
+        $secondReport = $service->create($request, $this->payload(), ScoreCalculator::VERSION);
 
         $this->assertSame(1, AuditReport::where('audit_request_id', $request->id)->count());
         $this->assertNotSame($firstReport->id, $secondReport->id);
@@ -54,7 +55,7 @@ class AuditReportControllerTest extends FeatureTest
         Mail::fake();
         $request = AuditRequest::factory()->create();
         $service = app(AuditReportService::class);
-        $report = $service->create($request, $this->payload());
+        $report = $service->create($request, $this->payload(), ScoreCalculator::VERSION);
 
         $service->send($report);
 
