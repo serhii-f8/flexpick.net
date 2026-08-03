@@ -42,7 +42,7 @@ class ViewAuditRequest extends ViewRecord
                                     }
 
                                     try {
-                                        ReportPayload::validate($decoded);
+                                        ReportPayload::validate($decoded, $this->getRecord()->report->payload_schema_version);
                                     } catch (AiAnalysisException $e) {
                                         $fail($e->getMessage());
                                     }

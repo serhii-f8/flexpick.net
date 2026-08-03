@@ -15,6 +15,7 @@ class ReportPayloadTest extends TestCase
             'scores' => ['structure' => 1, 'duplication' => 2, 'testing' => 3, 'dependencies' => 4, 'security_hygiene' => 5, 'overall' => 3],
             'risks' => [['title' => 't', 'impact' => 'high', 'evidence' => 'e', 'recommendation' => 'r']],
             'fix_first_plan' => [['step' => 's', 'why' => 'w', 'effort' => 'S']],
+            'groups' => [],
         ];
     }
 
