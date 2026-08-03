@@ -122,4 +122,15 @@ class SemgrepScanner implements Scanner
 
         return $this->ruleMetadata = $metadata;
     }
+
+    private function decode(string $path): array
+    {
+        $decoded = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+
+        if (! is_array($decoded)) {
+            throw new JsonException('semgrep report is not an object');
+        }
+
+        return $decoded;
+    }
 }

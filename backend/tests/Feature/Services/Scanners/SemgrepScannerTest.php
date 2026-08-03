@@ -3,7 +3,11 @@
 namespace Tests\Feature\Services\Scanners;
 
 use App\Services\AuditReport\Findings\Severity;
+use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\SemgrepScanner;
+use App\Services\AuditReport\Tiers\TierProfileResolver;
+use App\Constants\AuditTier;
+use Illuminate\Support\Facades\Process;
 use Tests\Feature\FeatureTest;
 
 class SemgrepScannerTest extends FeatureTest
@@ -70,5 +74,34 @@ class SemgrepScannerTest extends FeatureTest
         config()->set('audit.scanners.semgrep.bin', '/nonexistent/semgrep');
 
         $this->assertFalse(app(SemgrepScanner::class)->isAvailable());
+    }
+
+    public function test_scan_reads_the_reported_sarif_file_end_to_end(): void
+    {
+        // Regression: scan() previously called a decode() method that did not
+        // exist on this class, a fatal error on every real invocation that no
+        // test caught because every other test here calls normalize()
+        // directly. Process::fake() simulates the binary writing its SARIF
+        // report to the --output path so scan()'s full path executes.
+        $sarifFixture = (string) file_get_contents(
+            base_path('tests/Feature/Services/Fixtures/Scanners/semgrep.sarif.json'),
+        );
+
+        Process::fake(function ($process) use ($sarifFixture) {
+            $command = $process->command;
+            $outputIndex = array_search('--output', $command, true);
+            file_put_contents($command[$outputIndex + 1], $sarifFixture);
+
+            return Process::result();
+        });
+
+        $context = new RepoContext(
+            path: base_path('tests/Feature/Services/Fixtures/Scanners'),
+            tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+        );
+
+        $findings = app(SemgrepScanner::class)->scan($context);
+
+        $this->assertCount(2, $findings);
     }
 }
