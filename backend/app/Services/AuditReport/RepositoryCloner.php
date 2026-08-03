@@ -48,6 +48,13 @@ class RepositoryCloner
         return $path;
     }
 
+    public function sizeKb(string $path): int
+    {
+        $result = Process::run(['du', '-sk', $path]);
+
+        return (int) strtok(trim($result->output()), "\t ");
+    }
+
     public function cleanup(string $uuid): void
     {
         File::deleteDirectory($this->workdirPath($uuid));

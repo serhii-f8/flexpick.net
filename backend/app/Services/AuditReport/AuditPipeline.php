@@ -95,7 +95,13 @@ class AuditPipeline
             $report = $this->reportService->create($auditRequest, $payload, $scoreSet->scoringVersion);
             $this->reportService->send($report);
 
-            $auditRequest->update(['analysis_completed_at' => now()]);
+            $auditRequest->update([
+                'analysis_completed_at' => now(),
+                'ai_input_tokens' => $result->inputTokens,
+                'ai_output_tokens' => $result->outputTokens,
+                'scanner_ms' => $suite->totalWallMs(),
+                'repo_size_kb' => $this->cloner->sizeKb($path),
+            ]);
             $auditRequest->appendPipelineLog('report', 'Report stored and sent');
         } catch (AuditNotAnalyzableException $e) {
             $auditRequest->appendPipelineLog('not_analyzable', $e->getMessage());

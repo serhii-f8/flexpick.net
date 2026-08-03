@@ -19,6 +19,7 @@ class AuditRequest extends Model
         'name', 'email', 'repo_url', 'message', 'status', 'failure_reason', 'meta', 'metrics',
         'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'tier', 'user_id', 'prepaid',
         'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
+        'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
     ];
 
     protected $casts = [
@@ -34,6 +35,10 @@ class AuditRequest extends Model
         'analysis_started_at' => 'datetime',
         'analysis_completed_at' => 'datetime',
         'tier' => AuditTier::class,
+        'ai_input_tokens' => 'integer',
+        'ai_output_tokens' => 'integer',
+        'scanner_ms' => 'integer',
+        'repo_size_kb' => 'integer',
     ];
 
     /**
