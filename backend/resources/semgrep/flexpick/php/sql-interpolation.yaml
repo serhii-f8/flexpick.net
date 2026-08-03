@@ -10,7 +10,10 @@ rules:
       dimension: security_hygiene
     patterns:
       - pattern-either:
-          - pattern: $DB->query("...{$...}...")
-          - pattern: $DB->raw("...{$...}...")
-          - pattern: DB::select("...{$...}...")
-          - pattern: DB::statement("...{$...}...")
+          - pattern: $DB->query($QUERY)
+          - pattern: $DB->raw($QUERY)
+          - pattern: DB::select($QUERY)
+          - pattern: DB::statement($QUERY)
+      - metavariable-regex:
+          metavariable: $QUERY
+          regex: (?s).*\{\$.*\}.*

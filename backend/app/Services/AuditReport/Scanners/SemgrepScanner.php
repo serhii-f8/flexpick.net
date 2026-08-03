@@ -88,15 +88,38 @@ class SemgrepScanner implements Scanner
      */
     public function dimensionFor(string $ruleId): ?string
     {
-        return $this->metadata()[$ruleId]['dimension'] ?? null;
+        return $this->matchedMetadata($ruleId)['dimension'] ?? null;
     }
 
     private function familyFor(string $ruleId): string
     {
-        return $this->metadata()[$ruleId]['family']
+        return $this->matchedMetadata($ruleId)['family']
             // Fall back to the id's namespace: flexpick.php.sql-interpolation → php.injection
             // is unavailable, so use the middle segments verbatim.
             ?? implode('.', array_slice(explode('.', $ruleId), 1, 1)) ?: 'semgrep.other';
+    }
+
+    /**
+     * Real semgrep prefixes the SARIF ruleId with the rule's path relative to
+     * --config (dot-joined), which duplicates our own id segment whenever a
+     * rule file's directory mirrors its id's namespace — e.g. our declared
+     * id `flexpick.php.missing-authorization` comes back as
+     * `resources.semgrep.flexpick.php.flexpick.php.missing-authorization`.
+     * An exact-key lookup never matches that; matching on suffix does, and
+     * still matches the plain id verbatim (a string is always its own
+     * suffix), which is what the hand-built SARIF fixtures in tests use.
+     *
+     * @return array{family: string, dimension: string}|null
+     */
+    private function matchedMetadata(string $ruleId): ?array
+    {
+        foreach ($this->metadata() as $ownId => $meta) {
+            if (str_ends_with($ruleId, $ownId)) {
+                return $meta;
+            }
+        }
+
+        return null;
     }
 
     /** @return array<string, array{family: string, dimension: string}> */

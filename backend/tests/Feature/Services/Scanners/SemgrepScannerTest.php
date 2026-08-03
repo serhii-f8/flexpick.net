@@ -54,6 +54,21 @@ class SemgrepScannerTest extends FeatureTest
         $this->assertNull(app(SemgrepScanner::class)->dimensionFor('flexpick.nonexistent.rule'));
     }
 
+    public function test_dimension_and_family_resolve_when_real_semgrep_prefixes_the_rule_id(): void
+    {
+        // Regression: real semgrep's SARIF ruleId is prefixed with the rule's
+        // path relative to --config (dot-joined), e.g. our declared id
+        // `flexpick.php.sql-interpolation` comes back as
+        // `resources.semgrep.flexpick.php.flexpick.php.sql-interpolation`. An
+        // exact-key lookup silently misses this, falling back to the generic
+        // "semgrep" family and the default "security_hygiene" dimension for
+        // every real finding regardless of the rule's declared metadata.
+        $scanner = app(SemgrepScanner::class);
+        $prefixed = 'resources.semgrep.flexpick.common.flexpick.common.debug-in-production';
+
+        $this->assertSame('structure', $scanner->dimensionFor($prefixed));
+    }
+
     public function test_findings_carry_the_dimension_declared_by_their_rule(): void
     {
         // This is what ScoreCalculator routes on — a structure-tagged rule

@@ -10,6 +10,7 @@ rules:
       family: common.configuration
       dimension: structure
     pattern-either:
-      - pattern: "'debug' => true"
+      - pattern: $ARR = [..., 'debug' => true, ...]
+      - pattern: return [..., 'debug' => true, ...];
       - pattern: ini_set('display_errors', 1)
       - pattern: error_reporting(E_ALL)
