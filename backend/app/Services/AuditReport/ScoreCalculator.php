@@ -5,6 +5,12 @@ namespace App\Services\AuditReport;
 class ScoreCalculator
 {
     /**
+     * Bump when any formula in calculate() changes. Reports record the version
+     * that produced them; deltas and benchmarks only compare within a version.
+     */
+    public const VERSION = 1;
+
+    /**
      * Deterministic 0-100 health scores computed from measured metrics.
      * The LLM narrates; these numbers are authoritative so repeat runs
      * of the same repo score identically (trends/deltas depend on this).

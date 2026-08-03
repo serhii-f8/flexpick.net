@@ -21,6 +21,7 @@ class AuditDeltaService
                 ->where('email', $report->auditRequest->email)
                 ->whereIn('repo_url', [$repoUrl, $repoUrl.'/']))
             ->where('id', '<', $report->id)
+            ->where('scoring_version', $report->scoring_version)
             ->latest('id')
             ->first();
 

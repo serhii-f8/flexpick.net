@@ -41,4 +41,17 @@ class AuditBenchmarkServiceTest extends FeatureTest
         // 2 of 4 scores are below 25 → 50th percentile
         $this->assertSame(50, app(AuditBenchmarkService::class)->percentileFor(25));
     }
+
+    public function test_pools_only_reports_sharing_the_current_scoring_version(): void
+    {
+        // 25 v1 reports would otherwise satisfy benchmark_min_sample and produce a percentile.
+        AuditReport::factory()->count(25)->create([
+            'payload' => ['scores' => ['overall' => 50]],
+            'scoring_version' => 1,
+        ]);
+
+        Cache::flush();
+
+        $this->assertNull(app(AuditBenchmarkService::class)->percentileFor(80, scoringVersion: 2));
+    }
 }

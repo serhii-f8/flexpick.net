@@ -7,10 +7,13 @@ use Illuminate\Support\Facades\Cache;
 
 class AuditBenchmarkService
 {
-    public function percentileFor(int $overallScore): ?int
+    public function percentileFor(int $overallScore, ?int $scoringVersion = null): ?int
     {
-        $scores = Cache::remember('audit-benchmark-overall-scores', 3600, function (): array {
+        $version = $scoringVersion ?? ScoreCalculator::VERSION;
+
+        $scores = Cache::remember("audit-benchmark-overall-scores:v{$version}", 3600, function () use ($version): array {
             return AuditReport::query()
+                ->where('scoring_version', $version)
                 ->pluck('payload')
                 ->map(function ($payload): ?int {
                     $decoded = is_string($payload) ? json_decode($payload, true) : $payload;

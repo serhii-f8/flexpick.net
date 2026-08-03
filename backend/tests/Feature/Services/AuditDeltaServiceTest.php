@@ -45,4 +45,15 @@ class AuditDeltaServiceTest extends FeatureTest
 
         $this->assertNull(app(AuditDeltaService::class)->deltasFor($current));
     }
+
+    public function test_does_not_compare_across_scoring_versions(): void
+    {
+        $previous = $this->reportWithOverall('delta4@example.com', 'https://github.com/acme/app', 40);
+        $previous->update(['scoring_version' => 1]);
+
+        $current = $this->reportWithOverall('delta4@example.com', 'https://github.com/acme/app', 90);
+        $current->update(['scoring_version' => 2]);
+
+        $this->assertNull(app(AuditDeltaService::class)->deltasFor($current->fresh()));
+    }
 }

@@ -30,7 +30,7 @@ class AuditReportController extends Controller
             'report' => $auditReport,
             'unlocked' => $auditReport->unlocked_at !== null,
             'isSample' => false,
-            'percentile' => $benchmark->percentileFor((int) data_get($auditReport->payload, 'scores.overall', 0)),
+            'percentile' => $benchmark->percentileFor((int) data_get($auditReport->payload, 'scores.overall', 0), $auditReport->scoring_version),
             'unlockUrl' => URL::temporarySignedRoute(
                 'reports.unlock',
                 now()->addDays((int) config('audit.report_link_days')),

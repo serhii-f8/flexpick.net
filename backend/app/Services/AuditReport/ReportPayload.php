@@ -6,6 +6,9 @@ use App\Exceptions\AiAnalysisException;
 
 class ReportPayload
 {
+    /** Bump when the payload contract changes. validate() dispatches on this. */
+    public const VERSION = 1;
+
     public static function validate(mixed $payload): array
     {
         if (! is_array($payload)) {
