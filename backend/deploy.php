@@ -5,20 +5,22 @@ namespace Deployer;
 require 'recipe/laravel.php';
 require 'contrib/crontab.php';
 
-// Configs  (You need to configure these)
+// Configs
+// Server-specific values are read from the environment so no host detail is
+// committed. Ploi provisions the `deployer` user with key-based sudo.
 
-$remoteUser = 'deployer';   // the user that will be used to connect to remote server and deploy the app
-$sudoPassword = '';  // the sudo password of the remote user (leave empty if using ssh key)
+$remoteUser = 'deployer';
+$sudoPassword = '';
 
-$deployPath = '~/app';      // the path where the app will be deployed on the remote server
+$host = getenv('DEPLOY_HOST') ?: 'app.flexpick.net';
 
-$host = '1.2.3.4';    // the host of the remote server (can be an IP or domain)
-$domain = 'yourdomain.com';   // the domain of the app
+$repository = 'git@github.com:serhii-f8/flexpick.net.git';
 
-$repository = 'git@github.com:username/saasykit.git';      // has to be in the SSH format
-$subDirectory = '';    // the subdirectory of the repository where the app is located (this is the directory that contains the composer.json file). Leave empty if the app is in the root of the repository (by default)
+// This is a monorepo. The Laravel application lives in backend/; deploying the
+// repository root would deploy a directory with no composer.json.
+$subDirectory = 'backend';
 
-$phpVersion = '8.4'; // the version of PHP to be installed on the server
+$phpVersion = '8.4';
 
 // End of configs
 // ///////////////////////////////////
@@ -33,13 +35,25 @@ add('shared_files', []);
 add('shared_dirs', []);
 add('writable_dirs', []);
 
-host($host)
+host('production')
+    ->setHostname($host)
     ->set('remote_user', $remoteUser)
-    ->set('deploy_path', $deployPath)
+    ->set('deploy_path', '~/app')
     ->set('sudo_password', $sudoPassword)
-    ->set('domain', $domain)
+    ->set('domain', 'app.flexpick.net')
     ->set('public_path', 'public')
-    ->set('php_version', $phpVersion);
+    ->set('php_version', $phpVersion)
+    ->set('branch', 'main');
+
+host('staging')
+    ->setHostname($host)
+    ->set('remote_user', $remoteUser)
+    ->set('deploy_path', '~/staging')
+    ->set('sudo_password', $sudoPassword)
+    ->set('domain', 'staging.app.flexpick.net')
+    ->set('public_path', 'public')
+    ->set('php_version', $phpVersion)
+    ->set('branch', 'main');
 
 desc('Install & build npm packages');
 task('npm:build', function () {
@@ -59,13 +73,18 @@ task('provision:php-extra', function () {
     ->limit(1);
 
 desc('Provision supervisor');
-task('provision:supervisor', function () use ($remoteUser, $deployPath) {
+task('provision:supervisor', function () use ($remoteUser) {
     info('Installing Supervisor');
 
     run('apt-get install -y supervisor', env: ['DEBIAN_FRONTEND' => 'noninteractive']);
 
+    // Both hosts live on one server (D9A2.2), so the program name and config
+    // file must be per-host. A fixed `horizon` name would mean provisioning
+    // staging silently overwrote production's supervisor program.
+    $program = 'horizon-'.get('alias');
+
     $supervisorConfig = <<<'EOF'
-[program:horizon]
+[program:{{program}}]
 process_name=%(program_name)s
 command=php {{deployPath}}/current/artisan horizon
 autostart=true
@@ -76,18 +95,19 @@ stdout_logfile={{deployPath}}/log/horizon.log
 stopwaitsecs=60
 EOF;
 
-    $deployPathRelativeToDeployerUser = str_replace('~', '/home/'.$remoteUser, $deployPath);
+    $deployPathRelativeToDeployerUser = str_replace('~', '/home/'.$remoteUser, get('deploy_path'));
 
+    $supervisorConfig = str_replace('{{program}}', $program, $supervisorConfig);
     $supervisorConfig = str_replace('{{deployPath}}', $deployPathRelativeToDeployerUser, $supervisorConfig);
     $supervisorConfig = str_replace('{{user}}', $remoteUser, $supervisorConfig);
 
-    $supervisorConfigPath = '/etc/supervisor/conf.d/horizon.conf';
+    $supervisorConfigPath = "/etc/supervisor/conf.d/$program.conf";
 
     run("echo '$supervisorConfig' > $supervisorConfigPath");
 
     run('supervisorctl reread');
     run('supervisorctl update');
-    run('supervisorctl start horizon');
+    run("supervisorctl start $program");
 })->verbose()
     ->limit(1);
 
