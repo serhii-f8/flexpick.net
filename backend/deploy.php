@@ -155,6 +155,13 @@ task('deploy:sentry-release', function () {
     info("SENTRY_RELEASE set to $sha");
 });
 
+desc('Post-release smoke gate (PR8) -- fails the deploy on a non-zero exit');
+task('deploy:smoke', function () {
+    // Runs against the freshly symlinked release, which is now live. Read-only:
+    // sends no email, runs no audit, writes nothing. Exit code is the contract.
+    run('cd {{current_path}} && {{bin/php}} artisan app:smoke', timeout: 120);
+});
+
 // seed database
 after('artisan:migrate', 'artisan:db:seed');
 
@@ -210,7 +217,13 @@ after('deploy:success', 'deploy:export-configs');
 
 before('artisan:optimize', 'deploy:sentry-release');
 
+after('deploy:symlink', 'deploy:smoke');
+
 after('deploy:failed', 'deploy:unlock');
+
+// deploy:failed already unlocks (see above); rolling back afterwards returns
+// the site to the previous release. Rehearsed in the runbook, step 8.
+after('deploy:failed', 'rollback');
 
 add('crontab:jobs', [
     '* * * * * cd {{current_path}} && {{bin/php}} artisan schedule:run >> /dev/null 2>&1',
