@@ -29,11 +29,11 @@ class AuditSettingsTest extends FeatureTest
 
         Livewire::actingAs($admin)
             ->test(AuditSettings::class)
-            ->fillForm(['prompt_template' => "HEAD\n{metrics}\n{excerpts}\nTAIL"])
+            ->fillForm(['prompt_template' => "HEAD\n{metrics}\n{groups}\n{excerpts}\nTAIL"])
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame("HEAD\n{metrics}\n{excerpts}\nTAIL", app(ConfigService::class)->get('audit.prompt_template'));
+        $this->assertSame("HEAD\n{metrics}\n{groups}\n{excerpts}\nTAIL", app(ConfigService::class)->get('audit.prompt_template'));
     }
 
     public function test_template_missing_placeholders_is_rejected(): void
