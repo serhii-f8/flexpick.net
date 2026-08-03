@@ -5,6 +5,7 @@ namespace App\Services\AuditReport;
 use App\Constants\AuditRequestStatus;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\AuditRequest;
+use App\Services\AuditReport\Tiers\TierProfileResolver;
 use App\Services\AuditRequestService;
 
 class AuditPipeline
@@ -16,6 +17,7 @@ class AuditPipeline
         private AuditReportService $reportService,
         private AuditRequestService $requestService,
         private ScoreCalculator $scoreCalculator,
+        private TierProfileResolver $tierProfileResolver,
     ) {}
 
     public function run(AuditRequest $auditRequest): void
@@ -35,7 +37,8 @@ class AuditPipeline
             $path = $this->cloner->clone($auditRequest->repo_url, $auditRequest->uuid);
             $auditRequest->appendPipelineLog('cloned', 'Repository cloned');
 
-            $collected = $this->metricsCollector->collect($path);
+            $profile = $this->tierProfileResolver->for($auditRequest->tier);
+            $collected = $this->metricsCollector->collect($path, $profile);
             $metrics = $collected['metrics'];
             $scores = $this->scoreCalculator->calculate($metrics);
             $metrics['computed_scores'] = $scores;

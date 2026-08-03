@@ -7,8 +7,6 @@ return [
     'clone_depth' => 200,
     'preflight_timeout' => 30,
     'max_repo_size_mb' => 500,
-    'max_excerpt_files' => 50,
-    'max_excerpt_bytes' => 6000,
     'report_link_days' => 30,
     'workdir' => storage_path('app/audit-workdirs'),
     'reports_dir' => 'audit-reports',
@@ -20,4 +18,50 @@ return [
     'benchmark_min_sample' => 20,
     'unlock_product_slug' => 'audit-report-unlock',
     'osv_endpoint' => 'https://api.osv.dev/v1/querybatch',
+
+    'tiers' => [
+        'diagnostic' => [
+            'scanners' => ['scc', 'gitleaks', 'osv'],
+            'excerpt_files' => 15,
+            'excerpt_bytes' => 3000,
+            'ai_max_tokens' => 4000,
+            'narrated_groups' => 2,
+        ],
+        'automated' => [
+            'scanners' => ['scc', 'gitleaks', 'osv', 'jscpd', 'semgrep'],
+            'excerpt_files' => 50,
+            'excerpt_bytes' => 6000,
+            'ai_max_tokens' => 16000,
+            'narrated_groups' => 12,
+        ],
+        // Phase 12 diverges deep_ai; Phase 13 adds the expert delivery hold.
+        // Until then both compose identically to `automated` — deliberate, not an omission.
+        'deep_ai' => [
+            'scanners' => ['scc', 'gitleaks', 'osv', 'jscpd', 'semgrep'],
+            'excerpt_files' => 50,
+            'excerpt_bytes' => 6000,
+            'ai_max_tokens' => 16000,
+            'narrated_groups' => 12,
+        ],
+        'expert' => [
+            'scanners' => ['scc', 'gitleaks', 'osv', 'jscpd', 'semgrep'],
+            'excerpt_files' => 50,
+            'excerpt_bytes' => 6000,
+            'ai_max_tokens' => 16000,
+            'narrated_groups' => 12,
+        ],
+    ],
+
+    'findings' => [
+        'max_groups' => 20,
+        'max_group_examples' => 8,
+        'directory_depth' => 2,
+        'severity_weights' => [
+            'critical' => 100,
+            'high' => 40,
+            'medium' => 10,
+            'low' => 3,
+            'info' => 1,
+        ],
+    ],
 ];

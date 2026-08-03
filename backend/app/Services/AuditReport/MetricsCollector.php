@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport;
 
+use App\Services\AuditReport\Tiers\TierProfile;
 use Illuminate\Support\Facades\Process;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Finder\SplFileInfo;
@@ -34,7 +35,7 @@ class MetricsCollector
         private DependencyAuditor $dependencyAuditor,
     ) {}
 
-    public function collect(string $repoPath): array
+    public function collect(string $repoPath, TierProfile $profile): array
     {
         $files = iterator_to_array($this->sourceFiles($repoPath), false);
 
@@ -102,7 +103,7 @@ class MetricsCollector
 
         return [
             'metrics' => $metrics,
-            'excerpts' => $this->excerpts($repoPath, $fileStats),
+            'excerpts' => $this->excerpts($repoPath, $fileStats, $profile),
         ];
     }
 
@@ -204,14 +205,12 @@ class MetricsCollector
         return array_slice($hotspots, 0, 10);
     }
 
-    private function excerpts(string $repoPath, array $fileStats): array
+    private function excerpts(string $repoPath, array $fileStats, TierProfile $profile): array
     {
-        $maxFiles = config('audit.max_excerpt_files');
-        $maxBytes = config('audit.max_excerpt_bytes');
         $excerpts = [];
 
-        foreach (array_slice($fileStats, 0, $maxFiles) as $file) {
-            $content = (string) file_get_contents($repoPath.'/'.$file['path'], length: $maxBytes);
+        foreach (array_slice($fileStats, 0, $profile->excerptFiles) as $file) {
+            $content = (string) file_get_contents($repoPath.'/'.$file['path'], length: $profile->excerptBytes);
             $excerpts[] = ['path' => $file['path'], 'content' => $content];
         }
 

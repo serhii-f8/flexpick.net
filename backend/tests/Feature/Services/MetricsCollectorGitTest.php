@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\AuditTier;
 use App\Services\AuditReport\MetricsCollector;
+use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Tests\Feature\FeatureTest;
@@ -43,7 +45,7 @@ class MetricsCollectorGitTest extends FeatureTest
 
     public function test_collects_contributor_stats_and_hotspots(): void
     {
-        $metrics = app(MetricsCollector::class)->collect($this->repoPath)['metrics'];
+        $metrics = app(MetricsCollector::class)->collect($this->repoPath, app(TierProfileResolver::class)->for(AuditTier::AUTOMATED))['metrics'];
 
         $this->assertSame(3, $metrics['git']['commits_analyzed']);
         $this->assertSame(2, $metrics['git']['contributors']);

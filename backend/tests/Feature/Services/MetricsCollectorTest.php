@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\AuditTier;
 use App\Services\AuditReport\MetricsCollector;
+use App\Services\AuditReport\Tiers\TierProfile;
+use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Illuminate\Support\Facades\File;
 use Tests\Feature\FeatureTest;
 
@@ -36,7 +39,7 @@ class MetricsCollectorTest extends FeatureTest
 
     public function test_collects_expected_metrics(): void
     {
-        $result = app(MetricsCollector::class)->collect($this->repo);
+        $result = app(MetricsCollector::class)->collect($this->repo, $this->profile());
         $metrics = $result['metrics'];
 
         $this->assertArrayHasKey('php', $metrics['languages']);
@@ -53,16 +56,16 @@ class MetricsCollectorTest extends FeatureTest
 
     public function test_excerpts_skip_vendor_and_respect_limits(): void
     {
-        $result = app(MetricsCollector::class)->collect($this->repo);
+        $result = app(MetricsCollector::class)->collect($this->repo, $this->profile());
 
         $paths = array_column($result['excerpts'], 'path');
         $this->assertNotEmpty($paths);
-        $this->assertLessThanOrEqual(config('audit.max_excerpt_files'), count($paths));
+        $this->assertLessThanOrEqual($this->profile()->excerptFiles, count($paths));
         foreach ($paths as $path) {
             $this->assertStringNotContainsString('vendor/', $path);
         }
         foreach ($result['excerpts'] as $excerpt) {
-            $this->assertLessThanOrEqual(config('audit.max_excerpt_bytes'), strlen($excerpt['content']));
+            $this->assertLessThanOrEqual($this->profile()->excerptBytes, strlen($excerpt['content']));
         }
     }
 
@@ -78,7 +81,7 @@ class MetricsCollectorTest extends FeatureTest
             'const slack = "xoxb-1234567890-abcdefghij";',
         ]));
 
-        $metrics = app(MetricsCollector::class)->collect($path)['metrics'];
+        $metrics = app(MetricsCollector::class)->collect($path, $this->profile())['metrics'];
         File::deleteDirectory($path);
 
         $findings = $metrics['secret_findings'];
@@ -100,7 +103,7 @@ class MetricsCollectorTest extends FeatureTest
         File::put($path.'/.env.example', 'APP_KEY=');
         File::put($path.'/Dockerfile', 'FROM node:22');
 
-        $metrics = app(MetricsCollector::class)->collect($path)['metrics'];
+        $metrics = app(MetricsCollector::class)->collect($path, $this->profile())['metrics'];
         File::deleteDirectory($path);
 
         $this->assertSame([
@@ -111,5 +114,10 @@ class MetricsCollectorTest extends FeatureTest
             'env_example' => true,
             'dockerized' => true,
         ], $metrics['tooling']);
+    }
+
+    private function profile(): TierProfile
+    {
+        return app(TierProfileResolver::class)->for(AuditTier::AUTOMATED);
     }
 }

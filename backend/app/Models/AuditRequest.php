@@ -35,6 +35,15 @@ class AuditRequest extends Model
     ];
 
     /**
+     * Mirror the migration's column default at the PHP layer. Without it a
+     * request created but never reloaded carries a null tier, and every
+     * consumer that resolves a profile from it (AuditPipeline) fails.
+     */
+    protected $attributes = [
+        'tier' => AuditTier::DIAGNOSTIC->value,
+    ];
+
+    /**
      * All audits owned by the given user: linked by id, or submitted with
      * their email before they registered.
      *
