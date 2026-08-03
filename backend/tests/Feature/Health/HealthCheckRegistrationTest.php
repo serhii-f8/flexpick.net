@@ -24,6 +24,7 @@ class HealthCheckRegistrationTest extends FeatureTest
             'OldestPendingAudit',
             'Queue',
             'Redis',
+            'ScannerDegradation',
             'Schedule',
             'UsedDiskSpace',
         ];

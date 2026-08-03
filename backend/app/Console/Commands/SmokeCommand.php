@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Constants\AuditTier;
+use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Illuminate\Console\Command;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +70,7 @@ class SmokeCommand extends Command
             'horizon worker on the audit queue' => fn (): bool => $this->horizonIsRunning(),
             'mail transport is a real transport' => fn (): bool => $this->mailTransportIsUsable(),
             'vite manifest present and a public page renders' => fn (): bool => $this->publicPageRenders(),
+            'audit scanners provisioned' => fn (): bool => $this->auditScannersProvisioned(),
         ];
     }
 
@@ -144,5 +147,28 @@ class SmokeCommand extends Command
 
         return file_exists(public_path('build/manifest.json'))
             && $this->getReturnsOk('/pricing');
+    }
+
+    /**
+     * Provisioning drift is otherwise invisible: every run degrades, reports
+     * quietly thin out, and the exit code stays 0 (spec §9.1). Checked
+     * everywhere, not just in production — the dev container provisions
+     * these binaries too (Task 14).
+     */
+    private function auditScannersProvisioned(): bool
+    {
+        $profile = app(TierProfileResolver::class)->for(AuditTier::AUTOMATED);
+
+        foreach ($profile->scanners as $name) {
+            $scanner = app('audit.scanner.'.$name);
+
+            if (! $scanner->isAvailable()) {
+                $this->line("  scanner [{$name}] is not available at its configured path");
+
+                return false;
+            }
+        }
+
+        return true;
     }
 }

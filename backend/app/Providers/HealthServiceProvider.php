@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Health\Checks\AuditPipelineFailureRateCheck;
 use App\Health\Checks\MailFailureRateCheck;
 use App\Health\Checks\OldestPendingAuditCheck;
+use App\Health\Checks\ScannerDegradationCheck;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Health\Checks\Checks\CacheCheck;
 use Spatie\Health\Checks\Checks\DatabaseCheck;
@@ -44,6 +45,7 @@ class HealthServiceProvider extends ServiceProvider
             OldestPendingAuditCheck::new(),
             AuditPipelineFailureRateCheck::new(),
             MailFailureRateCheck::new(),
+            ScannerDegradationCheck::new(),
         ]);
     }
 }

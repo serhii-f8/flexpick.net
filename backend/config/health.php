@@ -58,6 +58,14 @@ return [
             'fail_percent' => (int) env('HEALTH_MAIL_FAIL_PERCENT', 25),
         ],
 
+        // A degraded scanner sells thin reports; it does not take the site
+        // down, which is why its band is medium rather than high.
+        'scanner_degradation' => [
+            'window_hours' => (int) env('HEALTH_SCANNER_DEGRADATION_WINDOW_HOURS', 24),
+            'min_samples' => (int) env('HEALTH_SCANNER_DEGRADATION_MIN_SAMPLES', 20),
+            'fail_percent' => (int) env('HEALTH_SCANNER_DEGRADATION_FAIL_PERCENT', 20),
+        ],
+
         /*
          * Severity bands per spec §15.6. Only bands listed in `paging_bands`
          * affect the /health status code; the rest are reported in the body
@@ -72,6 +80,7 @@ return [
             'OldestPendingAudit' => 'critical',
             'AuditPipelineFailureRate' => 'high',
             'MailFailureRate' => 'high',
+            'ScannerDegradation' => 'medium',
             'Schedule' => 'medium',
             'UsedDiskSpace' => 'medium',
             'Cache' => 'medium',

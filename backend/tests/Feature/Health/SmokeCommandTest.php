@@ -30,7 +30,15 @@ class SmokeCommandTest extends FeatureTest
             ->expectsOutputToContain('horizon worker on the audit queue')
             ->expectsOutputToContain('mail transport')
             ->expectsOutputToContain('vite manifest')
+            ->expectsOutputToContain('audit scanners provisioned')
             ->assertSuccessful();
+    }
+
+    public function test_fails_when_a_scanner_binary_is_missing(): void
+    {
+        config()->set('audit.scanners.semgrep.bin', '/nonexistent/semgrep');
+
+        $this->artisan('app:smoke')->assertFailed();
     }
 
     public function test_fails_when_migrations_are_pending(): void
