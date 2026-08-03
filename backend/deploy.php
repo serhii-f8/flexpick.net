@@ -117,6 +117,43 @@ after('artisan:migrate', 'artisan:db:seed');
 // npm
 after('artisan:migrate', 'npm:build');
 
+desc('Provision the audit scanner binaries');
+task('provision:scanners', function () {
+    $binDir = '/opt/flexpick/bin';
+
+    $scc = '3.5.0';
+    $gitleaks = '8.28.0';
+    $jscpd = '4.0.5';
+    $semgrep = '1.99.0';
+
+    info('Installing audit scanners to '.$binDir);
+
+    run("mkdir -p $binDir");
+
+    // scc — single static Go binary
+    run("curl -sSfL https://github.com/boyter/scc/releases/download/v$scc/scc_Linux_x86_64.tar.gz "
+        ."| tar -xz -C $binDir scc && chmod +x $binDir/scc");
+
+    // Gitleaks — single static Go binary
+    run("curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v$gitleaks/gitleaks_${gitleaks}_linux_x64.tar.gz "
+        ."| tar -xz -C $binDir gitleaks && chmod +x $binDir/gitleaks");
+
+    // jscpd — npm package; Node is already provisioned via fnm
+    run("eval \"\$(fnm env)\" && npm install -g jscpd@$jscpd");
+    run("ln -sf \$(eval \"\$(fnm env)\" && which jscpd) $binDir/jscpd");
+
+    // Semgrep — Python package; the only scanner needing a Python runtime
+    run('apt-get install -y python3 python3-venv', env: ['DEBIAN_FRONTEND' => 'noninteractive']);
+    run("python3 -m venv /opt/flexpick/semgrep-venv");
+    // setuptools>=81 dropped pkg_resources, which semgrep's opentelemetry
+    // dependency still imports without declaring — pin below 81 or semgrep
+    // crashes with ModuleNotFoundError on invocation, not just on --version.
+    run("/opt/flexpick/semgrep-venv/bin/pip install --quiet 'setuptools<81' semgrep==$semgrep");
+    run("ln -sf /opt/flexpick/semgrep-venv/bin/semgrep $binDir/semgrep");
+})->verbose()->limit(1);
+
+after('provision:php-extra', 'provision:scanners');
+
 // php
 after('provision:php', 'provision:php-extra');
 after('provision:verify', 'provision:supervisor');

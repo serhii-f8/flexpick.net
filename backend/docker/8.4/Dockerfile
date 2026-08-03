@@ -24,7 +24,7 @@ RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
 
 RUN apt-get update && apt-get upgrade -y \
     && mkdir -p /etc/apt/keyrings \
-    && apt-get install -y gnupg gosu curl ca-certificates zip unzip git supervisor sqlite3 libcap2-bin libpng-dev python3 dnsutils librsvg2-bin fswatch ffmpeg nano  \
+    && apt-get install -y gnupg gosu curl ca-certificates zip unzip git supervisor sqlite3 libcap2-bin libpng-dev python3 python3-venv dnsutils librsvg2-bin fswatch ffmpeg nano  \
     && curl -sS 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xb8dc7e53946656efbce4c1dd71daeaab4ad4cab6' | gpg --dearmor | tee /etc/apt/keyrings/ppa_ondrej_php.gpg > /dev/null \
     && echo "deb [signed-by=/etc/apt/keyrings/ppa_ondrej_php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu noble main" > /etc/apt/sources.list.d/ppa_ondrej_php.list \
     && apt-get update \
@@ -68,6 +68,27 @@ COPY start-container /usr/local/bin/start-container
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY php.ini /etc/php/8.4/cli/conf.d/99-sail.ini
 RUN chmod +x /usr/local/bin/start-container
+
+# Audit scanners — versions must match config/audit.php and deploy.php.
+ARG SCC_VERSION=3.5.0
+ARG GITLEAKS_VERSION=8.28.0
+ARG JSCPD_VERSION=4.0.5
+ARG SEMGREP_VERSION=1.99.0
+
+RUN mkdir -p /opt/flexpick/bin \
+    && curl -sSfL "https://github.com/boyter/scc/releases/download/v${SCC_VERSION}/scc_Linux_x86_64.tar.gz" \
+       | tar -xz -C /opt/flexpick/bin scc \
+    && curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+       | tar -xz -C /opt/flexpick/bin gitleaks \
+    && chmod +x /opt/flexpick/bin/scc /opt/flexpick/bin/gitleaks \
+    && npm install -g "jscpd@${JSCPD_VERSION}" \
+    && ln -sf "$(which jscpd)" /opt/flexpick/bin/jscpd \
+    && python3 -m venv /opt/flexpick/semgrep-venv \
+    # setuptools>=81 dropped pkg_resources, which semgrep's opentelemetry
+    # dependency still imports without declaring — pin below 81 or semgrep
+    # crashes with ModuleNotFoundError on invocation, not just on --version.
+    && /opt/flexpick/semgrep-venv/bin/pip install --quiet "setuptools<81" "semgrep==${SEMGREP_VERSION}" \
+    && ln -sf /opt/flexpick/semgrep-venv/bin/semgrep /opt/flexpick/bin/semgrep
 
 EXPOSE 80/tcp
 
