@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class AuditRequest extends Model
@@ -81,6 +82,12 @@ class AuditRequest extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** @return HasMany<AuditFindingGroup, $this> */
+    public function findingGroups(): HasMany
+    {
+        return $this->hasMany(AuditFindingGroup::class)->orderByDesc('score');
     }
 
     public function appendPipelineLog(string $step, string $message): void
