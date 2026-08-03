@@ -1,0 +1,10 @@
+{
+  "minLines": 10,
+  "minTokens": 70,
+  "ignore": [
+    "**/vendor/**", "**/node_modules/**", "**/dist/**", "**/build/**",
+    "**/.git/**", "**/storage/**", "**/coverage/**", "**/*.min.js"
+  ],
+  "absolute": false,
+  "gitignore": false
+}

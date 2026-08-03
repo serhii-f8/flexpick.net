@@ -1,0 +1,19 @@
+{
+  "statistics": {
+    "total": { "lines": 10000, "duplicatedLines": 1250, "percentage": 12.5 }
+  },
+  "duplicates": [
+    {
+      "format": "php",
+      "lines": 40,
+      "firstFile":  { "name": "app/Http/Controllers/OrderController.php", "start": 12, "end": 52 },
+      "secondFile": { "name": "app/Http/Controllers/InvoiceController.php", "start": 30, "end": 70 }
+    },
+    {
+      "format": "php",
+      "lines": 25,
+      "firstFile":  { "name": "app/Services/Billing.php", "start": 5, "end": 30 },
+      "secondFile": { "name": "app/Services/Refunds.php", "start": 8, "end": 33 }
+    }
+  ]
+}

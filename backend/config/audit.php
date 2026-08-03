@@ -70,6 +70,13 @@ return [
             'version' => '3.5.0',
             'timeout' => 60,
         ],
+        'jscpd' => [
+            'bin' => env('AUDIT_JSCPD_BIN', '/opt/flexpick/bin/jscpd'),
+            'version' => '4.0.5',
+            'timeout' => 180,
+            'config' => resource_path('scanners/jscpd.json'),
+            'max_file_size' => '2mb',
+        ],
     ],
 
     'findings' => [
