@@ -1,0 +1,18 @@
+rules:
+  - id: flexpick.common.unbounded-upload
+    languages: [php]
+    severity: WARNING
+    message: >-
+      An uploaded file is stored without validating its size or type. This
+      permits resource exhaustion and storage of executable content.
+    metadata:
+      family: common.upload
+      dimension: security_hygiene
+    patterns:
+      - pattern: $REQUEST->file(...)->store(...)
+      - pattern-not-inside: |
+          $this->validate(...);
+          ...
+      - pattern-not-inside: |
+          $REQUEST->validate(...);
+          ...

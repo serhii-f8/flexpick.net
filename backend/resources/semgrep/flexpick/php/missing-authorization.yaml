@@ -1,0 +1,22 @@
+rules:
+  - id: flexpick.php.missing-authorization
+    languages: [php]
+    severity: ERROR
+    message: >-
+      A controller action that writes or deletes state performs no authorization
+      check. Any authenticated user can invoke it against any record.
+    metadata:
+      family: php.authorization
+      dimension: security_hygiene
+    patterns:
+      - pattern-either:
+          - pattern: |
+              public function update(...) { ... }
+          - pattern: |
+              public function destroy(...) { ... }
+      - pattern-not: |
+          public function $M(...) { ... $this->authorize(...); ... }
+      - pattern-not: |
+          public function $M(...) { ... Gate::authorize(...); ... }
+      - pattern-not: |
+          public function $M(...) { ... $this->authorizeResource(...); ... }

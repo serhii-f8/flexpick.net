@@ -1,0 +1,15 @@
+rules:
+  - id: flexpick.common.debug-in-production
+    languages: [php]
+    severity: WARNING
+    message: >-
+      Debug mode is enabled unconditionally rather than read from environment
+      configuration. In production this exposes stack traces and configuration
+      values to end users.
+    metadata:
+      family: common.configuration
+      dimension: structure
+    pattern-either:
+      - pattern: "'debug' => true"
+      - pattern: ini_set('display_errors', 1)
+      - pattern: error_reporting(E_ALL)

@@ -1,0 +1,14 @@
+rules:
+  - id: flexpick.common.unsafe-deserialize
+    languages: [php, python]
+    severity: ERROR
+    message: >-
+      Untrusted data is deserialized. Deserializing attacker-controlled input
+      can instantiate arbitrary objects and execute code.
+    metadata:
+      family: common.deserialization
+      dimension: security_hygiene
+    pattern-either:
+      - pattern: unserialize($X)
+      - pattern: pickle.loads($X)
+      - pattern: yaml.load($X)

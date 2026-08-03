@@ -1,0 +1,13 @@
+rules:
+  - id: flexpick.js.tls-verify-disabled
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      TLS certificate verification is disabled. Traffic that appears encrypted
+      can be intercepted and modified without detection.
+    metadata:
+      family: js.transport-security
+      dimension: security_hygiene
+    pattern-either:
+      - pattern: "rejectUnauthorized: false"
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"

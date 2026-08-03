@@ -1,0 +1,16 @@
+rules:
+  - id: flexpick.php.sql-interpolation
+    languages: [php]
+    severity: ERROR
+    message: >-
+      SQL is assembled by string interpolation. A value reaching this query from
+      request input allows an attacker to change the query's meaning.
+    metadata:
+      family: php.injection
+      dimension: security_hygiene
+    patterns:
+      - pattern-either:
+          - pattern: $DB->query("...{$...}...")
+          - pattern: $DB->raw("...{$...}...")
+          - pattern: DB::select("...{$...}...")
+          - pattern: DB::statement("...{$...}...")

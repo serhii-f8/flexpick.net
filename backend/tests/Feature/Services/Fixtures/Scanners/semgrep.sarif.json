@@ -1,0 +1,31 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "semgrep", "rules": [
+        { "id": "flexpick.php.sql-interpolation",
+          "description": { "text": "SQL is assembled by string interpolation." } },
+        { "id": "flexpick.common.debug-in-production",
+          "description": { "text": "Debug mode is enabled unconditionally." } }
+      ] } },
+      "results": [
+        {
+          "ruleId": "flexpick.php.sql-interpolation",
+          "level": "error",
+          "message": { "text": "SQL is assembled by string interpolation." },
+          "locations": [ { "physicalLocation": {
+            "artifactLocation": { "uri": "app/Http/Controllers/UserController.php" },
+            "region": { "startLine": 42 } } } ]
+        },
+        {
+          "ruleId": "flexpick.common.debug-in-production",
+          "level": "warning",
+          "message": { "text": "Debug mode is enabled unconditionally." },
+          "locations": [ { "physicalLocation": {
+            "artifactLocation": { "uri": "config/app.php" },
+            "region": { "startLine": 12 } } } ]
+        }
+      ]
+    }
+  ]
+}

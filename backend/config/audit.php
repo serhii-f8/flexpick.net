@@ -59,6 +59,12 @@ return [
             'timeout' => 120,
             'config' => resource_path('scanners/gitleaks.toml'),
         ],
+        'semgrep' => [
+            'bin' => env('AUDIT_SEMGREP_BIN', '/opt/flexpick/bin/semgrep'),
+            'version' => '1.99.0',
+            'timeout' => 300,
+            'rules_path' => resource_path('semgrep/flexpick'),
+        ],
     ],
 
     'findings' => [
