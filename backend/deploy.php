@@ -131,6 +131,30 @@ task('deploy:sitemap', artisan('app:generate-sitemap', ['skipIfNoEnv']));
 desc('Export configs from database to cache');
 task('deploy:export-configs', artisan('app:export-configs', ['skipIfNoEnv']));
 
+desc('Inject the deployed git SHA as SENTRY_RELEASE (PR4)');
+task('deploy:sentry-release', function () {
+    $sha = trim(run('cat {{release_path}}/REVISION'));
+
+    if ($sha === '') {
+        throw new \RuntimeException(
+            'REVISION is empty; refusing to deploy without release context (PR4).'
+        );
+    }
+
+    // .env is a shared file, so {{release_path}}/.env is a symlink. sed -i
+    // renames over its target and would replace the symlink with a plain
+    // file, detaching this release from shared config. Edit the real path.
+    $envPath = trim(run('readlink -f {{release_path}}/.env'));
+
+    run("if grep -q '^SENTRY_RELEASE=' $envPath; then
+            sed -i -E 's|^SENTRY_RELEASE=.*|SENTRY_RELEASE=$sha|' $envPath;
+         else
+            echo 'SENTRY_RELEASE=$sha' >> $envPath;
+         fi");
+
+    info("SENTRY_RELEASE set to $sha");
+});
+
 // seed database
 after('artisan:migrate', 'artisan:db:seed');
 
@@ -183,6 +207,8 @@ after('deploy:success', 'artisan:horizon:terminate'); // to restart horizon afte
 after('deploy:success', 'crontab:sync');
 after('deploy:success', 'deploy:sitemap');
 after('deploy:success', 'deploy:export-configs');
+
+before('artisan:optimize', 'deploy:sentry-release');
 
 after('deploy:failed', 'deploy:unlock');
 
