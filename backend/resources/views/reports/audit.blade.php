@@ -29,10 +29,14 @@
     <h2>{{ __('Summary') }}</h2>
     <p>{{ $payload['summary'] }}</p>
 
+    @php($notMeasured = $report->auditRequest->metrics['not_measured'] ?? [])
     <h2>{{ __('Health scores') }} <span class="muted">(0–100, {{ __('higher is healthier') }})</span></h2>
     <table>
         <tr>
             @foreach ($payload['scores'] as $dimension => $score)
+                <th>{{ str_replace('_', ' ', $dimension) }}</th>
+            @endforeach
+            @foreach ($notMeasured as $dimension)
                 <th>{{ str_replace('_', ' ', $dimension) }}</th>
             @endforeach
         </tr>
@@ -40,8 +44,34 @@
             @foreach ($payload['scores'] as $score)
                 <td class="score">{{ $score }}</td>
             @endforeach
+            @foreach ($notMeasured as $dimension)
+                <td class="muted">{{ __('Not measured') }}</td>
+            @endforeach
         </tr>
     </table>
+
+    @php($groups = $payload['groups'] ?? [])
+    @if ($groups !== [])
+        <h2>{{ __('What we found') }}</h2>
+        <table>
+            <tr><th>{{ __('Rule family') }}</th><th>{{ __('Location') }}</th><th>{{ __('Severity') }}</th><th>{{ __('Count') }}</th></tr>
+            @foreach ($groups as $group)
+                <tr>
+                    <td>{{ $group['rule_family'] }}</td>
+                    <td>{{ $group['directory'] }}</td>
+                    <td class="impact-{{ $group['severity'] }}">{{ strtoupper($group['severity']) }}</td>
+                    <td>{{ $group['count'] }}</td>
+                </tr>
+                <tr>
+                    <td colspan="4">
+                        <div><strong>{{ __('What it is') }}:</strong> {{ $group['narrative']['what'] }}</div>
+                        <div><strong>{{ __('What it affects') }}:</strong> {{ $group['narrative']['affects'] }}</div>
+                        <div><strong>{{ __('What fixing it buys you') }}:</strong> {{ $group['narrative']['benefit'] }}</div>
+                    </td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
 
     @php($metrics = $report->auditRequest->metrics)
     @if (is_array($metrics) && $metrics !== [])

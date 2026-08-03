@@ -66,6 +66,7 @@
         <p style="margin-top: 14px;">{{ $payload['summary'] }}</p>
     </div>
 
+    @php($notMeasured = $report->auditRequest->metrics['not_measured'] ?? [])
     <div class="card">
         <h2>{{ __('Health scores') }}</h2>
         <div class="scores-grid">
@@ -81,8 +82,48 @@
                     @endif
                 </div>
             @endforeach
+            @foreach ($notMeasured as $dimension)
+                <div class="score-tile">
+                    <div class="value" style="color: #78716c; font-size: 13px;" title="{{ __('This analysis did not run the scanner this score depends on.') }}">{{ __('Not measured') }}</div>
+                    <div class="label">{{ str_replace('_', ' ', $dimension) }}</div>
+                </div>
+            @endforeach
         </div>
     </div>
+
+    @php($groups = $payload['groups'] ?? [])
+    @if ($groups !== [])
+        <div class="card">
+            <h2>{{ __('What we found') }}</h2>
+            @foreach ($groups as $group)
+                <div class="risk">
+                    <div class="risk-head">
+                        <span class="badge badge-{{ $group['severity'] }}">{{ $group['severity'] }}</span>
+                        <span class="risk-title">{{ $group['rule_family'] }}</span>
+                        <span class="muted">{{ $group['directory'] }} ·
+                            {{ trans_choice('{1} :count finding|[2,*] :count findings', $group['count'], ['count' => $group['count']]) }}
+                        </span>
+                    </div>
+                    @if ($unlocked)
+                        <div class="risk-detail">
+                            <div><strong>{{ __('What it is') }}:</strong> {{ $group['narrative']['what'] }}</div>
+                            <div style="margin-top: 4px;"><strong>{{ __('What it affects') }}:</strong> {{ $group['narrative']['affects'] }}</div>
+                            <div style="margin-top: 4px;"><strong>{{ __('What fixing it buys you') }}:</strong> {{ $group['narrative']['benefit'] }}</div>
+                        </div>
+                    @else
+                        <div class="locked-block">
+                            <div class="locked-blur">
+                                <div><strong>{{ __('What it is') }}:</strong> {{ str_repeat('█▌ ', 10) }}</div>
+                                <div style="margin-top: 4px;"><strong>{{ __('What it affects') }}:</strong> {{ str_repeat('█▌ ', 10) }}</div>
+                                <div style="margin-top: 4px;"><strong>{{ __('What fixing it buys you') }}:</strong> {{ str_repeat('█▌ ', 10) }}</div>
+                            </div>
+                            <div class="lock-overlay"><span class="lock-pill">🔒 {{ __('Unlock to read') }}</span></div>
+                        </div>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    @endif
 
     @php($metrics = $report->auditRequest->metrics)
     @if (is_array($metrics) && $metrics !== [])
