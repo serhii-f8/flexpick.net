@@ -1,0 +1,41 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": { "driver": { "name": "gitleaks", "rules": [
+        { "id": "aws-access-token", "description": { "text": "AWS Access Token" } }
+      ] } },
+      "results": [
+        {
+          "ruleId": "aws-access-token",
+          "level": "error",
+          "message": { "text": "aws-access-token has detected a secret." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "config/services.php" },
+                "region": {
+                  "startLine": 17,
+                  "snippet": { "text": "'key' => 'AKIAIOSFODNN7EXAMPLE'," }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "generic-api-key",
+          "level": "error",
+          "message": { "text": "generic-api-key has detected a secret." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "app/Services/Payment.php" },
+                "region": { "startLine": 88, "snippet": { "text": "$key = 'sk_live_supersecret';" } }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

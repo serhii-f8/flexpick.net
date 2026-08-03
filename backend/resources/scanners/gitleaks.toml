@@ -1,0 +1,4 @@
+title = "FlexPick Gitleaks config"
+
+[extend]
+useDefault = true

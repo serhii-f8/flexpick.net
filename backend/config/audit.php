@@ -52,6 +52,15 @@ return [
         ],
     ],
 
+    'scanners' => [
+        'gitleaks' => [
+            'bin' => env('AUDIT_GITLEAKS_BIN', '/opt/flexpick/bin/gitleaks'),
+            'version' => '8.28.0',
+            'timeout' => 120,
+            'config' => resource_path('scanners/gitleaks.toml'),
+        ],
+    ],
+
     'findings' => [
         'max_groups' => 20,
         'max_group_examples' => 8,
