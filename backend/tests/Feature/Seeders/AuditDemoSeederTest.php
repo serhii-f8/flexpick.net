@@ -19,7 +19,7 @@ class AuditDemoSeederTest extends FeatureTest
         $entitlements = app(AuditEntitlementService::class);
 
         // Active tiers expose their monthly allowance through the tenant subscription
-        foreach ([['audit-starter-demo@flexpick.net', 5], ['audit-growth-demo@flexpick.net', 20], ['audit-scale-demo@flexpick.net', 50], ['audit-trial-demo@flexpick.net', 5]] as [$email, $allowance]) {
+        foreach ([['audit-starter-demo@flexpick.net', 5], ['audit-growth-demo@flexpick.net', 20], ['audit-agency-demo@flexpick.net', 75], ['audit-trial-demo@flexpick.net', 5]] as [$email, $allowance]) {
             $user = User::where('email', $email)->firstOrFail();
             $this->assertSame($allowance, $entitlements->subscriptionAllowance($user->tenants()->firstOrFail()), $email);
             $this->assertSame(1, $user->subscriptions()->count(), $email);

@@ -31,7 +31,7 @@ class AuditDemoSeeder extends Seeder
 
         $starter = $this->subscribedUser('audit-starter-demo@flexpick.net', 'Audit Starter Demo', 'audit-starter-monthly', SubscriptionStatus::ACTIVE, now()->addMonth());
         $growth = $this->subscribedUser('audit-growth-demo@flexpick.net', 'Audit Growth Demo', 'audit-growth-monthly', SubscriptionStatus::ACTIVE, now()->addMonth());
-        $scale = $this->subscribedUser('audit-scale-demo@flexpick.net', 'Audit Scale Demo', 'audit-scale-monthly', SubscriptionStatus::ACTIVE, now()->addMonth());
+        $scale = $this->subscribedUser('audit-agency-demo@flexpick.net', 'Audit Agency Demo', 'audit-agency-monthly', SubscriptionStatus::ACTIVE, now()->addMonth());
         $this->subscribedUser('audit-trial-demo@flexpick.net', 'Audit Trial Demo', 'audit-starter-monthly', SubscriptionStatus::ACTIVE, now()->addMonth(), trialEndsAt: now()->addWeek());
         $this->subscribedUser('audit-cancelled-demo@flexpick.net', 'Audit Cancelled Demo', 'audit-growth-monthly', SubscriptionStatus::CANCELED, now()->addWeeks(2));
         $this->subscribedUser('audit-expired-demo@flexpick.net', 'Audit Expired Demo', 'audit-starter-monthly', SubscriptionStatus::PAST_DUE, now()->subWeek());

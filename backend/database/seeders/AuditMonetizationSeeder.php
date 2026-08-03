@@ -10,56 +10,69 @@ use App\Models\Plan;
 use App\Models\Product;
 use Illuminate\Database\Seeder;
 
+/**
+ * Seeds the tiered catalog from config/pricing.php.
+ *
+ * Payment-provider identifiers are intentionally NOT seeded: SaaSykit creates
+ * provider products and prices on the fly at first checkout, so placeholder
+ * IDs would point at nonexistent Stripe objects and break test checkouts.
+ *
+ * Retired products are deactivated, never deleted — an unlock row still backs
+ * already-unlocked reports, and a plan with active subscriptions cannot be
+ * removed without orphaning them (spec §8.1).
+ */
 class AuditMonetizationSeeder extends Seeder
 {
-    /**
-     * Payment-provider identifiers are intentionally NOT seeded: SaaSykit
-     * creates provider products/prices on the fly at first checkout
-     * (e.g. StripeProvider::findOrCreateStripe*), so placeholder IDs would
-     * point at nonexistent Stripe objects and break test checkouts.
-     */
     public function run(): void
     {
-        $usd = Currency::where('code', 'USD')->firstOrFail();
+        $currency = Currency::where('code', config('pricing.currency'))->firstOrFail();
         $month = Interval::where('slug', 'month')->firstOrFail();
 
-        $unlock = OneTimeProduct::updateOrCreate(['slug' => 'audit-report-unlock'], [
-            'name' => 'Full audit report unlock',
-            'description' => 'Unlock every finding, recommendation, and the fix-first plan of one codebase audit report, including PDF export.',
-            'features' => [
-                ['feature' => 'All findings & recommendations'],
-                ['feature' => 'Fix-first action plan'],
-                ['feature' => 'PDF export'],
-            ],
-            'max_quantity' => 1,
-            'is_active' => true,
-            'is_visible' => true,
-        ]);
-        $unlock->prices()->updateOrCreate(['currency_id' => $usd->id], ['price' => 500]);
+        $this->seedTierProducts($currency);
+        $this->seedSubscriptions($currency, $month);
+        $this->retire();
+    }
 
-        $tiers = [
-            ['slug' => 'audit-starter', 'name' => 'Audit Starter', 'allowance' => 5, 'price' => 1000, 'is_popular' => false],
-            ['slug' => 'audit-growth', 'name' => 'Audit Growth', 'allowance' => 20, 'price' => 3000, 'is_popular' => true],
-            ['slug' => 'audit-scale', 'name' => 'Audit Scale', 'allowance' => 50, 'price' => 6000, 'is_popular' => false],
-        ];
-
-        foreach ($tiers as $tier) {
-            $product = Product::updateOrCreate(['slug' => $tier['slug']], [
+    private function seedTierProducts(Currency $currency): void
+    {
+        foreach (config('pricing.tiers') as $slug => $tier) {
+            $product = OneTimeProduct::updateOrCreate(['slug' => $slug], [
                 'name' => $tier['name'],
-                'description' => $tier['allowance'].' codebase analyses per month, fully detailed with PDF export.',
+                'description' => $tier['description'],
+                'features' => array_map(fn (string $f): array => ['feature' => $f], $tier['features']),
+                'max_quantity' => 1,
+                'is_active' => true,
+                'is_visible' => true,
+                'metadata' => ['audit_tier' => $tier['tier']],
+            ]);
+
+            $product->prices()->updateOrCreate(['currency_id' => $currency->id], ['price' => $tier['price']]);
+        }
+    }
+
+    private function seedSubscriptions(Currency $currency, Interval $month): void
+    {
+        foreach (config('pricing.subscriptions') as $slug => $subscription) {
+            $product = Product::updateOrCreate(['slug' => $slug], [
+                'name' => $subscription['name'],
+                'description' => $subscription['audit_analyses_per_month']
+                    .' automated analyses per month, with full reports and PDF export.',
                 'features' => [
-                    ['feature' => $tier['allowance'].' codebase analyses / month'],
+                    ['feature' => $subscription['audit_analyses_per_month'].' automated analyses / month'],
+                    ['feature' => $subscription['audit_deep_ai_credits'].' Deep AI review credits / month'],
                     ['feature' => 'Full detailed reports'],
-                    ['feature' => 'PDF export'],
                     ['feature' => 'Re-audit trends'],
                 ],
-                'is_popular' => $tier['is_popular'],
-                'metadata' => ['audit_analyses_per_month' => $tier['allowance']],
+                'is_popular' => $subscription['is_popular'],
+                'metadata' => [
+                    'audit_analyses_per_month' => $subscription['audit_analyses_per_month'],
+                    'audit_deep_ai_credits' => $subscription['audit_deep_ai_credits'],
+                ],
                 'is_default' => false,
             ]);
 
-            $plan = Plan::updateOrCreate(['slug' => $tier['slug'].'-monthly'], [
-                'name' => $tier['name'].' Monthly',
+            $plan = Plan::updateOrCreate(['slug' => $slug.'-monthly'], [
+                'name' => $subscription['name'].' Monthly',
                 'product_id' => $product->id,
                 'interval_id' => $month->id,
                 'interval_count' => 1,
@@ -69,7 +82,16 @@ class AuditMonetizationSeeder extends Seeder
                 'type' => PlanType::FLAT_RATE->value,
             ]);
 
-            $plan->prices()->updateOrCreate(['currency_id' => $usd->id], ['price' => $tier['price']]);
+            $plan->prices()->updateOrCreate(['currency_id' => $currency->id], ['price' => $subscription['price']]);
         }
+    }
+
+    private function retire(): void
+    {
+        OneTimeProduct::whereIn('slug', config('pricing.retired.one_time'))
+            ->update(['is_active' => false, 'is_visible' => false]);
+
+        Plan::whereIn('slug', config('pricing.retired.plans'))
+            ->update(['is_active' => false, 'is_visible' => false]);
     }
 }
