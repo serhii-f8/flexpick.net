@@ -2,6 +2,11 @@
 import Layout from '~/layouts/Layout.astro';
 import ContactModal from '~/components/widgets/ContactModal.astro';
 import { PRODUCT_APP } from 'flexpick:config';
+import pricing from '~/data/pricing.json';
+
+const automatedTier = pricing.tiers['audit-automated'];
+const starterPlan = pricing.subscriptions['audit-starter'];
+const enterprisePlan = pricing.subscriptions['audit-enterprise'];
 
 const structuredData = {
   '@context': 'https://schema.org',
@@ -832,11 +837,11 @@ const hotspots = [
             class="fp-card"
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015);"
           >
-            <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">02</span> · full-report/</p>
-            <h3 class="fp-card-title">Full report — $5</h3>
+            <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">02</span> · automated/</p>
+            <h3 class="fp-card-title">{automatedTier.name} — {automatedTier.price_display}</h3>
             <p class="fp-card-body">
-              Unlock the evidence behind every risk, a prioritized fix-first plan your team can start on today, and a
-              PDF you can share. One click from your report page.
+              Five static analyzers across security, duplication, and dependencies, with problems grouped and explained
+              — plus a prioritized fix-first plan and a PDF you can share. One click from your report page.
             </p>
           </div>
           <div
@@ -844,10 +849,10 @@ const hotspots = [
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015);"
           >
             <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">03</span> · monitor/</p>
-            <h3 class="fp-card-title">Track it — from $10/mo</h3>
+            <h3 class="fp-card-title">Track it — from {starterPlan.price_display}/mo</h3>
             <p class="fp-card-body">
               Re-audit on a schedule, watch your health score trend as you ship, and catch new risks before they
-              compound. Plans include 5 to 50 audits a month.
+              compound. Plans include {starterPlan.analyses_per_month} to {enterprisePlan.analyses_per_month} audits a month.
             </p>
           </div>
         </div>

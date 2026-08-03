@@ -1,0 +1,76 @@
+{
+    "_generated": "php artisan app:export-pricing \u2014 do not edit by hand",
+    "currency": "USD",
+    "tiers": {
+        "audit-automated": {
+            "name": "Automated Health Report",
+            "description": "A scanner-backed health report on one repository, with a prioritized fix-first plan.",
+            "price_cents": 4900,
+            "price_display": "$49",
+            "features": [
+                "Five static analyzers across security, duplication, and dependencies",
+                "Problems grouped and explained, not a raw lint dump",
+                "Prioritized fix-first plan",
+                "PDF export"
+            ]
+        },
+        "audit-deep-ai": {
+            "name": "Deep AI Code Review",
+            "description": "Everything in the Automated Health Report, plus AI review of your riskiest files.",
+            "price_cents": 19900,
+            "price_display": "$199",
+            "features": [
+                "Everything in the Automated Health Report",
+                "AI review of the 20-40 riskiest files",
+                "Findings bound to files, with evidence and effort sizing",
+                "PDF export"
+            ]
+        },
+        "audit-expert": {
+            "name": "Expert Audit",
+            "description": "Everything in the Deep AI Code Review, reviewed and signed off by a human auditor.",
+            "price_cents": 99900,
+            "price_display": "$999",
+            "features": [
+                "Everything in the Deep AI Code Review",
+                "Human expert review and sign-off",
+                "False positives removed, priorities adjusted",
+                "Remediation roadmap"
+            ]
+        }
+    },
+    "subscriptions": {
+        "audit-starter": {
+            "name": "Starter",
+            "price_cents": 5900,
+            "price_display": "$59",
+            "analyses_per_month": 5,
+            "deep_ai_credits": 0,
+            "is_popular": false
+        },
+        "audit-growth": {
+            "name": "Growth",
+            "price_cents": 14900,
+            "price_display": "$149",
+            "analyses_per_month": 20,
+            "deep_ai_credits": 1,
+            "is_popular": true
+        },
+        "audit-agency": {
+            "name": "Agency",
+            "price_cents": 49900,
+            "price_display": "$499",
+            "analyses_per_month": 75,
+            "deep_ai_credits": 4,
+            "is_popular": false
+        },
+        "audit-enterprise": {
+            "name": "Enterprise",
+            "price_cents": 150000,
+            "price_display": "$1,500",
+            "analyses_per_month": 250,
+            "deep_ai_credits": 15,
+            "is_popular": false
+        }
+    }
+}
