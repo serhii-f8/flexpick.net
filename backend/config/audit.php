@@ -65,6 +65,11 @@ return [
             'timeout' => 300,
             'rules_path' => resource_path('semgrep/flexpick'),
         ],
+        'scc' => [
+            'bin' => env('AUDIT_SCC_BIN', '/opt/flexpick/bin/scc'),
+            'version' => '3.5.0',
+            'timeout' => 60,
+        ],
     ],
 
     'findings' => [

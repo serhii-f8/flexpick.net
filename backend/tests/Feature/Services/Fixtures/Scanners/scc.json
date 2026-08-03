@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "PHP",
+    "Files": [
+      { "Location": "app/Http/Controllers/UserController.php", "Lines": 420, "Code": 350, "Complexity": 48 },
+      { "Location": "app/Models/User.php", "Lines": 180, "Code": 140, "Complexity": 12 }
+    ]
+  },
+  {
+    "Name": "JavaScript",
+    "Files": [
+      { "Location": "resources/js/app.js", "Lines": 90, "Code": 70, "Complexity": 4 }
+    ]
+  }
+]

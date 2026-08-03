@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\ClaudeAnalyzer;
 use App\Services\AuditReport\Scanners\GitleaksScanner;
+use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Scanners\SemgrepScanner;
 use App\Services\PaymentProviders\Creem\CreemProvider;
 use App\Services\PaymentProviders\LemonSqueezy\LemonSqueezyProvider;
@@ -58,6 +59,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind('audit.scanner.gitleaks', GitleaksScanner::class);
         $this->app->bind('audit.scanner.semgrep', SemgrepScanner::class);
+        $this->app->bind('audit.scanner.scc', SccScanner::class);
     }
 
     /**
