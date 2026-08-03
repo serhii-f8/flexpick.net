@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport\Scanners;
 
+use App\Services\AuditReport\Findings\Finding;
 use App\Services\AuditReport\Findings\Normalizers\SarifNormalizer;
 use App\Services\AuditReport\Findings\Severity;
 use Illuminate\Support\Facades\Process;
@@ -65,7 +66,7 @@ class SemgrepScanner implements Scanner
         }
     }
 
-    /** @return list<\App\Services\AuditReport\Findings\Finding> */
+    /** @return list<Finding> */
     public function normalize(array $sarif): array
     {
         return $this->normalizer->normalize(

@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Schedule;
+use Spatie\Health\Commands\RunHealthChecksCommand;
+use Spatie\Health\Commands\ScheduleCheckHeartbeatCommand;
 
 /*
 |--------------------------------------------------------------------------
@@ -42,9 +44,9 @@ Schedule::command('app:run-scheduled-audits')->dailyAt('06:00')->withoutOverlapp
 // silently block every health check for 24 hours — the exact silence this phase
 // exists to eliminate. Ten minutes bounds that to two ticks while still being
 // far longer than a healthy run.
-Schedule::command(\Spatie\Health\Commands\RunHealthChecksCommand::class)->everyFiveMinutes()->withoutOverlapping(10);
+Schedule::command(RunHealthChecksCommand::class)->everyFiveMinutes()->withoutOverlapping(10);
 
 Schedule::command('app:health-alerts')->everyFiveMinutes()->withoutOverlapping(10);
 
 // Must be last: it records that the scheduler itself ran (spec §18.3 O2).
-Schedule::command(\Spatie\Health\Commands\ScheduleCheckHeartbeatCommand::class)->everyMinute();
+Schedule::command(ScheduleCheckHeartbeatCommand::class)->everyMinute();

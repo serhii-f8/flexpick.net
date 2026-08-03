@@ -6,6 +6,7 @@ use App\Constants\AuditRequestStatus;
 use App\Health\Checks\OldestPendingAuditCheck;
 use App\Models\AuditRequest;
 use Carbon\Carbon;
+use Spatie\Health\Checks\Result;
 use Tests\Feature\FeatureTest;
 
 class OldestPendingAuditCheckTest extends FeatureTest
@@ -30,7 +31,7 @@ class OldestPendingAuditCheckTest extends FeatureTest
         parent::tearDown();
     }
 
-    private function runCheck(): \Spatie\Health\Checks\Result
+    private function runCheck(): Result
     {
         return (new OldestPendingAuditCheck)->run();
     }

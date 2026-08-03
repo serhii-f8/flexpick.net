@@ -18,7 +18,7 @@ class ReportPayloadTest extends FeatureTest
             ],
             'risks' => [
                 ['title' => 'No tests', 'impact' => 'high', 'evidence' => 'Test ratio 4%.',
-                 'recommendation' => 'Add characterization tests.'],
+                    'recommendation' => 'Add characterization tests.'],
             ],
             'fix_first_plan' => [
                 ['step' => 'Add tests to the checkout path', 'why' => 'Highest churn.', 'effort' => 'M'],

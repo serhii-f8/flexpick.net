@@ -33,7 +33,7 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->seedCatalog();
 
         foreach (['audit-starter' => 5900, 'audit-growth' => 14900,
-                  'audit-agency' => 49900, 'audit-enterprise' => 150000] as $slug => $cents) {
+            'audit-agency' => 49900, 'audit-enterprise' => 150000] as $slug => $cents) {
             $plan = Plan::where('slug', $slug.'-monthly')->first();
 
             $this->assertNotNull($plan, "Missing plan [{$slug}-monthly].");

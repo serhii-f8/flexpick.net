@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Constants\AuditTier;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Illuminate\Console\Command;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
@@ -101,7 +102,7 @@ class SmokeCommand extends Command
 
     private function migrationsAreCurrent(): bool
     {
-        /** @var \Illuminate\Database\Migrations\Migrator $migrator */
+        /** @var Migrator $migrator */
         $migrator = app('migrator');
 
         $paths = array_merge([database_path('migrations')], $migrator->paths());

@@ -1,5 +1,9 @@
 <?php
 
+use App\Support\Sentry\TokenScrubber;
+use Sentry\Event;
+use Sentry\EventHint;
+
 /**
  * Sentry Laravel SDK configuration file.
  *
@@ -61,7 +65,7 @@ return [
     // application. Anything Sentry captures beyond RepositoryCloner's own
     // redacted exception messages (breadcrumbs, context, framework-level
     // exceptions) must be scrubbed here before transmission.
-    'before_send' => fn (\Sentry\Event $event, ?\Sentry\EventHint $hint) => (new \App\Support\Sentry\TokenScrubber)($event, $hint),
+    'before_send' => fn (Event $event, ?EventHint $hint) => (new TokenScrubber)($event, $hint),
 
     // @see: https://docs.sentry.io/platforms/php/guides/laravel/configuration/options/#ignore_exceptions
     // 'ignore_exceptions' => [],

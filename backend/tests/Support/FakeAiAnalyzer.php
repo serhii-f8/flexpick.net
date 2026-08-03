@@ -4,13 +4,14 @@ namespace Tests\Support;
 
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\AnalysisResult;
+use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\AuditReport\Tiers\TierProfile;
 
 class FakeAiAnalyzer implements AiAnalyzer
 {
     public ?array $receivedMetrics = null;
 
-    /** @var list<\App\Services\AuditReport\Findings\FindingGroup>|null */
+    /** @var list<FindingGroup>|null */
     public ?array $receivedGroups = null;
 
     public ?string $receivedAdminContext = null;

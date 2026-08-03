@@ -195,7 +195,7 @@ task('provision:scanners', function () {
 
     // Semgrep — Python package; the only scanner needing a Python runtime
     run('apt-get install -y python3 python3-venv', env: ['DEBIAN_FRONTEND' => 'noninteractive']);
-    run("python3 -m venv /opt/flexpick/semgrep-venv");
+    run('python3 -m venv /opt/flexpick/semgrep-venv');
     // setuptools>=81 dropped pkg_resources, which semgrep's opentelemetry
     // dependency still imports without declaring — pin below 81 or semgrep
     // crashes with ModuleNotFoundError on invocation, not just on --version.

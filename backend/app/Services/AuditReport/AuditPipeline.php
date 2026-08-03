@@ -7,13 +7,15 @@ use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\AuditFindingGroup;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\Findings\FindingDeduplicator;
+use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\AuditReport\Findings\FindingGrouper;
 use App\Services\AuditReport\Scanners\RepoContext;
-use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Scanners\ScannerRunner;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
+use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use App\Services\AuditRequestService;
+use Sentry\State\Scope;
 
 class AuditPipeline
 {
@@ -39,7 +41,7 @@ class AuditPipeline
         ]);
         $auditRequest->appendPipelineLog('started', 'Analysis started');
 
-        \Sentry\configureScope(function (\Sentry\State\Scope $scope) use ($auditRequest): void {
+        \Sentry\configureScope(function (Scope $scope) use ($auditRequest): void {
             $scope->setTag('audit_request', (string) $auditRequest->uuid);
         });
 
@@ -126,7 +128,7 @@ class AuditPipeline
         }
     }
 
-    /** @param list<\App\Services\AuditReport\Findings\FindingGroup> $groups */
+    /** @param list<FindingGroup> $groups */
     private function persistGroups(AuditRequest $request, array $groups): void
     {
         $request->findingGroups()->delete();

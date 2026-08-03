@@ -27,9 +27,9 @@ class ScannerDegradationCheckTest extends FeatureTest
             'analysis_started_at' => now()->subMinutes(10),
             'scanner_runs' => [
                 ['name' => 'scc', 'version' => '3.5.0', 'wall_ms' => 100, 'finding_count' => 0,
-                 'outcome' => 'ok', 'reason' => null],
+                    'outcome' => 'ok', 'reason' => null],
                 ['name' => 'semgrep', 'version' => '1.99.0', 'wall_ms' => 5000, 'finding_count' => 0,
-                 'outcome' => $outcome, 'reason' => $outcome === 'ok' ? null : 'timeout'],
+                    'outcome' => $outcome, 'reason' => $outcome === 'ok' ? null : 'timeout'],
             ],
         ]);
     }
@@ -71,7 +71,7 @@ class ScannerDegradationCheckTest extends FeatureTest
             'tier' => 'automated',
             'analysis_started_at' => now()->subDays(3),
             'scanner_runs' => [['name' => 'semgrep', 'version' => '1', 'wall_ms' => 1,
-                                'finding_count' => 0, 'outcome' => 'timeout', 'reason' => 'timeout']],
+                'finding_count' => 0, 'outcome' => 'timeout', 'reason' => 'timeout']],
         ]);
 
         $this->assertSame(Status::ok()->value, app(ScannerDegradationCheck::class)->run()->status->value);

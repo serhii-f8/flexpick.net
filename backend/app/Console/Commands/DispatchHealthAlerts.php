@@ -158,12 +158,12 @@ class DispatchHealthAlerts extends Command
      * unreachable, return null so the caller treats this as "not yet alerted"
      * and sends.
      */
-    private function remember(string $key): ?\Illuminate\Support\Carbon
+    private function remember(string $key): ?Carbon
     {
         try {
             $value = Cache::get($key);
 
-            return $value === null ? null : \Illuminate\Support\Carbon::parse($value);
+            return $value === null ? null : Carbon::parse($value);
         } catch (Throwable) {
             return null;
         }

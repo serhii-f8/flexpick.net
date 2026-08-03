@@ -4,10 +4,10 @@ namespace Tests\Feature\Services;
 
 use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\AuditReport\Findings\Severity;
-use App\Services\AuditReport\ScoreCalculator;
 use App\Services\AuditReport\Scanners\ScannerOutcome;
 use App\Services\AuditReport\Scanners\ScannerRun;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
+use App\Services\AuditReport\ScoreCalculator;
 use Tests\Feature\FeatureTest;
 
 class ScoreCalculatorTest extends FeatureTest

@@ -13,8 +13,8 @@ namespace App\Services\AuditReport;
 final readonly class ScoreSet
 {
     /**
-     * @param  array<string, int>  $scores       measured dimensions plus `overall`
-     * @param  list<string>  $notMeasured        dimension names, sorted
+     * @param  array<string, int>  $scores  measured dimensions plus `overall`
+     * @param  list<string>  $notMeasured  dimension names, sorted
      */
     public function __construct(
         public array $scores,

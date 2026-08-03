@@ -8,7 +8,7 @@ use App\Services\AuditReport\Tiers\TierProfile;
 interface AiAnalyzer
 {
     /**
-     * @param  list<FindingGroup>  $groups              ranked, already capped to the tier's narrated_groups
+     * @param  list<FindingGroup>  $groups  ranked, already capped to the tier's narrated_groups
      * @param  list<array{path: string, content: string}>  $excerpts
      */
     public function analyze(

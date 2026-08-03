@@ -97,8 +97,16 @@ class ScannerRunnerTest extends FeatureTest
         $order = [];
 
         $runner = $this->runnerWith(
-            $this->fakeScanner('alpha', function () use (&$order) { $order[] = 'alpha'; return []; }),
-            $this->fakeScanner('beta', function () use (&$order) { $order[] = 'beta'; return []; }),
+            $this->fakeScanner('alpha', function () use (&$order) {
+                $order[] = 'alpha';
+
+                return [];
+            }),
+            $this->fakeScanner('beta', function () use (&$order) {
+                $order[] = 'beta';
+
+                return [];
+            }),
         );
 
         $runner->run(['alpha', 'beta'], $this->context());

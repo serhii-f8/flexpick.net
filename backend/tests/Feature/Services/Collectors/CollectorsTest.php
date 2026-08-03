@@ -83,7 +83,7 @@ class CollectorsTest extends FeatureTest
     public function test_every_collector_implements_the_interface(): void
     {
         foreach ([GitFactsCollector::class, ManifestCollector::class, ToolingCollector::class,
-                  HotspotCollector::class, ExcerptCollector::class] as $class) {
+            HotspotCollector::class, ExcerptCollector::class] as $class) {
             $this->assertInstanceOf(Collector::class, app($class));
         }
     }

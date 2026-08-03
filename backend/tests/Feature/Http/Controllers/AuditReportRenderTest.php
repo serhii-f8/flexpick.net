@@ -32,10 +32,10 @@ class AuditReportRenderTest extends FeatureTest
             'fix_first_plan' => [],
             'groups' => [
                 ['rule_family' => 'php.injection', 'directory' => 'app/Http',
-                 'severity' => 'high', 'count' => 37,
-                 'narrative' => ['what' => 'SQL by string interpolation.',
-                                 'affects' => 'Public controllers.',
-                                 'benefit' => 'Closes the main exfiltration route.']],
+                    'severity' => 'high', 'count' => 37,
+                    'narrative' => ['what' => 'SQL by string interpolation.',
+                        'affects' => 'Public controllers.',
+                        'benefit' => 'Closes the main exfiltration route.']],
             ],
         ], $overrides);
     }
@@ -82,7 +82,7 @@ class AuditReportRenderTest extends FeatureTest
             'payload' => [
                 'summary' => 'Legacy report.',
                 'scores' => ['structure' => 70, 'duplication' => 60, 'testing' => 40,
-                             'dependencies' => 80, 'security_hygiene' => 90, 'overall' => 68],
+                    'dependencies' => 80, 'security_hygiene' => 90, 'overall' => 68],
                 'risks' => [], 'fix_first_plan' => [],
             ],
         ]);
@@ -98,7 +98,7 @@ class AuditReportRenderTest extends FeatureTest
         $payload['groups'][] = ['rule_family' => 'duplication.clone', 'directory' => 'app',
             'severity' => 'medium', 'count' => 12,
             'narrative' => ['what' => 'Duplicated blocks.', 'affects' => 'Maintenance cost.',
-                            'benefit' => 'Cheaper changes.']];
+                'benefit' => 'Cheaper changes.']];
 
         $request = AuditRequest::factory()->create(['tier' => 'diagnostic']);
         $report = AuditReport::factory()->create([

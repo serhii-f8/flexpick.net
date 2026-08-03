@@ -4,13 +4,14 @@ namespace Tests\Feature\Services\Scanners;
 
 use App\Constants\AuditTier;
 use App\Services\AuditReport\Scanners\RepoContext;
+use App\Services\AuditReport\Scanners\SccInventory;
 use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Tests\Feature\FeatureTest;
 
 class SccScannerTest extends FeatureTest
 {
-    private function inventory(): \App\Services\AuditReport\Scanners\SccInventory
+    private function inventory(): SccInventory
     {
         $raw = json_decode(
             (string) file_get_contents(base_path('tests/Feature/Services/Fixtures/Scanners/scc.json')),

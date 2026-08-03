@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Services\Scanners;
 
+use App\Constants\AuditTier;
 use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\SemgrepScanner;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
-use App\Constants\AuditTier;
 use Illuminate\Support\Facades\Process;
 use Tests\Feature\FeatureTest;
 

@@ -21,9 +21,9 @@ class OsvScannerTest extends FeatureTest
             'vulnerable_count' => 2,
             'vulnerabilities' => [
                 ['package' => 'acme/parser', 'version' => '1.2.0', 'ecosystem' => 'Packagist',
-                 'vulns' => ['GHSA-aaaa', 'GHSA-bbbb']],
+                    'vulns' => ['GHSA-aaaa', 'GHSA-bbbb']],
                 ['package' => 'left-pad', 'version' => '0.1.0', 'ecosystem' => 'npm',
-                 'vulns' => ['GHSA-cccc']],
+                    'vulns' => ['GHSA-cccc']],
             ],
         ];
     }
