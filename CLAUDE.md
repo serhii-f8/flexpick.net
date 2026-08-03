@@ -65,10 +65,17 @@ php artisan horizon                  # Redis-backed queue worker/monitor
 php artisan test --compact                       # run tests (preferred)
 php artisan test --filter=TestName               # single test / filter
 vendor/bin/phpstan analyse                       # Larastan static analysis
-vendor/bin/pint --dirty --format agent           # format only changed files (run before finalizing)
+vendor/bin/pint --format agent                   # format (run before finalizing)
+vendor/bin/pint --test                           # CI's formatting gate — must be clean
 ```
 
-Deploy: `php dep deploy` (Deployer, see `backend/deploy.php`).
+**Do not use `pint --dirty` inside the dev container.** The backend bind-mount excludes `.git`,
+so Pint finds no dirty files and reports `passed` without checking anything. That vacuous gate is
+why 23 style issues accumulated before CI existed. Run plain `pint`, and verify with `pint --test`
+— the same command `.github/workflows/ci.yml` runs.
+
+Deploy: `php vendor/bin/dep deploy production` (or `staging`) — Deployer, see `backend/deploy.php`.
+CI: `.github/workflows/ci.yml` gates PRs; merges to `main` deploy staging automatically.
 
 The suite is **PHPUnit** (`^11`, classic `TestCase`-based classes under `backend/tests/`; there is no `Pest.php`). The Filament/Livewire test snippets in `backend/AGENTS.md` are written in Pest syntax from the Boost guidelines — translate them to PHPUnit before use, and create tests with `php artisan make:test --phpunit {name}`.
 

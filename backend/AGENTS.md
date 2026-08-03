@@ -369,7 +369,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 # Laravel Pint Code Formatter
 
-- If you have modified any PHP files, you must run `vendor/bin/pint --dirty --format agent` before finalizing changes to ensure your code matches the project's expected style.
+- If you have modified any PHP files, you must run `vendor/bin/pint --format agent` before finalizing changes to ensure your code matches the project's expected style, and confirm with `vendor/bin/pint --test`. Do **not** use `--dirty` inside the dev container: the bind-mount excludes `.git`, so Pint sees no dirty files and reports `passed` without checking anything.
 - Do not run `vendor/bin/pint --test --format agent`, simply run `vendor/bin/pint --format agent` to fix any formatting issues.
 
 === phpunit/core rules ===
