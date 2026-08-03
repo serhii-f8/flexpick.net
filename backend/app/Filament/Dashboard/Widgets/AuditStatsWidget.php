@@ -22,26 +22,35 @@ class AuditStatsWidget extends BaseWidget
         $entitlements = app(AuditEntitlementService::class);
 
         $allowance = $tenant !== null ? $entitlements->subscriptionAllowance($tenant) : 0;
+        $deepAiCredits = $tenant !== null ? $entitlements->deepAiCredits($tenant) : 0;
+        $stats = [];
 
         if ($allowance > 0) {
             $used = $entitlements->dashboardRunsUsedThisMonth($user);
             $remaining = $entitlements->remainingDashboardRuns($user, $tenant);
             $usagePercent = (int) round(min($used, $allowance) / $allowance * 100);
 
-            $quotaStat = Stat::make(__('Analyses remaining this month'), $remaining.' / '.$allowance)
+            $stats[] = Stat::make(__('Analyses remaining this month'), $remaining.' / '.$allowance)
                 ->description(__(':percent% of your plan used', ['percent' => $usagePercent]))
                 ->color($remaining > 0 ? 'success' : 'warning');
         } else {
             $limit = $entitlements->freeRunsLimit($user->email);
             $used = $entitlements->freeRunsUsed($user->email);
 
-            $quotaStat = Stat::make(__('Free audits remaining'), max(0, $limit - $used).' / '.$limit)
+            $stats[] = Stat::make(__('Free audits remaining'), max(0, $limit - $used).' / '.$limit)
                 ->description(__(':used of :limit free audits used', ['used' => $used, 'limit' => $limit]))
                 ->color($used < $limit ? 'success' : 'warning');
         }
 
+        if ($deepAiCredits > 0) {
+            $remainingDeepAi = $entitlements->remainingDeepAiRuns($user, $tenant);
+
+            $stats[] = Stat::make(__('Deep AI credits remaining this month'), $remainingDeepAi.' / '.$deepAiCredits)
+                ->color($remainingDeepAi > 0 ? 'success' : 'warning');
+        }
+
         return [
-            $quotaStat,
+            ...$stats,
             Stat::make(__('In progress'), AuditRequest::forUser($user)->whereIn('status', [
                 AuditRequestStatus::QUEUED->value,
                 AuditRequestStatus::ANALYZING->value,

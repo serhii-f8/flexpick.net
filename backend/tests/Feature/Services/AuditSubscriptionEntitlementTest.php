@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\AuditTier;
 use App\Constants\SubscriptionStatus;
 use App\Models\AuditRequest;
 use App\Models\Plan;
@@ -38,13 +39,78 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
 
-        AuditRequest::factory()->count(2)->dashboardSource()->create(['user_id' => $user->id]);
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'created_at' => now()->subMonths(2)]);
-        AuditRequest::factory()->create(['user_id' => $user->id]); // web source — doesn't count
+        AuditRequest::factory()->count(2)->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value]);
+        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value, 'created_at' => now()->subMonths(2)]);
+        AuditRequest::factory()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value]); // web source — doesn't count
 
         $service = app(AuditEntitlementService::class);
         $this->assertSame(2, $service->dashboardRunsUsedThisMonth($user));
         $this->assertSame(3, $service->remainingDashboardRuns($user, $tenant));
+    }
+
+    public function test_subscription_allowance_meters_automated_runs_only(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_analyses_per_month' => 5, 'audit_deep_ai_credits' => 2]);
+
+        // Three automated dashboard runs consume the allowance.
+        AuditRequest::factory()->count(3)->create([
+            'user_id' => $user->id, 'source' => 'dashboard',
+            'tier' => AuditTier::AUTOMATED->value, 'created_at' => now(),
+        ]);
+
+        // A diagnostic run must NOT consume the paid allowance.
+        AuditRequest::factory()->create([
+            'user_id' => $user->id, 'source' => 'dashboard',
+            'tier' => AuditTier::DIAGNOSTIC->value, 'created_at' => now(),
+        ]);
+
+        $this->assertSame(2, app(AuditEntitlementService::class)->remainingDashboardRuns($user, $tenant));
+    }
+
+    public function test_deep_ai_credits_are_metered_separately(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_analyses_per_month' => 5, 'audit_deep_ai_credits' => 2]);
+
+        AuditRequest::factory()->create([
+            'user_id' => $user->id, 'source' => 'dashboard',
+            'tier' => AuditTier::DEEP_AI->value, 'created_at' => now(),
+        ]);
+
+        $service = app(AuditEntitlementService::class);
+
+        $this->assertSame(2, $service->deepAiCredits($tenant));
+        $this->assertSame(1, $service->remainingDeepAiRuns($user, $tenant));
+        // A deep_ai run does not also consume an automated run.
+        $this->assertSame(5, $service->remainingDashboardRuns($user, $tenant));
+    }
+
+    public function test_runs_from_a_previous_month_do_not_count(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_analyses_per_month' => 5, 'audit_deep_ai_credits' => 0]);
+
+        AuditRequest::factory()->count(5)->create([
+            'user_id' => $user->id, 'source' => 'dashboard',
+            'tier' => AuditTier::AUTOMATED->value, 'created_at' => now()->subMonth(),
+        ]);
+
+        $this->assertSame(5, app(AuditEntitlementService::class)->remainingDashboardRuns($user, $tenant));
+    }
+
+    public function test_a_plan_without_deep_ai_credits_grants_none(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_analyses_per_month' => 5]);
+
+        $this->assertSame(0, app(AuditEntitlementService::class)->remainingDeepAiRuns($user, $tenant));
+    }
+
+    /** @return array{0: User, 1: Tenant} */
+    private function subscribedTenant(array $metadata): array
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, $metadata);
+
+        return [$user, $tenant];
     }
 
     private function createTenantFor(User $user): Tenant

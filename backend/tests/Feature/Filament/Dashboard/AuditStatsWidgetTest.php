@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament\Dashboard;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Constants\SubscriptionStatus;
 use App\Filament\Dashboard\Widgets\AuditStatsWidget;
 use App\Models\AuditRequest;
@@ -24,8 +25,8 @@ class AuditStatsWidgetTest extends FeatureTest
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
 
         // 2 dashboard runs this month; statuses: 1 in progress, 1 completed
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'status' => AuditRequestStatus::ANALYZING->value]);
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'status' => AuditRequestStatus::SENT->value]);
+        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::ANALYZING->value]);
+        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::SENT->value]);
         AuditRequest::factory()->create(['user_id' => $user->id, 'status' => AuditRequestStatus::FAILED->value, 'source' => 'web']);
 
         $this->actingAs($user);
@@ -56,6 +57,41 @@ class AuditStatsWidgetTest extends FeatureTest
             ->test(AuditStatsWidget::class)
             ->assertSee(__('Free audits remaining'))
             ->assertSee('2 / 3');
+    }
+
+    public function test_subscriber_with_deep_ai_credits_sees_a_separate_counter(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5, 'audit_deep_ai_credits' => 2]);
+
+        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::DEEP_AI->value, 'status' => AuditRequestStatus::SENT->value]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditStatsWidget::class)
+            ->assertSee(__('Deep AI credits remaining this month'))
+            ->assertSee('1 / 2')
+            // A deep_ai run does not also consume the automated allowance.
+            ->assertSee('5 / 5');
+    }
+
+    public function test_subscriber_without_deep_ai_credits_sees_no_counter(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditStatsWidget::class)
+            ->assertDontSee(__('Deep AI credits remaining this month'));
     }
 
     public function test_hidden_for_user_without_audits_or_allowance(): void
