@@ -32,12 +32,24 @@ class CollectorsTest extends FeatureTest
         file_put_contents($this->repo.'/composer.lock', '{}');
         file_put_contents($this->repo.'/.env.example', 'APP_KEY=');
         file_put_contents($this->repo.'/app/Service.php', str_repeat("<?php // line\n", 50));
+        file_put_contents($this->repo.'/churny.php', "<?php\n// v1 padding padding padding\n");
+        file_put_contents($this->repo.'/stable.php', "<?php\n// stable padding padding padding\n");
 
         exec('git -C '.escapeshellarg($this->repo).' init -q 2>&1');
         exec('git -C '.escapeshellarg($this->repo).' config user.email test@example.com');
         exec('git -C '.escapeshellarg($this->repo).' config user.name Test');
         exec('git -C '.escapeshellarg($this->repo).' add -A 2>&1');
         exec('git -C '.escapeshellarg($this->repo).' commit -q -m init 2>&1');
+
+        // Second commit, same author — still churns churny.php.
+        file_put_contents($this->repo.'/churny.php', "<?php\n// v2 padding padding padding\n");
+        exec('git -C '.escapeshellarg($this->repo).' commit -aqm c2 2>&1');
+
+        // Third commit, a different author — makes contributors() = 2.
+        exec('git -C '.escapeshellarg($this->repo).' config user.email b@example.com');
+        exec('git -C '.escapeshellarg($this->repo).' config user.name B');
+        file_put_contents($this->repo.'/churny.php', "<?php\n// v3 padding padding padding\n");
+        exec('git -C '.escapeshellarg($this->repo).' commit -aqm c3 2>&1');
     }
 
     protected function tearDown(): void
@@ -55,9 +67,13 @@ class CollectorsTest extends FeatureTest
         );
 
         $context->withInventory(new SccInventory(
-            files: [['path' => 'app/Service.php', 'loc' => 50, 'complexity' => 3]],
-            languages: ['PHP' => ['files' => 1, 'loc' => 50]],
-            totalLoc: 50,
+            files: [
+                ['path' => 'app/Service.php', 'loc' => 50, 'complexity' => 3],
+                ['path' => 'churny.php', 'loc' => 2, 'complexity' => 0],
+                ['path' => 'stable.php', 'loc' => 2, 'complexity' => 0],
+            ],
+            languages: ['PHP' => ['files' => 3, 'loc' => 54]],
+            totalLoc: 54,
             totalComplexity: 3,
         ));
 
@@ -77,8 +93,9 @@ class CollectorsTest extends FeatureTest
         $facts = app(GitFactsCollector::class)->collect($this->context());
 
         $this->assertArrayHasKey('default_branch', $facts);
-        $this->assertSame(1, $facts['contributors']);
-        $this->assertSame(1, $facts['commits_analyzed']);
+        $this->assertSame(3, $facts['commits_analyzed']);
+        $this->assertSame(2, $facts['contributors']);
+        $this->assertSame(67, $facts['top_contributor_pct']); // 2 of 3 commits
     }
 
     public function test_manifest_collector_counts_dependencies_and_detects_lockfiles(): void
@@ -118,10 +135,14 @@ class CollectorsTest extends FeatureTest
         $this->assertSame('app/Service.php', $excerpts[0]['path']);
     }
 
-    public function test_hotspot_collector_returns_an_array(): void
+    public function test_hotspot_collector_ranks_churned_files_above_stable_ones(): void
     {
-        // A single-commit repository has no file changed twice, so hotspots
-        // is legitimately empty — the shape is what matters here.
-        $this->assertIsArray(app(HotspotCollector::class)->collect($this->context()));
+        $hotspots = app(HotspotCollector::class)->collect($this->context());
+
+        $this->assertNotEmpty($hotspots);
+        $this->assertSame('churny.php', $hotspots[0]['path']);
+        $this->assertSame(3, $hotspots[0]['changes']);
+        // stable.php changed only once — below the >=2 threshold.
+        $this->assertArrayNotHasKey('stable.php', array_column($hotspots, 'changes', 'path'));
     }
 }

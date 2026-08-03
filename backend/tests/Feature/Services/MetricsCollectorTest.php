@@ -4,9 +4,9 @@ namespace Tests\Feature\Services;
 
 use App\Constants\AuditTier;
 use App\Services\AuditReport\MetricsCollector;
-use App\Services\AuditReport\Tiers\TierProfile;
+use App\Services\AuditReport\Scanners\RepoContext;
+use App\Services\AuditReport\Scanners\SccInventory;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
-use Illuminate\Support\Facades\File;
 use Tests\Feature\FeatureTest;
 
 class MetricsCollectorTest extends FeatureTest
@@ -16,108 +16,72 @@ class MetricsCollectorTest extends FeatureTest
     protected function setUp(): void
     {
         parent::setUp();
-        $this->repo = storage_path('framework/testing/metrics-fixture');
-        File::deleteDirectory($this->repo);
-        File::ensureDirectoryExists($this->repo.'/src');
-        File::ensureDirectoryExists($this->repo.'/tests');
-        File::ensureDirectoryExists($this->repo.'/vendor/lib');
-        File::ensureDirectoryExists($this->repo.'/.github/workflows');
 
-        File::put($this->repo.'/README.md', "# Fixture\n");
-        File::put($this->repo.'/src/a.php', "<?php\n".str_repeat("function f() { return 1; }\n", 30));
-        File::put($this->repo.'/src/b.php', "<?php\n".str_repeat("function f() { return 1; }\n", 30)); // duplicate of a.php
-        File::put($this->repo.'/src/c.js', "const key = 'x';\n".str_repeat("console.log(1);\n", 5));
-        File::put($this->repo.'/src/leak.php', "<?php\n\$key = 'AKIAIOSFODNN7EXAMPLE';\n");
-        File::put($this->repo.'/tests/aTest.php', "<?php\n// test\n");
-        File::put($this->repo.'/vendor/lib/ignored.php', "<?php\n// must be skipped\n");
-        File::put($this->repo.'/.github/workflows/ci.yml', "on: push\n");
-        File::put($this->repo.'/composer.json', json_encode([
-            'require' => ['php' => '^8.4', 'laravel/framework' => '^13.0'],
-            'require-dev' => ['phpunit/phpunit' => '^11.0'],
+        $this->repo = sys_get_temp_dir().'/metrics-collector-repo-'.bin2hex(random_bytes(6));
+        mkdir($this->repo.'/app', 0755, true);
+
+        file_put_contents($this->repo.'/composer.json', json_encode([
+            'require' => ['laravel/framework' => '^13.0'],
         ]));
+        file_put_contents($this->repo.'/app/Service.php', str_repeat("<?php // line\n", 50));
+
+        exec('git -C '.escapeshellarg($this->repo).' init -q 2>&1');
+        exec('git -C '.escapeshellarg($this->repo).' config user.email test@example.com');
+        exec('git -C '.escapeshellarg($this->repo).' config user.name Test');
+        exec('git -C '.escapeshellarg($this->repo).' add -A 2>&1');
+        exec('git -C '.escapeshellarg($this->repo).' commit -q -m init 2>&1');
     }
 
-    public function test_collects_expected_metrics(): void
+    protected function tearDown(): void
     {
-        $result = app(MetricsCollector::class)->collect($this->repo, $this->profile());
-        $metrics = $result['metrics'];
+        exec('rm -rf '.escapeshellarg($this->repo));
 
-        $this->assertArrayHasKey('php', $metrics['languages']);
-        $this->assertGreaterThan(0, $metrics['loc_total']);
-        $this->assertGreaterThan(20, $metrics['duplication_pct']); // a.php duplicates b.php
-        $this->assertSame(1, $metrics['test_files']);
-        $this->assertTrue($metrics['has_ci']);
-        $this->assertTrue($metrics['has_readme']);
-        $this->assertSame(2, $metrics['manifests']['composer.json']['dependencies']);
-        $this->assertSame(1, $metrics['manifests']['composer.json']['dev_dependencies']);
-        $this->assertGreaterThanOrEqual(1, $metrics['secret_findings']['aws_access_key']['count']);
-        $this->assertStringNotContainsString('AKIA', json_encode($metrics)); // never the value itself
+        parent::tearDown();
     }
 
-    public function test_excerpts_skip_vendor_and_respect_limits(): void
+    private function context(): RepoContext
     {
-        $result = app(MetricsCollector::class)->collect($this->repo, $this->profile());
+        $context = new RepoContext(
+            path: $this->repo,
+            tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+        );
 
-        $paths = array_column($result['excerpts'], 'path');
-        $this->assertNotEmpty($paths);
-        $this->assertLessThanOrEqual($this->profile()->excerptFiles, count($paths));
-        foreach ($paths as $path) {
-            $this->assertStringNotContainsString('vendor/', $path);
-        }
-        foreach ($result['excerpts'] as $excerpt) {
-            $this->assertLessThanOrEqual($this->profile()->excerptBytes, strlen($excerpt['content']));
-        }
+        $context->withInventory(new SccInventory(
+            files: [['path' => 'app/Service.php', 'loc' => 50, 'complexity' => 3]],
+            languages: ['PHP' => ['files' => 1, 'loc' => 50]],
+            totalLoc: 50,
+            totalComplexity: 3,
+        ));
+
+        return $context;
     }
 
-    public function test_detects_modern_provider_token_formats(): void
+    public function test_composes_collector_output_under_named_keys(): void
     {
-        $path = storage_path('framework/testing/secrets-'.uniqid());
-        File::ensureDirectoryExists($path);
-        File::put($path.'/config.js', implode("\n", [
-            'const gh = "ghp_'.str_repeat('a', 36).'";',
-            'const stripe = "sk_live_'.str_repeat('b', 24).'";',
-            'const anthropic = "sk-ant-'.str_repeat('c', 40).'";',
-            'const db = "postgres://admin:hunter2@db.internal:5432/app";',
-            'const slack = "xoxb-1234567890-abcdefghij";',
-        ]));
+        $collected = app(MetricsCollector::class)->collect($this->context());
+        $metrics = $collected['metrics'];
 
-        $metrics = app(MetricsCollector::class)->collect($path, $this->profile())['metrics'];
-        File::deleteDirectory($path);
-
-        $findings = $metrics['secret_findings'];
-        $this->assertArrayHasKey('github_token', $findings);
-        $this->assertArrayHasKey('stripe_live_key', $findings);
-        $this->assertArrayHasKey('anthropic_key', $findings);
-        $this->assertArrayHasKey('credentialed_url', $findings);
-        $this->assertArrayHasKey('slack_token', $findings);
+        $this->assertArrayHasKey('git', $metrics);
+        $this->assertArrayHasKey('manifests', $metrics);
+        $this->assertArrayHasKey('tooling', $metrics);
+        $this->assertArrayHasKey('hotspots', $metrics);
+        $this->assertArrayHasKey('files_total', $metrics);
+        $this->assertArrayHasKey('loc_total', $metrics);
     }
 
-    public function test_detects_engineering_tooling_from_manifests_and_files(): void
+    public function test_excerpts_are_returned_separately_from_metrics(): void
     {
-        $path = storage_path('framework/testing/tooling-'.uniqid());
-        File::ensureDirectoryExists($path);
-        File::put($path.'/package.json', json_encode([
-            'dependencies' => ['@sentry/node' => '^8.0.0'],
-            'devDependencies' => ['eslint' => '^9.0.0', 'prettier' => '^3.0.0', 'typescript' => '^5.0.0'],
-        ]));
-        File::put($path.'/.env.example', 'APP_KEY=');
-        File::put($path.'/Dockerfile', 'FROM node:22');
+        $collected = app(MetricsCollector::class)->collect($this->context());
 
-        $metrics = app(MetricsCollector::class)->collect($path, $this->profile())['metrics'];
-        File::deleteDirectory($path);
-
-        $this->assertSame([
-            'error_monitoring' => true,
-            'linter' => true,
-            'static_analysis' => true,
-            'formatter' => true,
-            'env_example' => true,
-            'dockerized' => true,
-        ], $metrics['tooling']);
+        $this->assertArrayNotHasKey('excerpts', $collected['metrics']);
+        $this->assertIsArray($collected['excerpts']);
     }
 
-    private function profile(): TierProfile
+    public function test_superseded_keys_are_gone(): void
     {
-        return app(TierProfileResolver::class)->for(AuditTier::AUTOMATED);
+        $metrics = app(MetricsCollector::class)->collect($this->context())['metrics'];
+
+        $this->assertArrayNotHasKey('secret_findings', $metrics);
+        $this->assertArrayNotHasKey('duplication_pct', $metrics);
     }
 }
