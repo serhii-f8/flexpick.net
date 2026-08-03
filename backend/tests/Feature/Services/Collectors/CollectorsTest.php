@@ -1,0 +1,127 @@
+<?php
+
+namespace Tests\Feature\Services\Collectors;
+
+use App\Constants\AuditTier;
+use App\Services\AuditReport\Collectors\Collector;
+use App\Services\AuditReport\Collectors\ExcerptCollector;
+use App\Services\AuditReport\Collectors\GitFactsCollector;
+use App\Services\AuditReport\Collectors\HotspotCollector;
+use App\Services\AuditReport\Collectors\ManifestCollector;
+use App\Services\AuditReport\Collectors\ToolingCollector;
+use App\Services\AuditReport\Scanners\RepoContext;
+use App\Services\AuditReport\Scanners\SccInventory;
+use App\Services\AuditReport\Tiers\TierProfileResolver;
+use Tests\Feature\FeatureTest;
+
+class CollectorsTest extends FeatureTest
+{
+    private string $repo;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->repo = sys_get_temp_dir().'/collector-repo-'.bin2hex(random_bytes(6));
+        mkdir($this->repo.'/app', 0755, true);
+
+        file_put_contents($this->repo.'/composer.json', json_encode([
+            'require' => ['laravel/framework' => '^13.0'],
+            'require-dev' => ['phpstan/phpstan' => '^2.0', 'laravel/pint' => '^1.0'],
+        ]));
+        file_put_contents($this->repo.'/composer.lock', '{}');
+        file_put_contents($this->repo.'/.env.example', 'APP_KEY=');
+        file_put_contents($this->repo.'/app/Service.php', str_repeat("<?php // line\n", 50));
+
+        exec('git -C '.escapeshellarg($this->repo).' init -q 2>&1');
+        exec('git -C '.escapeshellarg($this->repo).' config user.email test@example.com');
+        exec('git -C '.escapeshellarg($this->repo).' config user.name Test');
+        exec('git -C '.escapeshellarg($this->repo).' add -A 2>&1');
+        exec('git -C '.escapeshellarg($this->repo).' commit -q -m init 2>&1');
+    }
+
+    protected function tearDown(): void
+    {
+        exec('rm -rf '.escapeshellarg($this->repo));
+
+        parent::tearDown();
+    }
+
+    private function context(): RepoContext
+    {
+        $context = new RepoContext(
+            path: $this->repo,
+            tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+        );
+
+        $context->withInventory(new SccInventory(
+            files: [['path' => 'app/Service.php', 'loc' => 50, 'complexity' => 3]],
+            languages: ['PHP' => ['files' => 1, 'loc' => 50]],
+            totalLoc: 50,
+            totalComplexity: 3,
+        ));
+
+        return $context;
+    }
+
+    public function test_every_collector_implements_the_interface(): void
+    {
+        foreach ([GitFactsCollector::class, ManifestCollector::class, ToolingCollector::class,
+                  HotspotCollector::class, ExcerptCollector::class] as $class) {
+            $this->assertInstanceOf(Collector::class, app($class));
+        }
+    }
+
+    public function test_git_facts_collector_reports_branch_and_contributors(): void
+    {
+        $facts = app(GitFactsCollector::class)->collect($this->context());
+
+        $this->assertArrayHasKey('default_branch', $facts);
+        $this->assertSame(1, $facts['contributors']);
+        $this->assertSame(1, $facts['commits_analyzed']);
+    }
+
+    public function test_manifest_collector_counts_dependencies_and_detects_lockfiles(): void
+    {
+        $manifests = app(ManifestCollector::class)->collect($this->context());
+
+        $this->assertSame(1, $manifests['composer.json']['dependencies']);
+        $this->assertSame(2, $manifests['composer.json']['dev_dependencies']);
+        $this->assertTrue($manifests['composer.json']['lockfile']);
+    }
+
+    public function test_tooling_collector_detects_static_analysis_and_env_example(): void
+    {
+        $tooling = app(ToolingCollector::class)->collect($this->context());
+
+        $this->assertTrue($tooling['static_analysis']);
+        $this->assertTrue($tooling['linter']);
+        $this->assertTrue($tooling['env_example']);
+        $this->assertFalse($tooling['dockerized']);
+    }
+
+    public function test_excerpt_collector_respects_the_tier_budget(): void
+    {
+        config()->set('audit.tiers.automated.excerpt_files', 1);
+        config()->set('audit.tiers.automated.excerpt_bytes', 20);
+
+        $excerpts = app(ExcerptCollector::class)->collect($this->context())['excerpts'];
+
+        $this->assertCount(1, $excerpts);
+        $this->assertLessThanOrEqual(20, strlen($excerpts[0]['content']));
+    }
+
+    public function test_excerpt_collector_selects_from_the_scc_inventory(): void
+    {
+        $excerpts = app(ExcerptCollector::class)->collect($this->context())['excerpts'];
+
+        $this->assertSame('app/Service.php', $excerpts[0]['path']);
+    }
+
+    public function test_hotspot_collector_returns_an_array(): void
+    {
+        // A single-commit repository has no file changed twice, so hotspots
+        // is legitimately empty — the shape is what matters here.
+        $this->assertIsArray(app(HotspotCollector::class)->collect($this->context()));
+    }
+}

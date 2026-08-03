@@ -4,6 +4,12 @@ namespace App\Providers;
 
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\ClaudeAnalyzer;
+use App\Services\AuditReport\Collectors\ExcerptCollector;
+use App\Services\AuditReport\Collectors\GitFactsCollector;
+use App\Services\AuditReport\Collectors\HotspotCollector;
+use App\Services\AuditReport\Collectors\ManifestCollector;
+use App\Services\AuditReport\Collectors\ToolingCollector;
+use App\Services\AuditReport\MetricsCollector;
 use App\Services\AuditReport\Scanners\GitleaksScanner;
 use App\Services\AuditReport\Scanners\JscpdScanner;
 use App\Services\AuditReport\Scanners\OsvScanner;
@@ -64,6 +70,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind('audit.scanner.scc', SccScanner::class);
         $this->app->bind('audit.scanner.jscpd', JscpdScanner::class);
         $this->app->bind('audit.scanner.osv', OsvScanner::class);
+
+        $this->app->bind(MetricsCollector::class, fn ($app) => new MetricsCollector([
+            $app->make(GitFactsCollector::class),
+            $app->make(ManifestCollector::class),
+            $app->make(ToolingCollector::class),
+            $app->make(HotspotCollector::class),
+            $app->make(ExcerptCollector::class),
+        ]));
     }
 
     /**
