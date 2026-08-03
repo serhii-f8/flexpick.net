@@ -12,7 +12,8 @@ use Throwable;
 
 /**
  * Post-deploy gate (spec §14.4, PR8). Read-only and safe to re-run against
- * production: sends no email, runs no audit, writes nothing.
+ * any deployed environment: sends no email, runs no audit, writes nothing.
+ * The full assertion set runs everywhere except `local` and `testing`.
  */
 class SmokeCommand extends Command
 {
@@ -74,9 +75,14 @@ class SmokeCommand extends Command
         ];
     }
 
-    private function inProduction(): bool
+    /**
+     * Deployed environments — anything that is not a developer machine or the
+     * test runner — get the full assertion set. Staging must be gated exactly
+     * as strictly as production, or it certifies releases production rejects.
+     */
+    private function isDeployedEnvironment(): bool
     {
-        return config('app.env') === 'production';
+        return ! in_array(config('app.env'), ['local', 'testing'], true);
     }
 
     private function getReturnsOk(string $uri): bool
@@ -107,7 +113,7 @@ class SmokeCommand extends Command
 
     private function cachesAreWarm(): bool
     {
-        if (! $this->inProduction()) {
+        if (! $this->isDeployedEnvironment()) {
             return true;
         }
 
@@ -117,7 +123,7 @@ class SmokeCommand extends Command
 
     private function horizonIsRunning(): bool
     {
-        if (! $this->inProduction()) {
+        if (! $this->isDeployedEnvironment()) {
             return true;
         }
 
@@ -128,7 +134,7 @@ class SmokeCommand extends Command
 
     private function mailTransportIsUsable(): bool
     {
-        if (! $this->inProduction()) {
+        if (! $this->isDeployedEnvironment()) {
             return true;
         }
 
@@ -141,7 +147,7 @@ class SmokeCommand extends Command
      */
     private function publicPageRenders(): bool
     {
-        if (! $this->inProduction()) {
+        if (! $this->isDeployedEnvironment()) {
             return true;
         }
 

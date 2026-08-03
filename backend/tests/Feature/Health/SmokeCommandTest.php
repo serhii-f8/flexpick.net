@@ -77,6 +77,24 @@ class SmokeCommandTest extends FeatureTest
         $this->artisan('app:smoke')->assertSuccessful();
     }
 
+    public function test_mail_transport_assertion_is_enforced_on_staging(): void
+    {
+        config()->set('app.env', 'staging');
+        config()->set('mail.default', 'log');
+
+        $this->artisan('app:smoke')
+            ->expectsOutputToContain('mail transport')
+            ->assertFailed();
+    }
+
+    public function test_mail_transport_assertion_is_skipped_locally(): void
+    {
+        config()->set('app.env', 'local');
+        config()->set('mail.default', 'log');
+
+        $this->artisan('app:smoke')->assertSuccessful();
+    }
+
     public function test_fails_in_production_when_configuration_is_not_cached(): void
     {
         config()->set('app.env', 'production');
