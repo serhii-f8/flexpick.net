@@ -63,6 +63,9 @@ return [
 
         'postmark' => [
             'transport' => 'postmark',
+            // Separate streams per environment so staging's live-delivery
+            // proof (PR9) cannot affect production's sending reputation.
+            'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),
             // 'client' => [
             //     'timeout' => 5,
             // ],
