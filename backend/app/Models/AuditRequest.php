@@ -20,6 +20,7 @@ class AuditRequest extends Model
         'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'tier', 'user_id', 'prepaid',
         'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
+        'risk_files', 'deep_review_input_tokens', 'deep_review_output_tokens', 'deep_review_ms',
     ];
 
     protected $casts = [
@@ -39,6 +40,10 @@ class AuditRequest extends Model
         'ai_output_tokens' => 'integer',
         'scanner_ms' => 'integer',
         'repo_size_kb' => 'integer',
+        'risk_files' => 'array',
+        'deep_review_input_tokens' => 'integer',
+        'deep_review_output_tokens' => 'integer',
+        'deep_review_ms' => 'integer',
     ];
 
     /**
