@@ -201,13 +201,14 @@ class RiskFileSelector
         DeepReviewProfile $profile,
         int $candidatesConsidered,
     ): RiskFileSelection {
-        $files = [];
-        $estimated = 0;
+        $available = max(0, $profile->inputTokenBudget - (int) config('audit.deep_review.overhead_tokens'));
 
-        foreach ($ranked as $index => $path) {
-            $content = (string) file_get_contents($context->path.'/'.$path, length: $profile->fileBytes);
-            $tokens = $this->estimateTokens(strlen($content));
-            $estimated += $tokens;
+        [$kept, $bytesUsed, $estimated] = $this->fit($context, $ranked, $profile, $available);
+
+        $files = [];
+
+        foreach ($kept as $index => $path) {
+            $content = $this->read($context, $path, $bytesUsed);
 
             $files[] = new SelectedFile(
                 path: $path,
@@ -219,20 +220,62 @@ class RiskFileSelector
                     'sensitive' => ['raw' => $raw[$path]['sensitive'], 'normalized' => $normalized['sensitive'][$path]],
                 ],
                 content: $content,
-                estimatedTokens: $tokens,
+                estimatedTokens: $this->estimateTokens(strlen($content)),
             );
         }
 
         return new RiskFileSelection(
             files: $files,
             candidatesConsidered: $candidatesConsidered,
-            selectedBeforeBudget: count($files),
-            truncated: false,
+            selectedBeforeBudget: count($ranked),
+            truncated: count($files) < count($ranked),
             belowFloor: count($files) < $profile->minFiles,
             estimatedInputTokens: $estimated + (int) config('audit.deep_review.overhead_tokens'),
-            fileBytesUsed: $profile->fileBytes,
+            fileBytesUsed: $bytesUsed,
             selectionVersion: (int) config('audit.deep_review.selection_version'),
         );
+    }
+
+    /**
+     * Fit the ranked list into the budget.
+     *
+     * Breadth beats depth: when the floor cannot be met at full per-file
+     * depth, the cap shrinks toward min_file_bytes before any file is dropped,
+     * because cross-module reasoning is the tier's differentiator and needs to
+     * see many modules. Only when the floor is unreachable even at the minimum
+     * cap does the list go short.
+     *
+     * @param  list<string>  $ranked
+     * @return array{0: list<string>, 1: int, 2: int}
+     */
+    private function fit(RepoContext $context, array $ranked, DeepReviewProfile $profile, int $available): array
+    {
+        foreach ([$profile->fileBytes, $profile->minFileBytes] as $cap) {
+            $kept = [];
+            $estimated = 0;
+
+            foreach ($ranked as $path) {
+                $tokens = $this->estimateTokens(strlen($this->read($context, $path, $cap)));
+
+                if ($estimated + $tokens > $available && $kept !== []) {
+                    break;
+                }
+
+                $kept[] = $path;
+                $estimated += $tokens;
+            }
+
+            if (count($kept) >= min($profile->minFiles, count($ranked)) || $cap === $profile->minFileBytes) {
+                return [$kept, $cap, $estimated];
+            }
+        }
+
+        return [[], $profile->minFileBytes, 0];
+    }
+
+    private function read(RepoContext $context, string $path, int $bytes): string
+    {
+        return (string) file_get_contents($context->path.'/'.$path, length: $bytes);
     }
 
     public function estimateTokens(int $bytes): int
