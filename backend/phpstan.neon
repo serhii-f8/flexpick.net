@@ -1,5 +1,10 @@
 includes:
     - vendor/larastan/larastan/extension.neon
+    # Q21 / spec §18.2 T6. The 418 pre-existing level-3 errors are frozen so the
+    # gate fails on new ones only. Never regenerate to clear a fresh error --
+    # fix the error, or the baseline stops meaning anything. Shrinking it as
+    # errors are genuinely fixed is the intended direction.
+    - phpstan-baseline.neon
 
 parameters:
 
