@@ -66,7 +66,7 @@ class ReportPayloadTest extends FeatureTest
 
     public function test_version_defaults_to_the_current_contract(): void
     {
-        $this->assertSame(2, ReportPayload::VERSION);
+        $this->assertSame(3, ReportPayload::VERSION);
         $this->assertIsArray(ReportPayload::validate($this->v2Payload()));
     }
 
@@ -125,5 +125,107 @@ class ReportPayloadTest extends FeatureTest
         $this->expectException(AiAnalysisException::class);
 
         ReportPayload::validate($payload, 2);
+    }
+
+    private function v3Payload(array $overrides = []): array
+    {
+        return array_merge([
+            'summary' => 'A summary.',
+            'scores' => ['overall' => 50],
+            'risks' => [],
+            'fix_first_plan' => [],
+            'groups' => [],
+        ], $overrides);
+    }
+
+    private function fileFinding(array $overrides = []): array
+    {
+        return array_merge([
+            'path' => 'app/Auth/Guard.php',
+            'line' => 42,
+            'title' => 'Authorization check can be bypassed',
+            'severity' => 'critical',
+            'category' => 'authorization',
+            'evidence' => 'The guard returns true when the role is null.',
+            'recommendation' => 'Deny by default.',
+            'effort' => 'M',
+            'related_paths' => ['app/Services/Billing.php'],
+        ], $overrides);
+    }
+
+    public function test_version_is_three(): void
+    {
+        $this->assertSame(3, ReportPayload::VERSION);
+    }
+
+    public function test_v3_accepts_a_payload_with_no_deep_section(): void
+    {
+        // Degradation must produce a VALID payload, not a rejected one.
+        $payload = $this->v3Payload();
+
+        $this->assertSame($payload, ReportPayload::validate($payload, 3));
+    }
+
+    public function test_v3_accepts_file_findings_and_deep_review_metadata(): void
+    {
+        $payload = $this->v3Payload([
+            'file_findings' => [$this->fileFinding()],
+            'deep_review' => [
+                'files_selected' => 40,
+                'files_reviewed' => 28,
+                'truncated' => true,
+                'selection_version' => 1,
+                'degraded' => false,
+            ],
+        ]);
+
+        $this->assertSame($payload, ReportPayload::validate($payload, 3));
+    }
+
+    public function test_v3_rejects_a_malformed_file_finding(): void
+    {
+        foreach ([
+            ['path' => null],
+            ['title' => null],
+            ['severity' => 'catastrophic'],
+            ['category' => 'vibes'],
+            ['evidence' => null],
+            ['recommendation' => null],
+            ['effort' => 'XL'],
+            ['related_paths' => 'app/Foo.php'],
+        ] as $override) {
+            try {
+                ReportPayload::validate(
+                    $this->v3Payload(['file_findings' => [$this->fileFinding($override)]]),
+                    3,
+                );
+                $this->fail('Expected rejection for '.json_encode($override));
+            } catch (AiAnalysisException $e) {
+                $this->assertStringContainsString('file finding', $e->getMessage());
+            }
+        }
+    }
+
+    public function test_v3_rejects_malformed_deep_review_metadata(): void
+    {
+        $this->expectException(AiAnalysisException::class);
+
+        ReportPayload::validate(
+            $this->v3Payload(['deep_review' => ['files_reviewed' => 'twenty']]),
+            3,
+        );
+    }
+
+    public function test_v1_and_v2_payloads_still_validate(): void
+    {
+        // Stored reports depend on this; AuditReport rows carry their own
+        // payload_schema_version and are validated against it on view.
+        $v1 = $this->v3Payload(['scores' => [
+            'structure' => 50, 'duplication' => 50, 'testing' => 50,
+            'dependencies' => 50, 'security_hygiene' => 50, 'overall' => 50,
+        ]]);
+
+        $this->assertSame($v1, ReportPayload::validate($v1, 1));
+        $this->assertSame($this->v3Payload(), ReportPayload::validate($this->v3Payload(), 2));
     }
 }

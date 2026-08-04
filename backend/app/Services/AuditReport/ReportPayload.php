@@ -14,11 +14,15 @@ use App\Exceptions\AiAnalysisException;
 class ReportPayload
 {
     /** Bump when the payload contract changes. */
-    public const VERSION = 2;
+    public const VERSION = 3;
 
     private const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
     private const V1_SCORES = ['structure', 'duplication', 'testing', 'dependencies', 'security_hygiene', 'overall'];
+
+    private const FINDING_CATEGORIES = ['business_logic', 'authorization', 'architecture', 'security'];
+
+    private const EFFORTS = ['S', 'M', 'L'];
 
     public static function validate(mixed $payload, ?int $version = null): array
     {
@@ -33,6 +37,7 @@ class ReportPayload
         return match ($version) {
             1 => self::validateV1($payload),
             2 => self::validateV2($payload),
+            3 => self::validateV3($payload),
             default => throw new AiAnalysisException("Unknown payload schema version: {$version}"),
         };
     }
@@ -115,5 +120,70 @@ class ReportPayload
         }
 
         return $payload;
+    }
+
+    private static function validateV3(array $payload): array
+    {
+        $payload = self::validateV2($payload);
+
+        // Both deep keys are OPTIONAL by design. The validator is context-free
+        // and must not learn about tiers — and degradation has to yield a
+        // VALID payload with file_findings absent (spec D1).
+        foreach ($payload['file_findings'] ?? [] as $finding) {
+            self::validateFileFinding($finding);
+        }
+
+        if (array_key_exists('deep_review', $payload)) {
+            self::validateDeepReviewMeta($payload['deep_review']);
+        }
+
+        return $payload;
+    }
+
+    private static function validateFileFinding(mixed $finding): void
+    {
+        if (! is_array($finding)
+            || ! is_string($finding['path'] ?? null)
+            || ! is_string($finding['title'] ?? null)
+            || ! is_string($finding['evidence'] ?? null)
+            || ! is_string($finding['recommendation'] ?? null)
+            || ! in_array($finding['severity'] ?? null, self::SEVERITIES, true)
+            || ! in_array($finding['category'] ?? null, self::FINDING_CATEGORIES, true)
+            || ! in_array($finding['effort'] ?? null, self::EFFORTS, true)) {
+            throw new AiAnalysisException('Malformed file finding entry');
+        }
+
+        if (array_key_exists('line', $finding) && $finding['line'] !== null && ! is_int($finding['line'])) {
+            throw new AiAnalysisException('Malformed file finding entry: line');
+        }
+
+        if (! is_array($finding['related_paths'] ?? [])) {
+            throw new AiAnalysisException('Malformed file finding entry: related_paths');
+        }
+
+        foreach ($finding['related_paths'] ?? [] as $related) {
+            if (! is_string($related)) {
+                throw new AiAnalysisException('Malformed file finding entry: related_paths');
+            }
+        }
+    }
+
+    private static function validateDeepReviewMeta(mixed $meta): void
+    {
+        if (! is_array($meta)) {
+            throw new AiAnalysisException('Malformed deep_review metadata');
+        }
+
+        foreach (['files_selected', 'files_reviewed', 'selection_version'] as $key) {
+            if (array_key_exists($key, $meta) && ! is_int($meta[$key])) {
+                throw new AiAnalysisException("Malformed deep_review metadata: {$key}");
+            }
+        }
+
+        foreach (['truncated', 'degraded'] as $key) {
+            if (array_key_exists($key, $meta) && ! is_bool($meta[$key])) {
+                throw new AiAnalysisException("Malformed deep_review metadata: {$key}");
+            }
+        }
     }
 }
