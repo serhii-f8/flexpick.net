@@ -7,7 +7,13 @@ use App\Models\User;
 use Database\Seeders\Testing\TestingDatabaseSeeder;
 use Tests\TestCase;
 
-class FeatureTest extends TestCase
+/**
+ * Base class for the feature suite — abstract so PHPUnit does not collect it as
+ * a test class of its own. Its filename matches the `*Test.php` suffix, and a
+ * concrete class with no test methods is a test-runner warning, which PHPUnit 11
+ * reports through a non-zero exit code and would turn CI red on every run.
+ */
+abstract class FeatureTest extends TestCase
 {
     protected static bool $setUpHasRunOnce = false;
 

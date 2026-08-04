@@ -12,6 +12,10 @@
         </testsuite>
         <testsuite name="Feature">
             <directory suffix="Test.php">./tests/Feature</directory>
+            <!-- The shared base class, not a test class. Its name matches the
+                 suffix, so without this PHPUnit collects it and emits a test
+                 runner warning, which is a non-zero exit code in PHPUnit 11. -->
+            <exclude>./tests/Feature/FeatureTest.php</exclude>
         </testsuite>
     </testsuites>
     <source>

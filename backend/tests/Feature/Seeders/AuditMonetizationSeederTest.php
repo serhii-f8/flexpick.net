@@ -73,14 +73,26 @@ class AuditMonetizationSeederTest extends FeatureTest
 
     public function test_legacy_subscription_plans_are_deactivated_not_deleted(): void
     {
+        // Scale is the one plan the new grid orphans (config('pricing.retired.plans')).
+        // The row must survive so existing subscriptions keep resolving their plan.
+        // Created here rather than guarded on existence: a conditional assertion
+        // silently degrades to no assertion at all when the fixture stops matching.
+        foreach (config('pricing.retired.plans') as $slug) {
+            Plan::factory()->create([
+                'slug' => $slug,
+                'is_active' => true,
+                'is_visible' => true,
+            ]);
+        }
+
         $this->seedCatalog();
 
-        foreach (['audit-scale-monthly'] as $slug) {
+        foreach (config('pricing.retired.plans') as $slug) {
             $plan = Plan::where('slug', $slug)->first();
 
-            if ($plan !== null) {
-                $this->assertFalse((bool) $plan->is_active);
-            }
+            $this->assertNotNull($plan, "The retired plan [{$slug}] must survive to back existing subscriptions.");
+            $this->assertFalse((bool) $plan->is_active);
+            $this->assertFalse((bool) $plan->is_visible);
         }
     }
 
