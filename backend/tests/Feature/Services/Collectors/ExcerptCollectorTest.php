@@ -77,4 +77,23 @@ class ExcerptCollectorTest extends FeatureTest
     {
         $this->assertContains('app/User.php', $this->paths($this->context()));
     }
+
+    /**
+     * Proves the loop-restructure, not just the filter. A naive
+     * slice-then-filter implementation — array_slice($files, 0,
+     * excerptFiles) followed by an exclusion check inside the loop — would
+     * slice to ['.env', 'app/Legacy.php'] for a budget of 2, exclude '.env',
+     * and return only 1 excerpt: the excluded file's slot would be dropped,
+     * not backfilled. Breaking on the collected count instead keeps walking
+     * the inventory past the excluded file until the budget is actually met.
+     */
+    public function test_excluded_files_slot_is_backfilled_not_dropped(): void
+    {
+        config()->set('audit.tiers.automated.excerpt_files', 2);
+
+        $paths = $this->paths($this->context());
+
+        $this->assertCount(2, $paths);
+        $this->assertSame(['app/Legacy.php', 'app/User.php'], $paths);
+    }
 }
