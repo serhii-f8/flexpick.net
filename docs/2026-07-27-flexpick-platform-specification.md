@@ -2220,14 +2220,19 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 
 **[R]** Every value below must live in exactly one configuration entry and be read from there by backend logic, operator interfaces, and marketing copy alike. The figures shown are the specified defaults.
 
-**Pricing note (D2, 2026-08-01).** The pricing rows below are the *currently implemented* seed values. They are superseded as targets by the tier pricing in §5.12 — Automated $49, Deep AI $199, Expert from $999; subscriptions Starter $59 / Growth $149 / Agency $499 / Enterprise from $1,500 — which lands with the Phase 11 catalog rework and is **[Q]** subject to cost-per-audit validation (Q5). The fate of the legacy $5 unlock is Q32.
+**Pricing note (D2, revised 2026-08-04).** The §5.12 tier pricing **has landed** with the Phase 11 catalog rework; the rows below now describe the implemented catalog, not the pre-D2 one. Every figure lives in `backend/config/pricing.php` and nowhere else — `AuditMonetizationSeeder` seeds from it, `app:export-pricing` generates the marketing site's `pricing.json` from it, and the *Pricing drift* workflow fails a pull request where the two disagree. Prices remain **[Q]** subject to cost-per-audit validation on the first 20–30 paid runs (Q5). Q32 is resolved: the legacy $5 unlock is retired, its product row deactivated rather than deleted so existing unlocks keep rendering.
 
 | Domain | Value |
 | --- | --- |
 | Free allowance | 3 runs per email address, lifetime, plus per-user bonus |
-| One-time unlock | $5, unlocks one existing report only *(legacy — see Q32)* |
-| Prepaid single run | $5, same product, produces an unlocked report *(legacy — see Q32)* |
-| Subscription tiers | $10 / 5 analyses, $30 / 20, $60 / 50 — per month *(superseded by §5.12 grid at Phase 11)* |
+| Automated Health Report | $49 one-time — tier `automated` |
+| Deep AI Code Review | $199 one-time — tier `deep_ai` |
+| Expert Audit | $999 one-time, "from" pricing — tier `expert` |
+| Subscription grid | Starter $59 / 5 analyses / 0 Deep AI credits; Growth $149 / 20 / 1; Agency $499 / 75 / 4; Enterprise $1,500 / 250 / 15 — per month |
+| Subscription metering | Automated-tier dashboard runs consume `audit_analyses_per_month`; Deep AI runs consume `audit_deep_ai_credits`. Both read from plan product metadata |
+| One-time unlock | $5, unlocks one existing report only — **retired (Q32)**, row deactivated, existing unlocks grandfathered |
+| Prepaid single run | $5, same product — **retired (Q32)**, same grandfathering |
+| Retired subscription plan | `audit-scale-monthly` — the one plan the new grid orphans; deactivated, never deleted |
 | Verification link lifetime | 48 hours |
 | Unverified purge | 7 days |
 | Report link lifetime | 30 days |
@@ -2236,8 +2241,13 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 | Preflight timeout | 30 seconds |
 | Clone depth | 200 commits |
 | Maximum repository size | 500 MB |
-| Maximum excerpt files | 50 |
-| Maximum excerpt bytes | 6,000 per file |
+| Maximum excerpt files | Per tier (`audit.tiers.*.excerpt_files`) — diagnostic 15, automated / deep AI / expert 50 |
+| Maximum excerpt bytes | Per tier (`audit.tiers.*.excerpt_bytes`) — diagnostic 3,000, all paid tiers 6,000 per file |
+| Per-tier AI token budget | diagnostic 4,000; automated / deep AI / expert 16,000 |
+| Per-tier narrated groups | diagnostic 2; automated / deep AI / expert 12 |
+| Per-tier scanner set | diagnostic scc + Gitleaks + OSV; every paid tier adds jscpd + Semgrep. Deep AI and expert compose identically to automated until Phases 12–13 |
+| Scanner timeouts | scc 60s, Gitleaks 120s, jscpd 180s, Semgrep 300s — per tool, and a tool that fails or times out contributes no findings and never fails the run |
+| Findings grouping | 20 groups maximum, 8 examples per group, directory depth 2 |
 | Benchmark minimum sample | 20 completed reports |
 | Pipeline job timeout | 900 seconds |
 | Pipeline attempts | 3, with increasing backoff |

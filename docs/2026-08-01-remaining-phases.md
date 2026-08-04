@@ -10,15 +10,21 @@ Every item below was checked against the working tree on branch `growth-retentio
 
 ## 0. Where the system actually is
 
+The table below was written on 2026-08-01 and is re-stated as of **2026-08-04**.
+
 | | State |
 | --- | --- |
-| Spec Phases 1–8 | Implemented, reviewed, fix-waved on `growth-retention` (123 commits ahead of `main`, never merged) |
-| Phase 8 live path | Code complete, **never exercised against a real transport** — and D1 now deletes the platform it was built on |
-| Phase 9 | **Zero implementation.** No error tracking package, no health-check route, no `.github/`, no smoke gate in `deploy.php` — all verified absent |
-| Phases 10–13 | Not started. No `tier` attribute on `AuditRequest`, no scanner harness, no findings model, no `expert_review` status — verified absent |
-| Last known gate state | 587 tests / 1611 assertions passing; PHPStan level 3, 416 accepted errors, no frozen baseline file |
+| Spec Phases 1–8 | Implemented, reviewed, fix-waved on `growth-retention` (**202 commits** ahead of `main`, still never merged) |
+| Phase 8 live path | Code complete, **still never exercised against a real transport**. D1 deleted the platform it was built on; Postmark is configured but unproven |
+| Phase 9A-1 | Complete — Sentry/Bugsink SDK, health checks, three custom checks, band-aware alerting, `app:smoke` |
+| Phase 9A-2 | **In-repo enablers complete**; the runbook is written and **not yet executed**. No staging server, no production deploy, no proven alert delivery |
+| Phase 10 | Complete |
+| Phase 11 | Complete — tier attribute, five-scanner harness, findings model with dedup and grouping, versioned scores, cost telemetry, reworked catalog |
+| Phases 12–13 | Not started. No risk-file selection, no `expert_review` status, no operator review queue — verified absent 2026-08-04 |
+| Gate state | 839 tests / 2091 assertions passing, exit 0; PHPStan level 3 with 418 errors frozen in `backend/phpstan-baseline.neon`; Pint clean across 926 files |
 
-Everything below is what remains.
+Everything below is what remains. **The single largest gap is no longer code** — it is that
+nothing in Phase 9A-2 has met real infrastructure.
 
 ---
 
@@ -93,7 +99,7 @@ until then is "not verified".
   `OldestPendingAuditCheck` on oldest-pending age and stranded `analyzing` runs (§18.5 SC1).
 - [x] **Scheduler-missed alert** (§18.3 O2) — `ScheduleCheck` heartbeat, plus the staleness arm on
   `/health` so a dead scheduler is audible to the off-box monitor.
-- [ ] **Deploy automation with a post-release smoke gate and a documented, rehearsed rollback** (Q22, PR8, §18.3 O8). `backend/deploy.php` has no smoke or rollback step today; no `.github/workflows` exists at all.
+- [ ] **Deploy automation with a post-release smoke gate and a documented, rehearsed rollback** (Q22, PR8, §18.3 O8). *Wiring exists as of 9A-2* — `backend/deploy.php` carries `deploy:smoke` and `deploy:sentry-release`, Deployer's `rollback` is available, and `.github/workflows/` holds `ci.yml`, `deploy-staging.yml`, `pricing-drift.yml`. Unticked because **rehearsed** is the requirement: no deploy has run and no rollback has been performed.
 - [ ] **Staging environment** (Q10, PR9) — the spec's "largest infrastructure gap" (§18.3 O6). Provider checkout, live email delivery, and credentialed cross-origin session probing cannot be verified anywhere else.
 - [ ] **Production mail transport** (Q31, PR13): pick the ESP, configure SPF/DKIM/DMARC, verify send → log row → resend end to end. Choosing an ESP with event webhooks keeps the deferred delivery/open/click tracking a config change rather than a migration.
 - [ ] **Support ownership for `failed` and `needs_followup`** (Q8, PR17) — an owner and a response window, defined before launch. These states already imply a human response that is not staffed.
@@ -155,45 +161,51 @@ until then is "not verified".
 **Goal:** the sellable **Automated Health Report ($49)**. The pitch price is only defensible with scanner-backed output, so this lands **before public launch**.
 **Spec:** F5.12.1, F5.12.2, F5.12.5, F5.12.6; §17 Phase 11; Milestone M7.
 **Depends on:** Phase 9A (launchable operations).
-**Open:** Q5 (prices vs. measured cost), Q32 (fate of the legacy $5 unlock), Q33 (Semgrep ruleset licensing).
+**Open:** Q5 (prices vs. measured cost) — still open, and only the first paid runs close it. Q32 **resolved** (legacy $5 unlock retired, rows deactivated not deleted). Q33 **resolved** by shipping in-house rules only, no Registry content.
+
+**Status: complete (2026-08-04).** Implemented across 28 tasks on `growth-retention`, spec
+`docs/superpowers/specs/2026-08-02-scanner-platform-findings-catalog-design.md`, plan
+`docs/superpowers/plans/2026-08-02-scanner-platform-findings-catalog.md`. Every box below was
+re-verified against the working tree on 2026-08-04, not ticked from the task log. The exit
+criterion (M7) is **not** met and cannot be met in-repo — it requires a real sale.
 
 ### Tier attribute
-- [ ] `tier` on `AuditRequest` — `diagnostic` | `automated` | `deep_ai` | `expert` (**verified absent**). Drives pipeline composition, resource budgets, prompt template, report rendering, and price.
-- [ ] Per-tier budgets (excerpt limits, token budget, scanner set) **configuration-driven, never hardcoded** — one config entry each, per Appendix A's single-source rule.
+- [x] `tier` on `AuditRequest` — `diagnostic` | `automated` | `deep_ai` | `expert`. Drives pipeline composition, resource budgets, prompt template, report rendering, and price. `App\Constants\AuditTier`, migration `2026_08_02_000001`.
+- [x] Per-tier budgets (excerpt limits, token budget, scanner set) **configuration-driven, never hardcoded** — one config entry each, per Appendix A's single-source rule.
 
 ### Scanner harness — committed set, fixed order
 Executed inside `AuditPipeline`'s existing guardrails; no repository code is ever executed (§4.3 stands).
 
-- [ ] 1. **scc** (MIT) — size, language breakdown, per-file complexity. Always first; its output sizes the budgets for everything after.
-- [ ] 2. **Gitleaks** (MIT) — supersedes the in-house secret pattern set, same counts-and-paths-only contract (F5.2.6). Also retires the §18.7 false-positive item (documentation placeholders matching).
-- [ ] 3. **OSV querybatch** — existing `DependencyAuditor` integration, retained as-is with its degrade-to-zero behavior.
-- [ ] 4. **jscpd** (MIT) — cross-language duplication, supersedes the heuristic. Capped file set.
-- [ ] 5. **Semgrep CE** (LGPL-2.1 engine) — quality/security SAST, most expensive, runs last. **Permissive or in-house rulesets only** — the Registry license forbids use in a competing commercial product (Q33).
-- [ ] Per-tool timeout; a failed scanner contributes no findings, is recorded in the pipeline log, and **never fails the run on its own**.
-- [ ] Keep the existing collectors: git facts, hotspots, tooling detection, manifest summaries.
-- [ ] Explicitly **not** in this phase: SonarQube, Trivy, import-graph/SCIP, Lizard. CodeQL excluded permanently (license prohibits commercial service use).
+- [x] 1. **scc** (MIT) — size, language breakdown, per-file complexity. Always first; its output sizes the budgets for everything after.
+- [x] 2. **Gitleaks** (MIT) — supersedes the in-house secret pattern set, same counts-and-paths-only contract (F5.2.6). Also retires the §18.7 false-positive item (documentation placeholders matching).
+- [x] 3. **OSV querybatch** — existing `DependencyAuditor` integration, retained as-is with its degrade-to-zero behavior.
+- [x] 4. **jscpd** (MIT) — cross-language duplication, supersedes the heuristic. Capped file set.
+- [x] 5. **Semgrep CE** (LGPL-2.1 engine) — quality/security SAST, most expensive, runs last. **Permissive or in-house rulesets only** — the Registry license forbids use in a competing commercial product (Q33).
+- [x] Per-tool timeout; a failed scanner contributes no findings, is recorded in the pipeline log, and **never fails the run on its own**.
+- [x] Keep the existing collectors: git facts, hotspots, tooling detection, manifest summaries.
+- [x] Explicitly **not** in this phase: SonarQube, Trivy, import-graph/SCIP, Lizard. CodeQL excluded permanently (license prohibits commercial service use). — Held: `app/Services/AuditReport/Scanners/` contains the five committed tools and nothing else.
 
 ### Findings model
-- [ ] One internal findings model, SARIF as the interchange format where the tool supports it
-- [ ] Deduplication across tools
-- [ ] **Grouping into problem families** (rule family × directory), ranked by severity × count
-- [ ] Prompt rework in `PromptComposer` / `ClaudeAnalyzer`: the model receives metrics plus top problem *groups*, never the raw finding list, and narrates each group — what it is, what it affects, what fixing it buys. One lint error must never become one report item. Grouping is also the prompt-size cost control.
-- [ ] Report template rework to render grouped narration
-- [ ] `ScoreCalculator` formulas extended to consume scanner signal — measurement still owns the numbers, findings feed the formulas and never the reverse
+- [x] One internal findings model, SARIF as the interchange format where the tool supports it
+- [x] Deduplication across tools
+- [x] **Grouping into problem families** (rule family × directory), ranked by severity × count
+- [x] Prompt rework in `PromptComposer` / `ClaudeAnalyzer`: the model receives metrics plus top problem *groups*, never the raw finding list, and narrates each group — what it is, what it affects, what fixing it buys. One lint error must never become one report item. Grouping is also the prompt-size cost control.
+- [x] Report template rework to render grouped narration
+- [x] `ScoreCalculator` formulas extended to consume scanner signal — measurement still owns the numbers, findings feed the formulas and never the reverse
 
 ### Scoring-formula versioning (Q14 — §18.7 top-five #4)
-- [ ] Version the formulas and record the version on each report. Phase 11 *changes* the formulas, so without this the change silently corrupts every historical delta and benchmark (§18.2 T4). This is the phase where it stops being cheap.
-- [ ] Same argument for an explicit payload schema version (Q15, §18.2 T5) — the payload contract changes here too.
+- [x] Version the formulas and record the version on each report. Phase 11 *changes* the formulas, so without this the change silently corrupts every historical delta and benchmark (§18.2 T4). This is the phase where it stops being cheap.
+- [x] Same argument for an explicit payload schema version (Q15, §18.2 T5) — the payload contract changes here too.
 
 ### Cost telemetry (F5.12.6)
-- [ ] Record model tokens in/out, scanner wall time, and repository size per run, so cost per audit is measurable per tier from the first paid runs. Feeds Q5 (validate on the first 20–30 paid runs) and PR16 (unit economics confirmed against published prices).
+- [x] Record model tokens in/out, scanner wall time, and repository size per run, so cost per audit is measurable per tier from the first paid runs. Feeds Q5 (validate on the first 20–30 paid runs) and PR16 (unit economics confirmed against published prices).
 
 ### Catalog and marketing
-- [ ] Rebuild the purchasable catalog, seeded idempotently per F5.4.9: three one-time tier products ($49 / $199 / $999+) plus the subscription grid (Starter $59 / Growth $149 / Agency $499 / Enterprise from $1,500)
-- [ ] Subscription allowances meter tier-1 runs; higher-tier runs and Deep AI credits read from plan metadata
-- [ ] **Q32 decision:** retire the legacy $5 unlock and prepaid run (recommended — the free diagnostic converts directly to the $49 tier), grandfathering existing unlocks; or reposition it as a diagnostic-tier upsell
-- [ ] Marketing pricing surface synchronized — every monetary and quota figure read from backend configuration (F5.7.6, A15)
-- [ ] Supersede the Appendix A pricing rows
+- [x] Rebuild the purchasable catalog, seeded idempotently per F5.4.9: three one-time tier products ($49 / $199 / $999+) plus the subscription grid (Starter $59 / Growth $149 / Agency $499 / Enterprise from $1,500)
+- [x] Subscription allowances meter tier-1 runs; higher-tier runs and Deep AI credits read from plan metadata
+- [x] **Q32 decision:** retired, per the recommendation. `config('pricing.retired')` names the unlock product and the orphaned `audit-scale-monthly` plan; the seeder deactivates rather than deletes, so already-purchased unlocks keep rendering.
+- [x] Marketing pricing surface synchronized — every monetary and quota figure read from backend configuration (F5.7.6, A15)
+- [x] Supersede the Appendix A pricing rows
 
 **Exit:** Milestone M7 — first paid tier-1 report sold at the new price, with measured cost per audit behind it.
 
@@ -315,12 +327,20 @@ Non-blocking, but three of the spec's highest-value five are folded into phases 
 ## Order
 
 ```
-Phase 10  ──►  Phase 9A  ──►  Phase 11  ──►  ⟨LAUNCH⟩  ──►  Phase 12  ──►  Phase 13
-   small        launch          before                        flagship      on first
-   cleanup      blockers        launch                        revenue       expert order
+Phase 10  ──►  Phase 9A-1  ──►  Phase 11  ──►  9A-2 runbook  ──►  ⟨LAUNCH⟩  ──►  12  ──►  13
+  ✅ done       ✅ done          ✅ done        ⬅ HERE            first sale    flagship  expert
 
 Phase 9B — before scale, not before launch
 Defect backlog — opportunistic, except the items already folded into 10/11/12
 ```
 
-One unscheduled item sits outside every phase: `growth-retention` is 123 commits ahead of `main` and has never been merged. Deciding when that lands is a prerequisite to any of this shipping.
+Every remaining pre-launch item is **infrastructure execution, not code**: run
+`docs/superpowers/runbooks/2026-08-02-launch-operations-runbook.md` — DNS, staging, first
+production deploy, rollback rehearsal, Postmark verification, alert-delivery proof, and the two
+9A-1 carry-overs it owns (Ploi's monitor pointed at `/health` with a real token; accepting that a
+database outage is only detectable off-box).
+
+One unscheduled item sits outside every phase: `growth-retention` is **202 commits** ahead of
+`main` and has never been merged. Note the ordering constraint this now carries — `deploy-staging.yml`
+deploys on every merge to `main`, so merging before a staging server exists produces a red
+workflow on the first push. Stand up staging first, or merge with the workflow disabled.
