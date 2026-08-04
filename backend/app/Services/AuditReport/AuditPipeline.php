@@ -3,9 +3,15 @@
 namespace App\Services\AuditReport;
 
 use App\Constants\AuditRequestStatus;
+use App\Exceptions\AiAnalysisException;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\AuditFindingGroup;
 use App\Models\AuditRequest;
+use App\Notifications\OperationsAlert;
+use App\Services\AuditReport\DeepReview\DeepFindingSanitizer;
+use App\Services\AuditReport\DeepReview\DeepReviewer;
+use App\Services\AuditReport\DeepReview\RiskFileSelector;
+use App\Services\AuditReport\Findings\DedupedFinding;
 use App\Services\AuditReport\Findings\FindingDeduplicator;
 use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\AuditReport\Findings\FindingGrouper;
@@ -13,8 +19,10 @@ use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\ScannerRunner;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
 use App\Services\AuditReport\Scanners\SccScanner;
+use App\Services\AuditReport\Tiers\TierProfile;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use App\Services\AuditRequestService;
+use Illuminate\Support\Facades\Notification;
 use Sentry\State\Scope;
 
 class AuditPipeline
@@ -31,6 +39,9 @@ class AuditPipeline
         private FindingDeduplicator $deduplicator,
         private FindingGrouper $grouper,
         private SccScanner $sccScanner,
+        private RiskFileSelector $riskFileSelector,
+        private DeepReviewer $deepReviewer,
+        private DeepFindingSanitizer $sanitizer,
     ) {}
 
     public function run(AuditRequest $auditRequest): void
@@ -98,6 +109,21 @@ class AuditPipeline
             $payload['scores'] = $scoreSet->toPayloadScores();
             $auditRequest->appendPipelineLog('analyzed', 'AI analysis finished');
 
+            // The tier-1 payload is complete and valid at this point, which is
+            // what lets a deep-review failure lose a SECTION rather than a
+            // report (spec D1).
+            if ($profile->deepReview !== null) {
+                $payload = $this->runDeepReview(
+                    $auditRequest,
+                    $profile,
+                    $context,
+                    $this->deduplicator->dedupe($suite->findings),
+                    $metrics,
+                    array_slice($groups, 0, $profile->narratedGroups),
+                    $payload,
+                );
+            }
+
             $report = $this->reportService->create($auditRequest, $payload, $scoreSet->scoringVersion);
             $this->reportService->send($report);
 
@@ -159,5 +185,122 @@ class AuditPipeline
         }
 
         return array_values(array_unique($paths));
+    }
+
+    /**
+     * @param  list<DedupedFinding>  $dedupedFindings
+     * @param  array<string, mixed>  $metrics
+     * @param  list<FindingGroup>  $groups
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function runDeepReview(
+        AuditRequest $auditRequest,
+        TierProfile $profile,
+        RepoContext $context,
+        array $dedupedFindings,
+        array $metrics,
+        array $groups,
+        array $payload,
+    ): array {
+        $startedAt = microtime(true);
+        $selection = null;
+
+        try {
+            $selection = $this->riskFileSelector->select($context, $dedupedFindings, $profile->deepReview);
+            $auditRequest->update(['risk_files' => $selection->toLogArray()]);
+
+            $auditRequest->appendPipelineLog('risk_files', sprintf(
+                'Selected %d of %d candidates for deep review%s',
+                count($selection->files),
+                $selection->candidatesConsidered,
+                $selection->truncated ? ' (truncated by the token budget)' : '',
+            ));
+
+            if ($selection->belowFloor) {
+                // Someone paid for "your 20-40 riskiest files" and this repo
+                // cannot supply them. Whether that warrants a refund is a human
+                // judgement, so it surfaces rather than being absorbed.
+                $this->alert($auditRequest, sprintf(
+                    'Deep review ran on only %d files, below the configured floor.',
+                    count($selection->files),
+                ));
+            }
+
+            $review = $this->deepReviewer->review($metrics, $groups, $selection, $profile->deepReview);
+
+            $sanitized = $this->sanitizer->sanitize(
+                $review->findings,
+                $selection->paths(),
+                array_column($context->inventory?->files ?? [], 'path'),
+            );
+
+            if ($sanitized['dropped'] > 0 || $sanitized['strippedRelated'] > 0) {
+                $auditRequest->appendPipelineLog('deep_review_sanitized', sprintf(
+                    'Dropped %d finding(s) on files that were never sent; stripped %d unknown related path(s)',
+                    $sanitized['dropped'],
+                    $sanitized['strippedRelated'],
+                ));
+            }
+
+            // A review whose every finding was fabricated is not a review.
+            if ($sanitized['findings'] === [] && $sanitized['dropped'] > 0) {
+                throw new AiAnalysisException('Every deep finding referenced a file that was never sent');
+            }
+
+            $auditRequest->update([
+                'deep_review_input_tokens' => $review->inputTokens,
+                'deep_review_output_tokens' => $review->outputTokens,
+                'deep_review_ms' => (int) ((microtime(true) - $startedAt) * 1000),
+            ]);
+
+            $payload['file_findings'] = $sanitized['findings'];
+            $payload['deep_review'] = [
+                'files_selected' => $selection->selectedBeforeBudget,
+                'files_reviewed' => count($selection->files),
+                'truncated' => $selection->truncated,
+                'selection_version' => $selection->selectionVersion,
+                'degraded' => false,
+            ];
+
+            $auditRequest->appendPipelineLog('deep_review', sprintf(
+                'Deep review returned %d finding(s)',
+                count($sanitized['findings']),
+            ));
+
+            return $payload;
+        } catch (\Throwable $e) {
+            \Sentry\captureException($e);
+
+            $auditRequest->appendPipelineLog('deep_review_degraded', 'Deep review did not complete: '.$e->getMessage());
+            $this->alert($auditRequest, 'Deep review failed: '.$e->getMessage());
+
+            $payload['deep_review'] = [
+                'files_selected' => $selection?->selectedBeforeBudget ?? 0,
+                'files_reviewed' => 0,
+                'truncated' => $selection?->truncated ?? false,
+                'selection_version' => (int) config('audit.deep_review.selection_version'),
+                'degraded' => true,
+            ];
+
+            return $payload;
+        }
+    }
+
+    /**
+     * A degraded PAID run is an individual actionable event — a health check
+     * could report an elevated failure rate but never say which customer's run
+     * to re-run.
+     */
+    private function alert(AuditRequest $auditRequest, string $message): void
+    {
+        Notification::route('mail', (string) config('audit.admin_email'))->notify(
+            new OperationsAlert(
+                checkName: 'deep_review',
+                band: 'high',
+                status: 'failed',
+                message: $message.' Audit request: '.$auditRequest->uuid,
+            ),
+        );
     }
 }

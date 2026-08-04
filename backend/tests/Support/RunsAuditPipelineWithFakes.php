@@ -9,6 +9,7 @@ use App\Models\AuditRequest;
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\AnalysisResult;
 use App\Services\AuditReport\AuditPipeline;
+use App\Services\AuditReport\DeepReview\DeepReviewer;
 use App\Services\AuditReport\Findings\Finding;
 use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\AuditReport\Scanners\RepoContext;
@@ -26,6 +27,13 @@ use Illuminate\Support\Facades\Process;
  */
 trait RunsAuditPipelineWithFakes
 {
+    /**
+     * Comfortably clears config('audit.deep_review.min_files') (20 in
+     * production) so a healthy deep-tier run never trips the belowFloor
+     * operational alert purely because of fixture size.
+     */
+    private const DEEP_REVIEW_FILLER_FILE_COUNT = 25;
+
     /** @var list<FindingGroup> */
     public array $lastAnalyzerGroups = [];
 
@@ -39,6 +47,17 @@ trait RunsAuditPipelineWithFakes
             File::ensureDirectoryExists($this->fixtureRepo);
             File::put($this->fixtureRepo.'/README.md', "# Fixture\n");
             File::put($this->fixtureRepo.'/index.php', "<?php\necho 'hi';\n");
+            File::ensureDirectoryExists($this->fixtureRepo.'/app/Auth');
+            File::put($this->fixtureRepo.'/app/Auth/Guard.php', "<?php\nclass Guard {}\n");
+            // Deep review's floor (config('audit.deep_review.min_files'), 20 in
+            // production) is checked against the real candidate count, so a
+            // "healthy" deep-tier run needs enough candidates to clear it —
+            // otherwise every run here would spuriously trip the belowFloor
+            // operational alert regardless of the scenario under test.
+            File::ensureDirectoryExists($this->fixtureRepo.'/app/Filler');
+            foreach (range(1, self::DEEP_REVIEW_FILLER_FILE_COUNT) as $i) {
+                File::put($this->fixtureRepo."/app/Filler/File{$i}.php", "<?php\nclass File{$i} {}\n");
+            }
             Process::path($this->fixtureRepo)->run('git init -q -b main')->throw();
             Process::path($this->fixtureRepo)->run('git -c user.email=t@t -c user.name=t add -A')->throw();
             Process::path($this->fixtureRepo)->run('git -c user.email=t@t -c user.name=t commit -qm fixture')->throw();
@@ -61,6 +80,7 @@ trait RunsAuditPipelineWithFakes
         AuditTier $tier = AuditTier::AUTOMATED,
         int $inputTokens = 10,
         int $outputTokens = 5,
+        ?DeepReviewer $deepReviewer = null,
     ): AuditRequest {
         $profile = app(TierProfileResolver::class)->for($tier);
         $available = array_values(array_diff($profile->scanners, $failingScanners));
@@ -78,11 +98,21 @@ trait RunsAuditPipelineWithFakes
 
             if ($name === 'scc') {
                 $this->app->bind('audit.scanner.scc', fn () => $this->fakeScanner('scc', function (RepoContext $ctx): array {
+                    $fillerFiles = array_map(
+                        fn (int $i): array => ['path' => "app/Filler/File{$i}.php", 'loc' => 1, 'complexity' => 0],
+                        range(1, self::DEEP_REVIEW_FILLER_FILE_COUNT),
+                    );
+                    $files = [
+                        ['path' => 'app/Auth/Guard.php', 'loc' => 2, 'complexity' => 1],
+                        ['path' => 'index.php', 'loc' => 1, 'complexity' => 0],
+                        ...$fillerFiles,
+                    ];
+
                     $ctx->withInventory(new SccInventory(
-                        files: [['path' => 'index.php', 'loc' => 1, 'complexity' => 0]],
-                        languages: ['PHP' => ['files' => 1, 'loc' => 1]],
-                        totalLoc: 1,
-                        totalComplexity: 0,
+                        files: $files,
+                        languages: ['PHP' => ['files' => count($files), 'loc' => 3 + count($fillerFiles)]],
+                        totalLoc: 3 + count($fillerFiles),
+                        totalComplexity: 1,
                     ));
 
                     return [];
@@ -126,6 +156,10 @@ trait RunsAuditPipelineWithFakes
                 );
             }
         });
+
+        if ($deepReviewer !== null) {
+            $this->app->instance(DeepReviewer::class, $deepReviewer);
+        }
 
         $request = AuditRequest::factory()->create([
             'repo_url' => 'file://'.$this->fixtureRepo,
