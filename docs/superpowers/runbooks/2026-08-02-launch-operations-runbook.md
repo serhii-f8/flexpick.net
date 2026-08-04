@@ -80,7 +80,11 @@ git log --all -p -- backend/.env | grep -c . || echo "backend/.env never committ
 credential, and only then continue. A tracked `backend/.env` means history rewriting, not just
 deletion.
 
-- [ ] Secrets inventory complete, nothing in git
+- [ ] Secrets inventory complete (password-manager half — yours)
+- [x] **Nothing in git** — verified 2026-08-04. No populated secret-shaped key in
+      `backend/.env.example`; `backend/.env` never committed and ignored at `backend/.gitignore:11`;
+      the tracked `backend/.env.testing` holds only obvious dummies (`sk_test_123…`, `1234`) plus a
+      testing-only `APP_KEY`, which is public by design and used against the test database only.
 
 ---
 
@@ -207,6 +211,12 @@ HORIZON_PREFIX=flexpick_staging_horizon:
 MAIL_MAILER=postmark
 POSTMARK_TOKEN=<staging token>
 POSTMARK_MESSAGE_STREAM_ID=<staging stream>
+# .env.example ships hello@example.com. Postmark rejects any From address that
+# is not a verified sender signature or on a verified domain, so leaving the
+# default turns step 4's live send into a 300/422 rather than a delivery. The
+# domain here MUST be the one carrying the DKIM and SPF records from step 1.
+MAIL_FROM_ADDRESS=<reports@flexpick.net>
+MAIL_FROM_NAME=FlexPick
 
 SENTRY_LARAVEL_DSN=<dsn>
 SENTRY_ENVIRONMENT=staging
@@ -680,7 +690,9 @@ observed is **not verified** — never a checkmark.
 | Rollback works — production | Step 8, with measured time | | not verified |
 | Health monitor pages on 503 | Step 7 forced failure | | not verified |
 | Marketing site serves, CTA reaches the app | Step 9 | | not verified |
-| Flake is gone | Full suite run twice, green | 836 passed, 1 pre-existing risky, both runs (2026-08-03, local) | **observed locally; not yet observed in CI** |
+| Flake is gone | Full suite run twice, green | 839 passed / 2091 assertions, **0 risky, exit 0**, three runs (2026-08-04, local) | **observed locally; not yet observed in CI** |
+| Suite exits 0 at all | Discovered 2026-08-04 closing this phase: `artisan test` exited **1** on a green run — PHPUnit 11 signals test-runner warnings through the exit code, and two `*Test.php` classes declared no tests. Fixed in `abd78ba`. CI's test step would have been red on every PR. | exit 0 | **observed locally** |
+| PHPStan gate is meaningful | Same pass: `phpstan analyse` exited **1** on a clean checkout (418 accepted errors, no baseline), so CI's analysis step was red regardless of the change. Baseline frozen in `6e130ab`; verified a newly introduced error still fails the run. | exit 0, and a probe error correctly failed | **observed locally** |
 
 **Predicted entries — recorded here in advance rather than discovered later:**
 
