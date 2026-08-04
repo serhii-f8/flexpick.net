@@ -32,6 +32,18 @@ final class RepoContext
      */
     public private(set) array $secretPaths = [];
 
+    /**
+     * Commit count per repository-relative path, recorded by HotspotCollector.
+     *
+     * The collector returns only its top 10 for the metrics block, but
+     * risk-file selection needs churn for every candidate — and re-running
+     * `git log` there would both cost a second walk of a 200-commit clone and
+     * risk drifting from this definition.
+     *
+     * @var array<string, int>
+     */
+    public private(set) array $churn = [];
+
     public function __construct(
         public readonly string $path,
         public readonly TierProfile $tier,
@@ -47,6 +59,12 @@ final class RepoContext
     public function withSecretPaths(array $paths): void
     {
         $this->secretPaths = $paths;
+    }
+
+    /** @param array<string, int> $churn */
+    public function withChurn(array $churn): void
+    {
+        $this->churn = $churn;
     }
 
     public function record(string $key, float|int $value): void

@@ -17,6 +17,8 @@ class HotspotCollector implements Collector
         $log = Process::path($context->path)->run(['git', 'log', '--name-only', '--format=']);
         $changes = array_count_values(array_filter(explode("\n", trim($log->output()))));
 
+        $context->withChurn(array_map('intval', $changes));
+
         $locByPath = array_column($context->inventory?->files ?? [], 'loc', 'path');
 
         $hotspots = [];
