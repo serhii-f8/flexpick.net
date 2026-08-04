@@ -9,6 +9,8 @@ use App\Services\AuditReport\Collectors\GitFactsCollector;
 use App\Services\AuditReport\Collectors\HotspotCollector;
 use App\Services\AuditReport\Collectors\ManifestCollector;
 use App\Services\AuditReport\Collectors\ToolingCollector;
+use App\Services\AuditReport\DeepReview\ClaudeDeepReviewer;
+use App\Services\AuditReport\DeepReview\DeepReviewer;
 use App\Services\AuditReport\MetricsCollector;
 use App\Services\AuditReport\Scanners\GitleaksScanner;
 use App\Services\AuditReport\Scanners\JscpdScanner;
@@ -64,6 +66,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->bind(AiAnalyzer::class, ClaudeAnalyzer::class);
+        $this->app->bind(DeepReviewer::class, ClaudeDeepReviewer::class);
 
         $this->app->bind('audit.scanner.gitleaks', GitleaksScanner::class);
         $this->app->bind('audit.scanner.semgrep', SemgrepScanner::class);
