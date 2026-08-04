@@ -25,6 +25,12 @@
         .badge-high { background: #fee2e2; color: #b91c1c; }
         .badge-medium { background: #fef3c7; color: #b45309; }
         .badge-low { background: #ecfccb; color: #4d7c0f; }
+        .badge-critical { background: #fecaca; color: #7f1d1d; }
+        .badge-info { background: #e0f2fe; color: #075985; }
+        .deep-file { border-top: 1px solid #e7e5e4; padding-top: 14px; margin-top: 14px; }
+        .deep-file > .risk-title { font-family: monospace; font-size: 13px; word-break: break-all; }
+        .deep-file .risk:first-of-type { border-top: none; }
+        .deep-notice { background: #fef3c7; border: 1px solid #fcd34d; color: #78350f; padding: 12px 14px; border-radius: 6px; }
         .risk-title { font-weight: bold; }
         .risk-detail { margin-top: 8px; color: #44403c; }
         .locked-block { position: relative; margin-top: 8px; }
@@ -217,6 +223,12 @@
             </div>
         @endforeach
     </div>
+
+    @if (($payload['deep_review'] ?? null) !== null)
+        <div class="card">
+            @include('reports.partials.deep-findings', ['payload' => $payload, 'unlocked' => $unlocked])
+        </div>
+    @endif
 
     @if ($unlocked)
         <div class="card">

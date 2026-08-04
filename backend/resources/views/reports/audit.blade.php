@@ -15,6 +15,16 @@
         .impact-medium { color: #b45309; font-weight: bold; }
         .impact-low { color: #4d7c0f; font-weight: bold; }
         .score { font-size: 18px; font-weight: bold; }
+        .badge { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 8px; background: #e7e5e4; color: #44403c; }
+        .badge-critical, .badge-high { background: #fee2e2; color: #b91c1c; }
+        .badge-medium { background: #fef3c7; color: #b45309; }
+        .badge-low, .badge-info { background: #ecfccb; color: #4d7c0f; }
+        .risk { padding: 8px 0; border-bottom: 1px solid #e7e5e4; }
+        .risk-title { font-weight: bold; }
+        .risk-detail { margin-top: 4px; color: #44403c; }
+        .deep-file { margin-top: 12px; }
+        .deep-file > .risk-title { font-family: DejaVu Sans Mono, monospace; font-size: 11px; }
+        .deep-notice { background: #fef3c7; border: 1px solid #fcd34d; color: #78350f; padding: 10px; }
     </style>
 </head>
 <body>
@@ -99,6 +109,8 @@
             </tr>
         @endforeach
     </table>
+
+    @include('reports.partials.deep-findings', ['payload' => $payload, 'unlocked' => true])
 
     <h2>{{ __('What to fix first') }}</h2>
     <table>
