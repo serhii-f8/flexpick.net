@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport\Tiers;
 
 use App\Constants\AuditTier;
+use App\Services\AuditReport\DeepReview\DeepReviewProfile;
 
 final readonly class TierProfile
 {
@@ -16,6 +17,8 @@ final readonly class TierProfile
         public int $excerptBytes,
         public int $aiMaxTokens,
         public int $narratedGroups,
+        /** Null for tiers that do not run deep review — the pipeline's gate. */
+        public ?DeepReviewProfile $deepReview = null,
     ) {}
 
     public function runsScanner(string $name): bool
