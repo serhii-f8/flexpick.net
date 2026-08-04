@@ -20,8 +20,9 @@ The table below was written on 2026-08-01 and is re-stated as of **2026-08-04**.
 | Phase 9A-2 | **In-repo enablers complete**; the runbook is written and **not yet executed**. No staging server, no production deploy, no proven alert delivery |
 | Phase 10 | Complete |
 | Phase 11 | Complete — tier attribute, five-scanner harness, findings model with dedup and grouping, versioned scores, cost telemetry, reworked catalog |
-| Phases 12–13 | Not started. No risk-file selection, no `expert_review` status, no operator review queue — verified absent 2026-08-04 |
-| Gate state | 839 tests / 2091 assertions passing, exit 0; PHPStan level 3 with 418 errors frozen in `backend/phpstan-baseline.neon`; Pint clean across 926 files |
+| Phase 12 | Complete — deterministic logged risk-file selection, deep file-content review bound to files, payload v3, per-run token budget, deep-section rendering, secret-file exclusion on every tier. The $199 product and plan-metadata Deep AI credits predate this phase (shipped with Phase 11's catalog rework) |
+| Phase 13 | Not started. No `expert_review` status, no operator review queue — verified absent 2026-08-04 |
+| Gate state | 896 tests / 2245 assertions passing, exit 0 (confirmed twice); PHPStan level 3 with 418 errors frozen in `backend/phpstan-baseline.neon`, no new errors; Pint clean across 950 files |
 
 Everything below is what remains. **The single largest gap is no longer code** — it is that
 nothing in Phase 9A-2 has met real infrastructure.
@@ -217,15 +218,23 @@ Executed inside `AuditPipeline`'s existing guardrails; no repository code is eve
 **Spec:** F5.12.3, §17 Phase 12, Milestone M8.
 **Depends on:** Phase 11's findings model.
 
-- [ ] **Risk-file selection** — deterministic and logged, 20–40 files, never the whole repository. Three signals: churn×size hotspots (existing), scanner-finding density (from Phase 11), sensitive-domain path heuristics (auth, authorization, payments, uploads, secrets handling). Import-graph centrality is a deferred fourth signal — tier 2 must not wait on graph tooling.
-- [ ] **File-content review** with cross-module context, returning findings bound to files, covering business logic, authorization, and architectural risk; each carries evidence, recommendation, and effort sizing
-- [ ] **Payload contract extension** (`ReportPayload`) for file-bound findings, validated by the canonical validator
-- [ ] **Per-run token budget** — exceeding it truncates the file list, never the contract
-- [ ] **Report rendering** for the deep section
-- [ ] **$199 product** plus plan-metadata Deep AI credits
-- [ ] Fold in Q17 here at the latest (§18.7 top-five #2): exclude files matching secret patterns from excerpts sent to the model. Tier 2 sends far more source to a third party than tier 1 does, and Gitleaks already identifies the files.
+**Status: complete (2026-08-04).** Implemented across 13 tasks on `growth-retention`
+(commits `5ec4830`..`f712729`), spec/plan under `docs/superpowers/plans/2026-08-04-deep-ai-review.md`.
+Every box below was re-verified against the working tree on 2026-08-04, not ticked from the task
+log. Gate re-run for this phase: `vendor/bin/pint --test` clean (950 files), `vendor/bin/phpstan
+analyse` reports `[OK] No errors` against the frozen baseline, `php artisan test` green twice in a
+row (896 tests / 2245 assertions, no risky tests, identical both times). The exit criterion (M8)
+requires a *paid* tier-2 report and, like Phase 11's M7, is **not** met and cannot be met in-repo.
 
-**Exit:** Milestone M8 — first paid tier-2 report delivered within its token budget.
+- [x] **Risk-file selection** — deterministic and logged, 20–40 files, never the whole repository. Three signals: churn×size hotspots (existing), scanner-finding density (from Phase 11), sensitive-domain path heuristics (auth, authorization, payments, uploads, secrets handling). Import-graph centrality is a deferred fourth signal — tier 2 must not wait on graph tooling. — `RiskFileSelector` / `SensitivePathMatcher` (`app/Services/AuditReport/DeepReview/`) score and rank candidates; the full selection (per-file rank plus per-signal contributions and `selection_version`) persists to the `audit_requests.risk_files` JSON column (migration `2026_08_04_000001_add_deep_review_to_audit_requests_table`). Import-graph centrality remains deferred, as scoped.
+- [x] **File-content review** with cross-module context, returning findings bound to files, covering business logic, authorization, and architectural risk; each carries evidence, recommendation, and effort sizing — `DeepReviewer` interface / `ClaudeDeepReviewer` impl with `DeepReviewPromptComposer` (`app/Services/AuditReport/DeepReview/`) produce the file-bound findings; `DeepFindingSanitizer`'s hallucination guard drops any finding bound to a file the model was never actually shown.
+- [x] **Payload contract extension** (`ReportPayload`) for file-bound findings, validated by the canonical validator — schema bumped to v3, with `validateFileFinding` covering evidence, recommendation, and effort sizing per finding.
+- [x] **Per-run token budget** — exceeding it truncates the file list, never the contract — `RiskFileSelector::fit()` bounds the selected set to the configured budget (`config('audit.tiers.deep_ai.deep_review')`); estimated-vs-actual input tokens are recorded (`audit_requests.deep_review_input_tokens`) for calibration.
+- [x] **Report rendering** for the deep section — `resources/views/reports/partials/deep-findings.blade.php`, included from both the PDF template (`reports/audit.blade.php`) and the web report (`reports/audit-web.blade.php`).
+- [x] **$199 product** plus plan-metadata Deep AI credits — **already true before this phase**: the `audit-deep-ai` product ($199 / 19900 cents, `config/pricing.php`) and the `audit_deep_ai_credits` plan-metadata field shipped as part of Phase 11's catalog rework, not this one. Recorded here for completeness, not claimed as Phase 12 work.
+- [x] Fold in Q17 here at the latest (§18.7 top-five #2): exclude files matching secret patterns from excerpts sent to the model. Tier 2 sends far more source to a third party than tier 1 does, and Gitleaks already identifies the files. — `SecretFileFilter` (`app/Services/AuditReport/SecretFileFilter.php`) excludes Gitleaks-flagged paths and denylisted basenames from excerpts on **every** tier, not just tier 2, with a regression test covering the excerpt loop's slot-backfill behavior.
+
+**Exit:** Milestone M8 — first paid tier-2 report delivered within its token budget. Code complete; unmet pending a real paid run, same as Phase 11's M7.
 
 ---
 
