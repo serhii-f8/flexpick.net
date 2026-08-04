@@ -43,7 +43,15 @@ trait RunsAuditPipelineWithFakes
     {
         $this->fixtureRepo = storage_path('framework/testing/fixture-repo');
 
-        if (! File::isDirectory($this->fixtureRepo.'/.git')) {
+        // Presence-only against .git is not enough: AuditRequestRoutingTest
+        // and RepositoryClonerTest share this same gitignored directory and,
+        // depending on run order, may create it first with far fewer files
+        // (README-only, or README + index.php). Also require the last filler
+        // file so this trait (re)builds the full fixture regardless of what a
+        // prior test class already left behind.
+        $lastFillerFile = $this->fixtureRepo.'/app/Filler/File'.self::DEEP_REVIEW_FILLER_FILE_COUNT.'.php';
+
+        if (! File::isDirectory($this->fixtureRepo.'/.git') || ! File::exists($lastFillerFile)) {
             File::ensureDirectoryExists($this->fixtureRepo);
             File::put($this->fixtureRepo.'/README.md', "# Fixture\n");
             File::put($this->fixtureRepo.'/index.php', "<?php\necho 'hi';\n");

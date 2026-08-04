@@ -227,6 +227,30 @@ class AuditPipeline
                 ));
             }
 
+            if ($selection->files === []) {
+                // Zero candidates survived selection (e.g. everything vendored
+                // or generated). Calling the reviewer would return an honest
+                // empty result that then looks identical to "reviewed and
+                // clean" — a false all-clear for a paying customer, not a
+                // healthy zero-findings outcome. belowFloor already alerted
+                // above; this only stops the section from rendering as
+                // reviewed.
+                $auditRequest->appendPipelineLog(
+                    'deep_review_degraded',
+                    'Deep review skipped: no files survived risk-file selection',
+                );
+
+                $payload['deep_review'] = [
+                    'files_selected' => $selection->selectedBeforeBudget,
+                    'files_reviewed' => 0,
+                    'truncated' => $selection->truncated,
+                    'selection_version' => $selection->selectionVersion,
+                    'degraded' => true,
+                ];
+
+                return $payload;
+            }
+
             $review = $this->deepReviewer->review($metrics, $groups, $selection, $profile->deepReview);
 
             $sanitized = $this->sanitizer->sanitize(
@@ -263,6 +287,14 @@ class AuditPipeline
                 'degraded' => false,
             ];
 
+            // The tier-1 payload was validated in ClaudeAnalyzer BEFORE
+            // file_findings/deep_review existed. Re-validate the merged
+            // payload here so a schema drift, provider change, or sanitizer
+            // bug can never persist a shape Blade isn't prepared to render —
+            // a validation failure degrades this section exactly like any
+            // other failure in this stage (caught below).
+            $payload = ReportPayload::validate($payload);
+
             $auditRequest->appendPipelineLog('deep_review', sprintf(
                 'Deep review returned %d finding(s)',
                 count($sanitized['findings']),
@@ -272,8 +304,19 @@ class AuditPipeline
         } catch (\Throwable $e) {
             \Sentry\captureException($e);
 
-            $auditRequest->appendPipelineLog('deep_review_degraded', 'Deep review did not complete: '.$e->getMessage());
-            $this->alert($auditRequest, 'Deep review failed: '.$e->getMessage());
+            // Classified reason only — never raw exception text, which could
+            // echo customer source back into an unscrubbed DB log/email
+            // (spec §5.4; see logScannerOutcomes() for the same convention).
+            $reason = $e::class;
+
+            $auditRequest->appendPipelineLog('deep_review_degraded', 'Deep review did not complete: '.$reason);
+            $this->alert($auditRequest, 'Deep review failed: '.$reason);
+
+            // The try block may have already written file_findings before a
+            // later failure (e.g. a validate() rejection after sanitizing) —
+            // a degraded payload must never carry a finding that was never
+            // proven valid.
+            unset($payload['file_findings']);
 
             $payload['deep_review'] = [
                 'files_selected' => $selection?->selectedBeforeBudget ?? 0,
