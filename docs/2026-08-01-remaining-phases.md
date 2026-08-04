@@ -74,6 +74,13 @@ Everything below is what remains.
 `docs/superpowers/plans/2026-08-02-launch-blocking-operations.md`. 9A-2 (staging, CI, first
 deploy, rollback rehearsal, ESP + DNS, support ownership) remains outstanding as a runbook.
 
+**9A-2 status (2026-08-04):** the **in-repo enablers are complete** — CI, Deployer hosts,
+`SENTRY_RELEASE` injection, the smoke gate and rollback wiring, Postmark keys, and the runbook
+itself (`docs/superpowers/runbooks/2026-08-02-launch-operations-runbook.md`). Every bullet below
+that describes *infrastructure* stays unticked: PR8, PR9, PR13 and PR17 are satisfied by
+**executing** that runbook against real servers, not by writing it. Under PR18 the correct report
+until then is "not verified".
+
 - [x] **Choose the stack (Q13).** Resolved as D9A.1–D9A.5: Ploi single server, self-hosted only,
   `spatie/laravel-health` + self-hosted Bugsink, alerts to Telegram/Slack/mail, Ploi's own
   off-box monitor as the dead-man's switch.
@@ -105,12 +112,25 @@ deploy, rollback rehearsal, ESP + DNS, support ownership) remains outstanding as
   `app:health-alerts` read MySQL, so `DatabaseCheck` failing means the alerter is blind too, and
   `/health` returns 500 rather than the designed 503. Ploi's non-2xx rule is the only coverage.
   Structural, not a bug — but it means the single most important alert depends entirely on 9A-2.
-- [ ] **Fix the suite's Faker email-collision flake before CI exists.** `FeatureTest` never rolls
-  back and seeds once per process, so `users.email` collisions surface intermittently in whichever
-  file happens to run late — observed in `LemonSqueezyControllerTest`, `InvoiceServiceTest`, and
-  `SubscriptionService` tests on different runs. It will fail builds. Unrelated to the audit domain.
-- [ ] `SENTRY_RELEASE` must be injected with the deployed git SHA by the Ploi deploy script, or
-  PR4's release-context requirement is unmet.
+- [x] **Fix the suite's Faker email-collision flake before CI exists.** `UserFactory` now builds the
+  local part from a ULID, so the address is unique by construction rather than by Faker's per-instance
+  `unique()` pool. The `FeatureTest` no-rollback root cause is untouched and will resurface on the next
+  unique column. Two `safeEmail()` factories remain.
+- [x] `SENTRY_RELEASE` must be injected with the deployed git SHA by the Ploi deploy script, or
+  PR4's release-context requirement is unmet. — `deploy:sentry-release` task in `backend/deploy.php`;
+  **injection is code, the resulting release context is only observable once the runbook is executed.**
+
+**Found while closing 9A-2 (2026-08-04) — both were silent CI-gate failures:**
+
+- [x] **`php artisan test` exited 1 on a fully green run.** PHPUnit 11 reports test runner warnings
+  through the exit code, and two `*Test.php` classes declared no tests: the stock empty
+  `Tests\Unit\ExampleTest` and `Tests\Feature\FeatureTest`, the base class 155 tests extend. The
+  base is now abstract *and* excluded from the Feature testsuite; the empty one is deleted. One
+  risky test (a legacy-plan assertion behind a null guard no fixture ever satisfied) fixed with it.
+- [x] **Freeze the static-analysis baseline** (Q21, §18.2 T6) — pulled forward from the defect
+  backlog because CI's `phpstan analyse` step was red on every pull request without it. 418 level-3
+  errors frozen in `backend/phpstan-baseline.neon`; verified a newly introduced error still fails
+  the run.
 
 **Deferred from 9A-1, non-blocking:**
 
@@ -271,7 +291,7 @@ Non-blocking, but three of the spec's highest-value five are folded into phases 
 - [ ] Schedules have no database-level uniqueness per user and repository
 - [ ] Corrupt lockfiles yield zero packages silently, with no operator signal
 - [ ] One legacy checkout route references a view that does not exist (pre-existing, unrelated to the audit domain)
-- [ ] **Freeze the static-analysis baseline** (Q21, §18.2 T6). `backend/phpstan.neon` is level 3 with no baseline file and ~416 accepted errors; "no new error category" currently depends entirely on reviewer diligence.
+- [x] **Freeze the static-analysis baseline** (Q21, §18.2 T6). Done 2026-08-04 as part of closing 9A-2 — see the "Found while closing 9A-2" note in Phase 9A. 418 errors frozen in `backend/phpstan-baseline.neon`.
 
 ---
 
