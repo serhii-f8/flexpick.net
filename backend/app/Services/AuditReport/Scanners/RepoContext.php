@@ -22,6 +22,16 @@ final class RepoContext
     /** @var array<string, float|int> */
     public private(set) array $measurements = [];
 
+    /**
+     * Repository-relative paths Gitleaks flagged. Populated by the pipeline
+     * from the deduped findings rather than by GitleaksScanner itself, so
+     * scanners stay free of cross-stage knowledge — the same reason inventory
+     * flows this way.
+     *
+     * @var list<string>
+     */
+    public private(set) array $secretPaths = [];
+
     public function __construct(
         public readonly string $path,
         public readonly TierProfile $tier,
@@ -31,6 +41,12 @@ final class RepoContext
     public function withInventory(SccInventory $inventory): void
     {
         $this->inventory = $inventory;
+    }
+
+    /** @param list<string> $paths */
+    public function withSecretPaths(array $paths): void
+    {
+        $this->secretPaths = $paths;
     }
 
     public function record(string $key, float|int $value): void

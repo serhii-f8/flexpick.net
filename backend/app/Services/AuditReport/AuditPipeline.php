@@ -66,6 +66,10 @@ class AuditPipeline
 
             $groups = $this->grouper->group($this->deduplicator->dedupe($suite->findings));
 
+            // Q17: excerpt collection (every tier) and risk-file selection
+            // both read this. Derived from findings, not from the scanner.
+            $context->withSecretPaths($this->secretPaths($suite));
+
             $collected = $this->metricsCollector->collect($context);
             $metrics = $collected['metrics'];
             // Recorded by JscpdScanner on the per-run context (Task 12).
@@ -142,4 +146,18 @@ class AuditPipeline
     // RepoContext during its own scan, and ScoreCalculator marks the
     // duplication dimension not-measured when jscpd did not run — so a
     // missing measurement can never be mistaken for a duplication-free repo.
+
+    /** @return list<string> */
+    private function secretPaths(ScannerSuiteResult $suite): array
+    {
+        $paths = [];
+
+        foreach ($suite->findings as $finding) {
+            if ($finding->tool === 'gitleaks') {
+                $paths[] = $finding->path;
+            }
+        }
+
+        return array_values(array_unique($paths));
+    }
 }
