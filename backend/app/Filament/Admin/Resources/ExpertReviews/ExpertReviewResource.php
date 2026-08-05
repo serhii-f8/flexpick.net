@@ -18,6 +18,8 @@ class ExpertReviewResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
+    protected static ?string $recordTitleAttribute = 'repo_url';
+
     public static function getNavigationGroup(): ?string
     {
         return __('Audits');
@@ -63,6 +65,11 @@ class ExpertReviewResource extends Resource
     public static function canDelete($record): bool
     {
         return false;
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        return (string) static::getEloquentQuery()->count();
     }
 
     public static function table(Table $table): Table

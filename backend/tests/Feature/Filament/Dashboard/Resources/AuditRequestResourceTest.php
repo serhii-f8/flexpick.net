@@ -98,6 +98,27 @@ class AuditRequestResourceTest extends FeatureTest
         $response->assertSee(__('Download PDF'));
     }
 
+    public function test_view_hides_report_actions_and_results_while_in_expert_review(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $audit = AuditRequest::factory()->verified()->create([
+            'user_id' => $user->id,
+            'status' => AuditRequestStatus::EXPERT_REVIEW->value,
+        ]);
+        AuditReport::factory()->create(['audit_request_id' => $audit->id, 'user_id' => $user->id]);
+
+        $this->actingAs($user);
+
+        $response = $this->get(AuditRequestResource::getUrl('view', ['record' => $audit->uuid], true, 'dashboard', tenant: $tenant))
+            ->assertSuccessful();
+
+        $response->assertDontSee(__('View online'));
+        $response->assertDontSee(__('Download PDF'));
+        $response->assertDontSee(__('Overall score'));
+        $response->assertDontSee(__('Category scores'));
+    }
+
     public function test_navigation_hidden_without_audits_or_allowance(): void
     {
         $user = User::factory()->create();

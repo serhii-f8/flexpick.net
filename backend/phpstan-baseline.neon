@@ -285,7 +285,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$report\.$#'
 			identifier: property.notFound
-			count: 4
+			count: 2
 			path: app/Filament/Dashboard/Resources/AuditRequests/Pages/ViewAuditRequest.php
 
 		-

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Dashboard\Resources\AuditRequests\Pages;
 
+use App\Constants\AuditRequestStatus;
 use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Services\AuditReport\AuditReportService;
 use Filament\Actions\Action;
@@ -18,12 +19,14 @@ class ViewAuditRequest extends ViewRecord
                 ->label(__('View online'))
                 ->url(fn (): string => app(AuditReportService::class)->signedUrl($this->getRecord()->report))
                 ->openUrlInNewTab()
-                ->visible(fn (): bool => $this->getRecord()->report !== null),
+                // @phpstan-ignore-next-line property.notFound (status is a real column on AuditRequest; Larastan can't see it through getRecord()'s generic Model return type)
+                ->visible(fn (): bool => $this->getRecord()->report !== null && $this->getRecord()->status !== AuditRequestStatus::EXPERT_REVIEW->value),
             Action::make('downloadPdf')
                 ->label(__('Download PDF'))
                 ->url(fn (): string => route('reports.download', $this->getRecord()->report))
                 ->openUrlInNewTab()
-                ->visible(fn (): bool => $this->getRecord()->report !== null),
+                // @phpstan-ignore-next-line property.notFound (status is a real column on AuditRequest; Larastan can't see it through getRecord()'s generic Model return type)
+                ->visible(fn (): bool => $this->getRecord()->report !== null && $this->getRecord()->status !== AuditRequestStatus::EXPERT_REVIEW->value),
         ];
     }
 }

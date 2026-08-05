@@ -151,7 +151,7 @@ class AuditRequestResource extends Resource
                 TextEntry::make('report.created_at')->label(__('Completed'))->dateTime(config('app.datetime_format'))->placeholder('—'),
             ]),
             Section::make(__('Results'))
-                ->visible(fn (AuditRequest $record): bool => $record->report !== null)
+                ->visible(fn (AuditRequest $record): bool => $record->report !== null && $record->status !== AuditRequestStatus::EXPERT_REVIEW->value)
                 ->schema([
                     TextEntry::make('overall_score')
                         ->label(__('Overall score'))

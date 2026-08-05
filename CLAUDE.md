@@ -89,7 +89,7 @@ SaaSykit is the *boilerplate*; the actual product is a **code-audit service** la
 2. `MetricsCollector::collect()` — returns `metrics` + code `excerpts`; runs `DependencyAuditor` internally.
 3. `ScoreCalculator::calculate($metrics)` — computed scores, stored on the request *before* the AI step.
 4. `AiAnalyzer::analyze($metrics, $excerpts, $adminContext)` — `AiAnalyzer` is an **interface**; `ClaudeAnalyzer` is the impl (bound in `AppServiceProvider`), and it composes prompts via `PromptComposer` and returns a `ReportPayload`-shaped array.
-5. `AuditReportService::create()` then `send()` — persists the `AuditReport` and emails it.
+5. `AuditReportService::createAndDeliver()` — persists the `AuditReport`, then either emails it (`send()`) or, for expert-tier runs, holds it at a new `expert_review` status for operator review through a Filament queue (`ExpertReviewResource`) before a reviewer publishes it.
 
 Failures throw `AuditNotAnalyzableException` → `AuditRequestService::markNeedsFollowup()`. Note `AuditDeltaService` / `AuditBenchmarkService` are **not** part of this run — they're applied at report *view* time in `AuditReportController`.
 

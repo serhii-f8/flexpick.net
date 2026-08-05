@@ -103,10 +103,19 @@ class AuditReportService
 
     public function publish(AuditReport $report): void
     {
+        // @phpstan-ignore-next-line property.notFound (status is a real column on AuditRequest; Larastan can't see it through the auditRequest relation's generic Model return type)
+        if ($report->auditRequest->status !== AuditRequestStatus::EXPERT_REVIEW->value) {
+            return;
+        }
+
         $payload = $report->payload;
 
         if (trim((string) ($payload['expert_review']['expert_summary'] ?? '')) === '') {
             throw new \InvalidArgumentException('Cannot publish a report without an expert summary.');
+        }
+
+        if (auth()->user() === null) {
+            throw new \LogicException('AuditReportService::publish() requires an authenticated user.');
         }
 
         $payload['expert_review']['reviewed_by'] = auth()->user()->name;

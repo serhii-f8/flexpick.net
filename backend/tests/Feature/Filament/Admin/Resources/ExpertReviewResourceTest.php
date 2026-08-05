@@ -43,6 +43,17 @@ class ExpertReviewResourceTest extends FeatureTest
         $this->assertNotContains($automated->id, $ids);
     }
 
+    public function test_navigation_badge_matches_queue_count(): void
+    {
+        $before = ExpertReviewResource::getEloquentQuery()->count();
+
+        AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+        AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+        AuditRequest::factory()->create(['tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::SENT->value]); // not in queue
+
+        $this->assertSame((string) ($before + 2), ExpertReviewResource::getNavigationBadge());
+    }
+
     public function test_user_without_the_permission_is_denied(): void
     {
         $user = User::factory()->create(['is_admin' => true]); // no role assigned, so no permission
@@ -51,6 +62,28 @@ class ExpertReviewResourceTest extends FeatureTest
 
         $this->actingAs($user);
         $this->assertFalse(ExpertReviewResource::canViewAny());
+    }
+
+    public function test_edit_page_shows_repo_and_customer_context(): void
+    {
+        $reviewer = $this->createAdminUser();
+        $request = AuditRequest::factory()->create([
+            'tier' => AuditTier::EXPERT->value,
+            'status' => AuditRequestStatus::EXPERT_REVIEW->value,
+            'repo_url' => 'https://github.com/acme/context-check',
+            'name' => 'Ada Lovelace',
+            'email' => 'ada@example.com',
+        ]);
+        AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'payload' => ['summary' => 'AI summary text.', 'scores' => ['overall' => 72], 'risks' => [], 'fix_first_plan' => [], 'groups' => []],
+        ]);
+
+        $response = $this->actingAs($reviewer)->get(ExpertReviewResource::getUrl('edit', ['record' => $request->getRouteKey()], true, 'admin'));
+
+        $response->assertSuccessful();
+        $response->assertSee('https://github.com/acme/context-check');
+        $response->assertSee('ada@example.com');
     }
 
     public function test_reviewer_can_edit_and_save_findings(): void

@@ -39,6 +39,7 @@ class AuditReportServiceTest extends FeatureTest
     public function test_publish_requires_an_expert_summary(): void
     {
         $report = AuditReport::factory()->create([
+            'audit_request_id' => AuditRequest::factory()->create(['status' => AuditRequestStatus::EXPERT_REVIEW->value]),
             'payload' => array_merge($this->payload(), ['expert_review' => [
                 'expert_summary' => '',
                 'review_notes' => '',
@@ -49,6 +50,44 @@ class AuditReportServiceTest extends FeatureTest
 
         $this->expectException(\InvalidArgumentException::class);
         app(AuditReportService::class)->publish($report);
+    }
+
+    public function test_publish_requires_an_authenticated_user(): void
+    {
+        $report = AuditReport::factory()->create([
+            'audit_request_id' => AuditRequest::factory()->create(['status' => AuditRequestStatus::EXPERT_REVIEW->value]),
+            'payload' => array_merge($this->payload(), ['expert_review' => [
+                'expert_summary' => 'Ready to publish.',
+                'review_notes' => '',
+                'reviewed_by' => '',
+                'reviewed_at' => '',
+            ]]),
+        ]);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('AuditReportService::publish() requires an authenticated user.');
+        app(AuditReportService::class)->publish($report);
+    }
+
+    public function test_publish_on_an_already_sent_report_is_a_noop(): void
+    {
+        Mail::fake();
+        $report = AuditReport::factory()->create([
+            'audit_request_id' => AuditRequest::factory()->create([
+                'tier' => AuditTier::EXPERT->value,
+                'status' => AuditRequestStatus::SENT->value,
+            ]),
+            'payload' => array_merge($this->payload(), ['expert_review' => [
+                'expert_summary' => 'Already published.',
+                'review_notes' => '',
+                'reviewed_by' => 'Some Reviewer',
+                'reviewed_at' => now()->toIso8601String(),
+            ]]),
+        ]);
+
+        app(AuditReportService::class)->publish($report);
+
+        Mail::assertNotQueued(AuditReportReady::class);
     }
 
     public function test_publish_stamps_attribution_regenerates_pdf_and_sends(): void

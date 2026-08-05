@@ -8,6 +8,7 @@ use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\ReportPayload;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -25,6 +26,23 @@ class EditExpertReview extends EditRecord
     public function form(Schema $schema): Schema
     {
         return $schema->components([
+            Section::make(__('Context'))->schema([
+                Placeholder::make('repo_url')
+                    ->label(__('Repository'))
+                    ->content(fn (): string => $this->getRecord()->repo_url ?? '—'),
+                Placeholder::make('customer')
+                    ->label(__('Customer'))
+                    ->content(fn (): string => sprintf('%s (%s)', $this->getRecord()->name ?? '—', $this->getRecord()->email ?? '—')),
+                Placeholder::make('submitted_at')
+                    ->label(__('Submitted'))
+                    ->content(fn (): string => $this->getRecord()->created_at?->format(config('app.datetime_format')) ?? '—'),
+                Placeholder::make('overall_score')
+                    ->label(__('Overall score'))
+                    ->content(fn (): string => (string) ($this->getRecord()->report->payload['scores']['overall'] ?? '—')),
+                Placeholder::make('ai_summary')
+                    ->label(__('AI summary'))
+                    ->content(fn (): string => $this->getRecord()->report->payload['summary'] ?? ''),
+            ]),
             Section::make(__('Risks'))->schema([
                 Repeater::make('risks')
                     ->label('')
@@ -133,7 +151,7 @@ class EditExpertReview extends EditRecord
                 ->modalDescription(__('This sends the report to the customer immediately and cannot be undone.'))
                 ->disabled(fn (): bool => trim((string) ($this->data['expert_summary'] ?? '')) === '')
                 ->action(function (): void {
-                    $this->save(shouldRedirect: false);
+                    $this->save(shouldRedirect: false, shouldSendSavedNotification: false);
 
                     // @phpstan-ignore-next-line property.notFound (report is AuditRequest's hasOne relation; Larastan can't see it through the parent's generic Model return type)
                     app(AuditReportService::class)->publish($this->getRecord()->report->fresh());

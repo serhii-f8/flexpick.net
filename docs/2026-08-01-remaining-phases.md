@@ -21,7 +21,7 @@ The table below was written on 2026-08-01 and is re-stated as of **2026-08-04**.
 | Phase 10 | Complete |
 | Phase 11 | Complete — tier attribute, five-scanner harness, findings model with dedup and grouping, versioned scores, cost telemetry, reworked catalog |
 | Phase 12 | Complete — deterministic logged risk-file selection, deep file-content review bound to files, payload v3, per-run token budget, deep-section rendering, secret-file exclusion on every tier. The $199 product and plan-metadata Deep AI credits predate this phase (shipped with Phase 11's catalog rework) |
-| Phase 13 | Not started. No `expert_review` status, no operator review queue — verified absent 2026-08-04 |
+| Phase 13 | Complete — `expert_review` status with display mapping everywhere, delivery hold for expert-tier runs, operator review queue with reviewer-only permission, publish action (send + regenerate PDF + transition to sent), human-verified rendering in both report templates, exhaustive stats-widget buckets. Q34's SLA and reviewer staffing are deliberately still open, per the design spec |
 | Gate state | 896 tests / 2245 assertions passing, exit 0 (confirmed twice); PHPStan level 3 with 418 errors frozen in `backend/phpstan-baseline.neon`, no new errors; Pint clean across 950 files |
 
 Everything below is what remains. **The single largest gap is no longer code** — it is that
@@ -244,17 +244,21 @@ requires a *paid* tier-2 report and, like Phase 11's M7, is **not** met and cann
 **Spec:** F5.12.4, §17 Phase 13, Milestone M9.
 **Depends on:** Phase 12; reviewer staffing decision (Q8 / Q34).
 
-- [ ] `expert_review` status added to the closed enumeration in `App\Constants\AuditRequestStatus`, with display mapping **everywhere** — the single status mapper, list views, detail views, widgets, and the customer dashboard's plain-language description
-- [ ] **Delivery hold**: for expert-tier runs only, the pipeline stops after persistence and the report is not auto-sent. §4.3's "no human review gate" exclusion narrows to the diagnostic, automated, and deep-AI tiers; the expert tier's gate *is* the product.
-- [ ] **Operator review queue** in the admin panel: reports awaiting review; edit findings through the canonical payload validator; remove false positives; adjust priorities; fill the expert payload section (expert summary, review notes, reviewed-by, reviewed-at)
-- [ ] **Reviewer permission**, distinct from full administrator rights
-- [ ] **Publish action**: send + regenerate PDF + transition to sent
-- [ ] **Human-verified rendering** in the report template, for this tier only
-- [ ] **$999+ product**
-- [ ] Q34: publish a review SLA on the product page only after the first three are delivered on time
-- [ ] Fixes the §18.7 consistency defect if done right — one audit status currently reconciles to no statistics bucket, so operator tiles don't sum to the total. Adding a status makes this worse unless the buckets are made exhaustive.
+**Status: complete (2026-08-05).** Implemented on `expert-review-workflow`
+(commits `e80c33a`..`653ad1d`), spec/plan under `docs/superpowers/plans/2026-08-05-expert-review-workflow.md`.
 
-**Exit:** Milestone M9 — first expert-reviewed report published through the workflow.
+- [x] `expert_review` status added to the closed enumeration in `App\Constants\AuditRequestStatus`, with display mapping **everywhere** — `AuditRequestStatusMapper` (label + color), both admin and dashboard `AuditRequest` list/detail views, both stats widgets, and the customer dashboard's plain-language description (`AuditRequestResource::statusDescription()`)
+- [x] **Delivery hold**: for expert-tier runs only, the pipeline stops after persistence and the report is not auto-sent — `AuditReportService::createAndDeliver()` branches expert-tier requests to `EXPERT_REVIEW` instead of calling `send()`
+- [x] **Operator review queue** in the admin panel (`ExpertReviewResource` / `EditExpertReview`): reports awaiting review; edit findings through the canonical `ReportPayload` validator; remove false positives via the repeater; adjust priorities via reordering; fill the expert payload section (expert summary, review notes, reviewed-by, reviewed-at)
+- [x] **Reviewer permission**, distinct from full administrator rights — `review expert audits` (`RolesAndPermissionsSeeder`), gates `ExpertReviewResource::canViewAny()`
+- [x] **Publish action**: send + regenerate PDF + transition to sent — `AuditReportService::publish()`, wired to the queue's header action, now guarded to no-op outside `expert_review` status and to require an authenticated reviewer
+- [x] **Human-verified rendering** in the report template, for this tier only — `resources/views/reports/partials/expert-review.blade.php`, included from both the PDF (`reports/audit.blade.php`) and the web view (`reports/audit-web.blade.php`, gated on the `expert_review` payload key being present)
+- [x] **$999+ product** — **already true before this phase**: shipped as part of Phase 11's catalog rework, not this one. Recorded here for completeness, not claimed as Phase 13 work.
+- [ ] Q34: publish a review SLA on the product page only after the first three are delivered on time — deliberately still open; no expert order has shipped through this workflow yet
+- [ ] Reviewer staffing (Q8) — deliberately still open, same reason
+- [x] Fixes the §18.7 consistency defect — both `AuditAdminStatsWidget::statusBuckets()` and `AuditStatsWidget::statusBuckets()` now partition all twelve `AuditRequestStatus` cases (an `expert_review` bucket was added alongside the pre-existing ones), so operator/customer tiles sum to the total
+
+**Exit:** Milestone M9 — first expert-reviewed report published through the workflow. Code complete; unmet pending a real expert-tier order, same shape as Phase 11's M7 and Phase 12's M8.
 
 ---
 
