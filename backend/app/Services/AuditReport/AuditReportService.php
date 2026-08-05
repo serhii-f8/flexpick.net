@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Mail\Audit\AuditReportReady;
 use App\Mail\Audit\AuditReportUnlocked;
 use App\Models\AuditReport;
@@ -56,6 +57,19 @@ class AuditReportService
         }
 
         $auditRequest->update(['status' => AuditRequestStatus::REPORT_READY->value]);
+
+        return $report;
+    }
+
+    public function createAndDeliver(AuditRequest $auditRequest, array $payload, int $scoringVersion): AuditReport
+    {
+        $report = $this->create($auditRequest, $payload, $scoringVersion);
+
+        if ($auditRequest->tier === AuditTier::EXPERT) {
+            $auditRequest->update(['status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+        } else {
+            $this->send($report);
+        }
 
         return $report;
     }

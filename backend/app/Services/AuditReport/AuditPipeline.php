@@ -124,8 +124,7 @@ class AuditPipeline
                 );
             }
 
-            $report = $this->reportService->create($auditRequest, $payload, $scoreSet->scoringVersion);
-            $this->reportService->send($report);
+            $this->reportService->createAndDeliver($auditRequest, $payload, $scoreSet->scoringVersion);
 
             $auditRequest->update([
                 'analysis_completed_at' => now(),

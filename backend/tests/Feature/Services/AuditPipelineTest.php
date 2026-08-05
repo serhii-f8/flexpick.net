@@ -206,6 +206,16 @@ class AuditPipelineTest extends FeatureTest
         $this->assertSame(ReportPayload::VERSION, $report->payload_schema_version);
     }
 
+    public function test_expert_tier_run_holds_for_review_instead_of_sending(): void
+    {
+        $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer);
+        $request = $this->runPipelineWithFakes(tier: AuditTier::EXPERT);
+
+        $this->assertSame(AuditRequestStatus::EXPERT_REVIEW->value, $request->fresh()->status);
+        Mail::assertNotQueued(AuditReportReady::class);
+        $this->assertNotNull($request->fresh()->report);
+    }
+
     public function test_narration_is_capped_to_the_tier_budget(): void
     {
         config()->set('audit.tiers.diagnostic.narrated_groups', 2);
