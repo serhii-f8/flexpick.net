@@ -41,4 +41,57 @@ class ReportPayloadTest extends TestCase
         $this->expectException(AiAnalysisException::class);
         ReportPayload::validate($payload);
     }
+
+    public function test_accepts_valid_payload_with_expert_review(): void
+    {
+        $payload = $this->valid();
+        $payload['expert_review'] = [
+            'expert_summary' => 'Reviewed and solid.',
+            'review_notes' => 'Nothing further to add.',
+            'reviewed_by' => 'Jane Reviewer',
+            'reviewed_at' => '2026-08-05T12:00:00+00:00',
+        ];
+
+        $validated = ReportPayload::validate($payload, 4);
+
+        $this->assertSame($payload['expert_review'], $validated['expert_review']);
+    }
+
+    public function test_expert_review_is_optional_in_v4(): void
+    {
+        $this->assertSame($this->valid(), ReportPayload::validate($this->valid(), 4));
+    }
+
+    public function test_rejects_expert_review_missing_a_field(): void
+    {
+        $payload = $this->valid();
+        $payload['expert_review'] = [
+            'expert_summary' => 'ok',
+            'review_notes' => 'ok',
+            'reviewed_by' => 'Jane',
+            // reviewed_at missing
+        ];
+
+        $this->expectException(AiAnalysisException::class);
+        ReportPayload::validate($payload, 4);
+    }
+
+    public function test_rejects_expert_review_with_non_string_field(): void
+    {
+        $payload = $this->valid();
+        $payload['expert_review'] = [
+            'expert_summary' => 'ok',
+            'review_notes' => 'ok',
+            'reviewed_by' => 'Jane',
+            'reviewed_at' => 12345, // not a string
+        ];
+
+        $this->expectException(AiAnalysisException::class);
+        ReportPayload::validate($payload, 4);
+    }
+
+    public function test_default_version_is_now_four(): void
+    {
+        $this->assertSame(4, ReportPayload::VERSION);
+    }
 }

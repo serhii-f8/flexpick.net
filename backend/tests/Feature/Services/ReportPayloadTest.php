@@ -66,7 +66,7 @@ class ReportPayloadTest extends FeatureTest
 
     public function test_version_defaults_to_the_current_contract(): void
     {
-        $this->assertSame(3, ReportPayload::VERSION);
+        $this->assertSame(4, ReportPayload::VERSION);
         $this->assertIsArray(ReportPayload::validate($this->v2Payload()));
     }
 
@@ -155,7 +155,7 @@ class ReportPayloadTest extends FeatureTest
 
     public function test_version_is_three(): void
     {
-        $this->assertSame(3, ReportPayload::VERSION);
+        $this->assertSame(4, ReportPayload::VERSION);
     }
 
     public function test_v3_accepts_a_payload_with_no_deep_section(): void

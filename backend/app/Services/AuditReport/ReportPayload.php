@@ -14,7 +14,7 @@ use App\Exceptions\AiAnalysisException;
 class ReportPayload
 {
     /** Bump when the payload contract changes. */
-    public const VERSION = 3;
+    public const VERSION = 4;
 
     private const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
@@ -38,6 +38,7 @@ class ReportPayload
             1 => self::validateV1($payload),
             2 => self::validateV2($payload),
             3 => self::validateV3($payload),
+            4 => self::validateV4($payload),
             default => throw new AiAnalysisException("Unknown payload schema version: {$version}"),
         };
     }
@@ -184,6 +185,30 @@ class ReportPayload
             if (array_key_exists($key, $meta) && ! is_bool($meta[$key])) {
                 throw new AiAnalysisException("Malformed deep_review metadata: {$key}");
             }
+        }
+    }
+
+    private static function validateV4(array $payload): array
+    {
+        $payload = self::validateV3($payload);
+
+        // Optional by design, matching file_findings/deep_review — the
+        // validator is context-free and must not learn about tiers.
+        if (array_key_exists('expert_review', $payload)) {
+            self::validateExpertReview($payload['expert_review']);
+        }
+
+        return $payload;
+    }
+
+    private static function validateExpertReview(mixed $review): void
+    {
+        if (! is_array($review)
+            || ! is_string($review['expert_summary'] ?? null)
+            || ! is_string($review['review_notes'] ?? null)
+            || ! is_string($review['reviewed_by'] ?? null)
+            || ! is_string($review['reviewed_at'] ?? null)) {
+            throw new AiAnalysisException('Malformed expert_review section');
         }
     }
 }
