@@ -15,4 +15,5 @@ enum AuditRequestStatus: string
     case PENDING_VERIFICATION = 'pending_verification';
     case AWAITING_ACCESS = 'awaiting_access';
     case AWAITING_PAYMENT = 'awaiting_payment';
+    case EXPERT_REVIEW = 'expert_review';
 }

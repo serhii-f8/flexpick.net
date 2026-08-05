@@ -58,4 +58,21 @@ class AuditRequestResourceTest extends FeatureTest
         $this->assertFalse($record->free_run);
         Queue::assertPushed(GenerateAuditReport::class);
     }
+
+    public function test_retry_action_is_visible_for_expert_review_status(): void
+    {
+        Queue::fake([GenerateAuditReport::class]);
+        $record = AuditRequest::factory()->create([
+            'repo_url' => 'https://example.com/repo.git',
+            'status' => AuditRequestStatus::EXPERT_REVIEW->value,
+        ]);
+
+        Livewire::actingAs($this->createAdminUser())
+            ->test(ListAuditRequests::class)
+            ->callTableAction('retry', $record);
+
+        $record->refresh();
+        $this->assertSame(AuditRequestStatus::QUEUED->value, $record->status);
+        Queue::assertPushed(GenerateAuditReport::class);
+    }
 }

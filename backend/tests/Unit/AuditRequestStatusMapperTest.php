@@ -29,4 +29,12 @@ class AuditRequestStatusMapperTest extends TestCase
         $this->assertSame('warning', $mapper->mapColor('awaiting_access'));
         $this->assertSame('warning', $mapper->mapColor('awaiting_payment'));
     }
+
+    public function test_maps_expert_review(): void
+    {
+        $mapper = new AuditRequestStatusMapper;
+
+        $this->assertSame('Awaiting expert review', $mapper->mapForDisplay('expert_review'));
+        $this->assertSame('warning', $mapper->mapColor('expert_review'));
+    }
 }

@@ -173,6 +173,7 @@ class AuditRequestResource extends Resource
                         AuditRequestStatus::FAILED->value,
                         AuditRequestStatus::NEEDS_FOLLOWUP->value,
                         AuditRequestStatus::REPORT_READY->value,
+                        AuditRequestStatus::EXPERT_REVIEW->value,
                     ], true))
                     ->action(function (AuditRequest $record): void {
                         $record->update(['status' => AuditRequestStatus::QUEUED->value, 'failure_reason' => null]);
