@@ -96,4 +96,24 @@ class AuditReportControllerTest extends FeatureTest
         $this->actingAs($stranger)->get(route('reports.download', $report))->assertStatus(403);
         $this->actingAs($owner)->get(route('reports.download', $report))->assertStatus(200);
     }
+
+    public function test_report_view_renders_the_expert_review_section_when_present(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create([
+            'payload' => array_merge($this->payload(), [
+                'expert_review' => [
+                    'expert_summary' => 'Reviewed thoroughly, no blockers.',
+                    'review_notes' => 'Two risks reprioritized.',
+                    'reviewed_by' => 'Jane Reviewer',
+                    'reviewed_at' => '2026-08-05T12:00:00+00:00',
+                ],
+            ]),
+        ]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+
+        $response->assertOk();
+        $response->assertSee('Reviewed thoroughly, no blockers.');
+        $response->assertSee('Jane Reviewer');
+    }
 }

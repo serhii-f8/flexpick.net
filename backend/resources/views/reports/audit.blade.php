@@ -112,6 +112,8 @@
 
     @include('reports.partials.deep-findings', ['payload' => $payload, 'unlocked' => true])
 
+    @include('reports.partials.expert-review', ['payload' => $payload])
+
     <h2>{{ __('What to fix first') }}</h2>
     <table>
         <tr><th>#</th><th>{{ __('Step') }}</th><th>{{ __('Why') }}</th><th>{{ __('Effort') }}</th></tr>

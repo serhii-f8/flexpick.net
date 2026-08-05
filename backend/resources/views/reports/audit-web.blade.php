@@ -230,6 +230,12 @@
         </div>
     @endif
 
+    @if (($payload['expert_review'] ?? null) !== null)
+        <div class="card">
+            @include('reports.partials.expert-review', ['payload' => $payload])
+        </div>
+    @endif
+
     @if ($unlocked)
         <div class="card">
             <h2>{{ __('What to fix first') }}</h2>
