@@ -93,6 +93,8 @@ class RolesAndPermissionsSeeder extends Seeder
 
         Permission::findOrCreate('view stats');
 
+        Permission::findOrCreate('review expert audits');
+
         $role = Role::findOrCreate('admin');
 
         // give all permissions to admin that doesn't start with "tenancy:"
