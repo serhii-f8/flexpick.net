@@ -3,9 +3,11 @@
 namespace Tests\Feature\Filament\Dashboard;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Constants\SubscriptionStatus;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Jobs\GenerateAuditReport;
+use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\Plan;
 use App\Models\Product;
@@ -102,6 +104,35 @@ class AuditReportsPageTest extends FeatureTest
             ->call('setSchedule', 'https://github.com/acme/app', 'off');
 
         $this->assertDatabaseMissing('audit_schedules', ['user_id' => $user->id]);
+    }
+
+    public function test_report_held_for_expert_review_is_not_listed(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+
+        $heldRequest = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::EXPERT->value,
+            'status' => AuditRequestStatus::EXPERT_REVIEW->value,
+            'repo_url' => 'https://github.com/acme/held-repo',
+        ]);
+        AuditReport::factory()->create(['audit_request_id' => $heldRequest->id, 'user_id' => $user->id]);
+
+        $sentRequest = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => AuditRequestStatus::SENT->value,
+            'repo_url' => 'https://github.com/acme/sent-repo',
+        ]);
+        AuditReport::factory()->create(['audit_request_id' => $sentRequest->id, 'user_id' => $user->id]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::test(AuditReports::class)
+            ->assertSee('https://github.com/acme/sent-repo')
+            ->assertDontSee('https://github.com/acme/held-repo');
     }
 
     private function createTenantFor(User $user): Tenant

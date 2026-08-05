@@ -110,7 +110,11 @@ class AuditReports extends Page
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
 
-        $reports = $user->auditReports()->with('auditRequest')->latest()->get();
+        $reports = $user->auditReports()
+            ->with('auditRequest')
+            ->whereHas('auditRequest', fn ($query) => $query->where('status', '!=', AuditRequestStatus::EXPERT_REVIEW->value))
+            ->latest()
+            ->get();
 
         return [
             'reports' => $reports,
