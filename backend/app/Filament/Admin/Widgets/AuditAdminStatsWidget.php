@@ -14,11 +14,21 @@ class AuditAdminStatsWidget extends BaseWidget
 {
     protected ?string $pollingInterval = null;
 
+    public static function statusBuckets(): array
+    {
+        return [
+            'pending' => [AuditRequestStatus::NEW->value, AuditRequestStatus::QUEUED->value, AuditRequestStatus::PENDING_VERIFICATION->value],
+            'analyzing' => [AuditRequestStatus::ANALYZING->value],
+            'expert_review' => [AuditRequestStatus::EXPERT_REVIEW->value],
+            'completed' => [AuditRequestStatus::REPORT_READY->value, AuditRequestStatus::SENT->value, AuditRequestStatus::HANDLED->value],
+            'failed' => [AuditRequestStatus::FAILED->value],
+            'manual' => [AuditRequestStatus::NEEDS_FOLLOWUP->value, AuditRequestStatus::AWAITING_ACCESS->value, AuditRequestStatus::AWAITING_PAYMENT->value],
+        ];
+    }
+
     protected function getStats(): array
     {
-        $pending = [AuditRequestStatus::NEW->value, AuditRequestStatus::QUEUED->value, AuditRequestStatus::PENDING_VERIFICATION->value];
-        $completed = [AuditRequestStatus::REPORT_READY->value, AuditRequestStatus::SENT->value];
-        $manual = [AuditRequestStatus::NEEDS_FOLLOWUP->value, AuditRequestStatus::AWAITING_ACCESS->value, AuditRequestStatus::AWAITING_PAYMENT->value];
+        $buckets = self::statusBuckets();
 
         return [
             Stat::make(__('Total audits'), AuditRequest::count())
@@ -27,11 +37,12 @@ class AuditAdminStatsWidget extends BaseWidget
                     'week' => AuditRequest::where('created_at', '>=', now()->startOfWeek())->count(),
                     'month' => AuditRequest::where('created_at', '>=', now()->startOfMonth())->count(),
                 ])),
-            Stat::make(__('Pending'), AuditRequest::whereIn('status', $pending)->count())->color('gray'),
-            Stat::make(__('Analyzing'), AuditRequest::where('status', AuditRequestStatus::ANALYZING->value)->count())->color('info'),
-            Stat::make(__('Completed'), AuditRequest::whereIn('status', $completed)->count())->color('success'),
-            Stat::make(__('Failed'), AuditRequest::where('status', AuditRequestStatus::FAILED->value)->count())->color('danger'),
-            Stat::make(__('Needs manual action'), AuditRequest::whereIn('status', $manual)->count())->color('warning'),
+            Stat::make(__('Pending'), AuditRequest::whereIn('status', $buckets['pending'])->count())->color('gray'),
+            Stat::make(__('Analyzing'), AuditRequest::whereIn('status', $buckets['analyzing'])->count())->color('info'),
+            Stat::make(__('Awaiting expert review'), AuditRequest::whereIn('status', $buckets['expert_review'])->count())->color('warning'),
+            Stat::make(__('Completed'), AuditRequest::whereIn('status', $buckets['completed'])->count())->color('success'),
+            Stat::make(__('Failed'), AuditRequest::whereIn('status', $buckets['failed'])->count())->color('danger'),
+            Stat::make(__('Needs manual action'), AuditRequest::whereIn('status', $buckets['manual'])->count())->color('warning'),
             Stat::make(__('Avg processing time'), $this->averageProcessingTime())
                 ->description(__('From analysis start to report')),
             Stat::make(__('Email failures'), $this->emailFailures())->color('danger'),

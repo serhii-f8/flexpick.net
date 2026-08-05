@@ -15,6 +15,26 @@ class AuditStatsWidget extends BaseWidget
 
     protected static ?int $sort = 1;
 
+    public static function statusBuckets(): array
+    {
+        return [
+            'in_progress' => [
+                AuditRequestStatus::NEW->value,
+                AuditRequestStatus::PENDING_VERIFICATION->value,
+                AuditRequestStatus::QUEUED->value,
+                AuditRequestStatus::ANALYZING->value,
+            ],
+            'expert_review' => [AuditRequestStatus::EXPERT_REVIEW->value],
+            'needs_action' => [
+                AuditRequestStatus::NEEDS_FOLLOWUP->value,
+                AuditRequestStatus::AWAITING_ACCESS->value,
+                AuditRequestStatus::AWAITING_PAYMENT->value,
+            ],
+            'completed' => [AuditRequestStatus::REPORT_READY->value, AuditRequestStatus::SENT->value, AuditRequestStatus::HANDLED->value],
+            'failed' => [AuditRequestStatus::FAILED->value],
+        ];
+    }
+
     protected function getStats(): array
     {
         $user = auth()->user();
@@ -49,18 +69,15 @@ class AuditStatsWidget extends BaseWidget
                 ->color($remainingDeepAi > 0 ? 'success' : 'warning');
         }
 
+        $buckets = self::statusBuckets();
+
         return [
             ...$stats,
-            Stat::make(__('In progress'), AuditRequest::forUser($user)->whereIn('status', [
-                AuditRequestStatus::QUEUED->value,
-                AuditRequestStatus::ANALYZING->value,
-            ])->count())->color('info'),
-            Stat::make(__('Completed'), AuditRequest::forUser($user)->whereIn('status', [
-                AuditRequestStatus::REPORT_READY->value,
-                AuditRequestStatus::SENT->value,
-            ])->count())->color('success'),
-            Stat::make(__('Failed'), AuditRequest::forUser($user)->where('status', AuditRequestStatus::FAILED->value)->count())
-                ->color('danger'),
+            Stat::make(__('In progress'), AuditRequest::forUser($user)->whereIn('status', $buckets['in_progress'])->count())->color('info'),
+            Stat::make(__('Awaiting expert review'), AuditRequest::forUser($user)->whereIn('status', $buckets['expert_review'])->count())->color('warning'),
+            Stat::make(__('Needs your action'), AuditRequest::forUser($user)->whereIn('status', $buckets['needs_action'])->count())->color('warning'),
+            Stat::make(__('Completed'), AuditRequest::forUser($user)->whereIn('status', $buckets['completed'])->count())->color('success'),
+            Stat::make(__('Failed'), AuditRequest::forUser($user)->whereIn('status', $buckets['failed'])->count())->color('danger'),
         ];
     }
 
