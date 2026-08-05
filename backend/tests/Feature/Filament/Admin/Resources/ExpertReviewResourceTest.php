@@ -6,9 +6,11 @@ use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Admin\Resources\ExpertReviews\ExpertReviewResource;
 use App\Filament\Admin\Resources\ExpertReviews\Pages\EditExpertReview;
+use App\Mail\Audit\AuditReportReady;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\User;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 
@@ -112,5 +114,39 @@ class ExpertReviewResourceTest extends FeatureTest
             ->assertHasNoFormErrors();
 
         $this->assertArrayNotHasKey('expert_review', $report->fresh()->payload);
+    }
+
+    public function test_publish_action_is_disabled_without_a_summary(): void
+    {
+        $reviewer = $this->createAdminUser();
+        $request = AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+        AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'payload' => ['summary' => 'ok', 'scores' => ['overall' => 60], 'risks' => [], 'fix_first_plan' => [], 'groups' => []],
+        ]);
+
+        Livewire::actingAs($reviewer)
+            ->test(EditExpertReview::class, ['record' => $request->getRouteKey()])
+            ->assertActionDisabled('publish');
+    }
+
+    public function test_publish_action_sends_and_transitions_status(): void
+    {
+        Mail::fake();
+        $reviewer = $this->createAdminUser();
+        $request = AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+        $report = AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'payload' => ['summary' => 'ok', 'scores' => ['overall' => 60], 'risks' => [], 'fix_first_plan' => [], 'groups' => []],
+        ]);
+
+        Livewire::actingAs($reviewer)
+            ->test(EditExpertReview::class, ['record' => $request->getRouteKey()])
+            ->fillForm(['risks' => [], 'file_findings' => [], 'expert_summary' => 'All clear.', 'review_notes' => ''])
+            ->callAction('publish');
+
+        $this->assertSame(AuditRequestStatus::SENT->value, $request->fresh()->status);
+        $this->assertSame($reviewer->name, $report->fresh()->payload['expert_review']['reviewed_by']);
+        Mail::assertQueued(AuditReportReady::class);
     }
 }

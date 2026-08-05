@@ -3,13 +3,16 @@
 namespace App\Filament\Admin\Resources\ExpertReviews\Pages;
 
 use App\Filament\Admin\Resources\ExpertReviews\ExpertReviewResource;
+use App\Services\AuditReport\AuditReportService;
 use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\ReportPayload;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -98,8 +101,13 @@ class EditExpertReview extends EditRecord
 
         if (trim((string) $data['expert_summary']) !== '' || trim((string) $data['review_notes']) !== '') {
             $payload['expert_review'] = [
-                'expert_summary' => $data['expert_summary'],
-                'review_notes' => $data['review_notes'],
+                // Filament dehydrates an empty text field to `null`, not `''`
+                // (vendor/filament/schemas/src/Components/Concerns/HasState.php,
+                // getStateToDehydrate()) — cast back to string so a blank
+                // review_notes/expert_summary never breaks the payload
+                // contract's is_string() check.
+                'expert_summary' => (string) $data['expert_summary'],
+                'review_notes' => (string) $data['review_notes'],
                 'reviewed_by' => $payload['expert_review']['reviewed_by'] ?? '',
                 'reviewed_at' => $payload['expert_review']['reviewed_at'] ?? '',
             ];
@@ -111,5 +119,25 @@ class EditExpertReview extends EditRecord
         $record->report->update(['payload' => $validated, 'payload_schema_version' => ReportPayload::VERSION]);
 
         return $record;
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('publish')
+                ->label(__('Publish report'))
+                ->requiresConfirmation()
+                ->modalDescription(__('This sends the report to the customer immediately and cannot be undone.'))
+                ->disabled(fn (): bool => trim((string) ($this->data['expert_summary'] ?? '')) === '')
+                ->action(function (): void {
+                    $this->save(shouldRedirect: false);
+
+                    app(AuditReportService::class)->publish($this->getRecord()->report->fresh());
+
+                    Notification::make()->title(__('Report published'))->success()->send();
+
+                    $this->redirect(static::getResource()::getUrl('index'));
+                }),
+        ];
     }
 }
