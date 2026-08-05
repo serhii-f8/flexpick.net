@@ -116,4 +116,14 @@ class AuditReportControllerTest extends FeatureTest
         $response->assertSee('Reviewed thoroughly, no blockers.');
         $response->assertSee('Jane Reviewer');
     }
+
+    public function test_report_view_does_not_render_expert_review_section_when_absent(): void
+    {
+        $report = AuditReport::factory()->create();
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+
+        $response->assertOk();
+        $response->assertDontSee('Human expert review');
+    }
 }
