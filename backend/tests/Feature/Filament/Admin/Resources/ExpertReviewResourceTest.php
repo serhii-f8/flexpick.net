@@ -5,8 +5,11 @@ namespace Tests\Feature\Filament\Admin\Resources;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Admin\Resources\ExpertReviews\ExpertReviewResource;
+use App\Filament\Admin\Resources\ExpertReviews\Pages\EditExpertReview;
+use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\User;
+use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 
 class ExpertReviewResourceTest extends FeatureTest
@@ -46,5 +49,68 @@ class ExpertReviewResourceTest extends FeatureTest
 
         $this->actingAs($user);
         $this->assertFalse(ExpertReviewResource::canViewAny());
+    }
+
+    public function test_reviewer_can_edit_and_save_findings(): void
+    {
+        $reviewer = $this->createAdminUser();
+        $request = AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+        $report = AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'payload' => [
+                'summary' => 'ok',
+                'scores' => ['overall' => 60],
+                'risks' => [
+                    ['title' => 'Keep', 'impact' => 'high', 'evidence' => 'e1', 'recommendation' => 'r1'],
+                    ['title' => 'Drop as false positive', 'impact' => 'low', 'evidence' => 'e2', 'recommendation' => 'r2'],
+                ],
+                'fix_first_plan' => [],
+                'groups' => [],
+                'file_findings' => [
+                    ['path' => 'app/A.php', 'line' => 3, 'title' => 'Finding', 'evidence' => 'ev', 'recommendation' => 'rec', 'severity' => 'high', 'category' => 'security', 'effort' => 'M', 'related_paths' => ['app/B.php']],
+                ],
+            ],
+        ]);
+
+        Livewire::actingAs($reviewer)
+            ->test(EditExpertReview::class, ['record' => $request->getRouteKey()])
+            ->fillForm([
+                'risks' => [
+                    ['title' => 'Keep', 'impact' => 'high', 'evidence' => 'e1', 'recommendation' => 'r1'],
+                    // second risk removed — simulates deleting a false positive
+                ],
+                'file_findings' => [
+                    ['path' => 'app/A.php', 'line' => 3, 'title' => 'Finding', 'evidence' => 'ev', 'recommendation' => 'rec', 'severity' => 'high', 'category' => 'security', 'effort' => 'M', 'related_paths' => ['app/B.php']],
+                ],
+                'expert_summary' => 'Looks solid overall.',
+                'review_notes' => 'One risk removed as a false positive.',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $payload = $report->fresh()->payload;
+        $this->assertCount(1, $payload['risks']);
+        $this->assertSame('Keep', $payload['risks'][0]['title']);
+        $this->assertSame('app/B.php', $payload['file_findings'][0]['related_paths'][0]); // hidden field round-tripped
+        $this->assertSame('Looks solid overall.', $payload['expert_review']['expert_summary']);
+        $this->assertSame('', $payload['expert_review']['reviewed_by']); // not stamped until publish
+    }
+
+    public function test_draft_save_without_a_summary_omits_the_expert_review_key(): void
+    {
+        $reviewer = $this->createAdminUser();
+        $request = AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+        $report = AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'payload' => ['summary' => 'ok', 'scores' => ['overall' => 60], 'risks' => [], 'fix_first_plan' => [], 'groups' => []],
+        ]);
+
+        Livewire::actingAs($reviewer)
+            ->test(EditExpertReview::class, ['record' => $request->getRouteKey()])
+            ->fillForm(['risks' => [], 'file_findings' => [], 'expert_summary' => '', 'review_notes' => ''])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertArrayNotHasKey('expert_review', $report->fresh()->payload);
     }
 }
