@@ -101,6 +101,29 @@ class AuditReportService
         }
     }
 
+    public function publish(AuditReport $report): void
+    {
+        $payload = $report->payload;
+
+        if (trim((string) ($payload['expert_review']['expert_summary'] ?? '')) === '') {
+            throw new \InvalidArgumentException('Cannot publish a report without an expert summary.');
+        }
+
+        $payload['expert_review']['reviewed_by'] = auth()->user()->name;
+        $payload['expert_review']['reviewed_at'] = now()->toIso8601String();
+
+        $validated = ReportPayload::validate($payload, ReportPayload::VERSION);
+
+        $report->update(['payload' => $validated, 'payload_schema_version' => ReportPayload::VERSION]);
+        $this->regeneratePdf($report);
+        $this->send($report);
+    }
+
+    public function regeneratePdf(AuditReport $report): void
+    {
+        $this->generatePdf($report);
+    }
+
     public function signedUrl(AuditReport $report): string
     {
         return URL::temporarySignedRoute(
