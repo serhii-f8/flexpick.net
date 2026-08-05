@@ -3,6 +3,7 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\AuditRequestStatus;
+use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditRequestService;
@@ -50,6 +51,37 @@ class AuditRequestStatusTest extends FeatureTest
         $request = AuditRequest::factory()->verified()->create();
 
         $this->get('/audit-requests/'.$request->uuid.'/status')->assertForbidden();
+    }
+
+    public function test_expert_review_label_is_not_generic_processing(): void
+    {
+        $request = AuditRequest::factory()->verified()->create(['status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+
+        $this->get(app(AuditRequestService::class)->statusUrl($request))
+            ->assertOk()
+            ->assertSee(__('Your report is complete and is being reviewed by our expert auditor before delivery.'));
+    }
+
+    public function test_status_json_does_not_report_expert_review_as_done(): void
+    {
+        $request = AuditRequest::factory()->verified()->create(['status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+        AuditReport::factory()->create(['audit_request_id' => $request->id]);
+
+        $this->getJson($this->signedJsonUrl($request))
+            ->assertOk()
+            ->assertJsonPath('done', false)
+            ->assertJsonPath('failed', false)
+            ->assertJsonPath('report_url', null);
+    }
+
+    public function test_dashboard_status_description_for_expert_review(): void
+    {
+        $request = AuditRequest::factory()->make(['status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+
+        $this->assertSame(
+            'Your report is complete and is being reviewed by our expert auditor before delivery.',
+            AuditRequestResource::statusDescription($request),
+        );
     }
 
     private function signedJsonUrl(AuditRequest $request): string
