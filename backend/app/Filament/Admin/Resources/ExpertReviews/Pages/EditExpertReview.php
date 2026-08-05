@@ -83,6 +83,7 @@ class EditExpertReview extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
+        // @phpstan-ignore-next-line property.notFound (report is AuditRequest's hasOne relation; Larastan can't see it through the parent's generic Model return type)
         $payload = $this->getRecord()->report->payload;
 
         $data['risks'] = $payload['risks'] ?? [];
@@ -95,6 +96,7 @@ class EditExpertReview extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
+        // @phpstan-ignore-next-line property.notFound (report is AuditRequest's hasOne relation; Larastan can't see it through the parent's generic Model return type)
         $payload = $record->report->payload;
         $payload['risks'] = $data['risks'];
         $payload['file_findings'] = $data['file_findings'];
@@ -116,6 +118,7 @@ class EditExpertReview extends EditRecord
         }
 
         $validated = ReportPayload::validate($payload, ReportPayload::VERSION);
+        // @phpstan-ignore-next-line property.notFound (report is AuditRequest's hasOne relation; Larastan can't see it through the parent's generic Model return type)
         $record->report->update(['payload' => $validated, 'payload_schema_version' => ReportPayload::VERSION]);
 
         return $record;
@@ -132,6 +135,7 @@ class EditExpertReview extends EditRecord
                 ->action(function (): void {
                     $this->save(shouldRedirect: false);
 
+                    // @phpstan-ignore-next-line property.notFound (report is AuditRequest's hasOne relation; Larastan can't see it through the parent's generic Model return type)
                     app(AuditReportService::class)->publish($this->getRecord()->report->fresh());
 
                     Notification::make()->title(__('Report published'))->success()->send();
