@@ -162,4 +162,78 @@ class AuditRequestResourceTest extends FeatureTest
             ->assertCanSeeTableRecords([$request])
             ->assertTableColumnStateSet('email_logs_count', 2, $request);
     }
+
+    public function test_the_view_page_renders_the_pipeline_log_as_a_timeline(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $request = AuditRequest::factory()->create([
+            'pipeline_log' => [
+                ['step' => 'clone', 'message' => 'Cloned 1200 files', 'at' => now()->subMinutes(10)->toIso8601String()],
+                ['step' => 'analyze_failed', 'message' => 'AI returned unparseable JSON', 'at' => now()->subMinutes(4)->toIso8601String()],
+            ],
+        ]);
+
+        $this->actingAs($admin);
+
+        $this->get(AuditRequestResource::getUrl('view', ['record' => $request], panel: 'admin'))
+            ->assertSuccessful()
+            ->assertSee(__('Timeline'))
+            ->assertSee('clone')
+            ->assertSee('Cloned 1200 files')
+            ->assertSee('analyze_failed')
+            ->assertSee('AI returned unparseable JSON');
+    }
+
+    public function test_a_half_written_pipeline_entry_renders_instead_of_throwing(): void
+    {
+        $admin = $this->createAdminUser();
+
+        // The pipeline may die mid-write, so malformed entries are expected
+        // input rather than corruption.
+        $request = AuditRequest::factory()->create([
+            'pipeline_log' => [
+                ['message' => 'no step key'],
+                ['step' => 'clone', 'message' => 'bad timestamp', 'at' => 'not-a-date'],
+                'a bare string, not an array',
+            ],
+        ]);
+
+        $this->actingAs($admin);
+
+        $this->get(AuditRequestResource::getUrl('view', ['record' => $request], panel: 'admin'))
+            ->assertSuccessful()
+            ->assertSee('bad timestamp');
+    }
+
+    public function test_an_empty_pipeline_log_shows_the_placeholder(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $request = AuditRequest::factory()->create(['pipeline_log' => []]);
+
+        $this->actingAs($admin);
+
+        $this->get(AuditRequestResource::getUrl('view', ['record' => $request], panel: 'admin'))
+            ->assertSuccessful()
+            ->assertSee(__('No processing activity recorded yet.'));
+    }
+
+    public function test_the_view_page_lists_this_requests_emails(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $request = AuditRequest::factory()->create();
+        AuditEmailLog::factory()->create([
+            'audit_request_id' => $request->id,
+            'recipient' => 'infolist-target@example.com',
+        ]);
+
+        $this->actingAs($admin);
+
+        $this->get(AuditRequestResource::getUrl('view', ['record' => $request], panel: 'admin'))
+            ->assertSuccessful()
+            ->assertSee(__('Emails'))
+            ->assertSee('infolist-target@example.com');
+    }
 }

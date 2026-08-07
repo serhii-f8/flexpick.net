@@ -20,7 +20,9 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -89,14 +91,16 @@ class AuditRequestResource extends Resource
             Section::make(__('Request'))->schema([
                 TextEntry::make('name'),
                 TextEntry::make('email'),
-                TextEntry::make('repo_url'),
-                TextEntry::make('message'),
-                TextEntry::make('status'),
-                TextEntry::make('failure_reason'),
-                TextEntry::make('email_verified_at')->dateTime(config('app.datetime_format')),
-                TextEntry::make('marketing_consent'),
+                TextEntry::make('repo_url')->label(__('Repository')),
+                TextEntry::make('message')->placeholder('—'),
+                TextEntry::make('status')
+                    ->badge()
+                    ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))
+                    ->formatStateUsing(fn (string $state, AuditRequestStatusMapper $mapper): string => $mapper->mapForDisplay($state)),
+                TextEntry::make('tier'),
                 TextEntry::make('source'),
-                TextEntry::make('report.uuid')->label(__('Report')),
+                TextEntry::make('marketing_consent'),
+                TextEntry::make('email_verified_at')->dateTime(config('app.datetime_format'))->placeholder('—'),
                 TextEntry::make('tenants')
                     ->label(__('Company / workspaces'))
                     ->state(fn (AuditRequest $record): string => $record->user?->tenants()->pluck('name')->implode(', ') ?: '—'),
@@ -104,30 +108,57 @@ class AuditRequestResource extends Resource
                     ->label(__('Additional analysis context'))
                     ->placeholder('—'),
             ]),
+
+            Section::make(__('Timeline'))->schema([
+                TextEntry::make('failure_reason')
+                    ->label(__('Failure reason'))
+                    ->color('danger')
+                    ->visible(fn (AuditRequest $record): bool => $record->failure_reason !== null),
+                TextEntry::make('analysis_started_at')->dateTime(config('app.datetime_format'))->placeholder('—'),
+                TextEntry::make('analysis_completed_at')->dateTime(config('app.datetime_format'))->placeholder('—'),
+                ViewEntry::make('pipeline_log')
+                    ->label('')
+                    ->view('filament.admin.audit.pipeline-timeline')
+                    ->columnSpanFull(),
+            ]),
+
+            Section::make(__('Results'))
+                ->visible(fn (AuditRequest $record): bool => $record->report !== null)
+                ->schema([
+                    TextEntry::make('report.uuid')->label(__('Report')),
+                    TextEntry::make('overall_score')
+                        ->label(__('Overall score'))
+                        ->state(fn (AuditRequest $record): string => (string) data_get($record->report?->payload, 'scores.overall', '—')),
+                ]),
+
+            Section::make(__('Emails'))
+                ->visible(fn (AuditRequest $record): bool => $record->emailLogs->isNotEmpty())
+                ->schema([
+                    RepeatableEntry::make('emailLogs')
+                        ->label('')
+                        ->schema([
+                            TextEntry::make('recipient'),
+                            TextEntry::make('mailable')->label(__('Notification'))->badge()->color('gray'),
+                            TextEntry::make('status')
+                                ->badge()
+                                ->color(fn (string $state): string => match ($state) {
+                                    AuditEmailLog::STATUS_DELIVERED => 'success',
+                                    AuditEmailLog::STATUS_SENT => 'info',
+                                    AuditEmailLog::STATUS_PENDING => 'gray',
+                                    default => 'danger',
+                                }),
+                            TextEntry::make('attempts'),
+                            TextEntry::make('sent_at')->label(__('Last attempt'))->dateTime(config('app.datetime_format'))->placeholder('—'),
+                        ])
+                        ->columns(5),
+                ]),
+
             Section::make(__('Next-run prompt preview'))->collapsed()->schema([
                 TextEntry::make('prompt_preview')
                     ->label('')
                     ->state(fn (AuditRequest $record): string => app(PromptComposer::class)->preview($record))
                     ->markdown(false)
                     ->extraAttributes(['style' => 'white-space: pre-wrap; font-family: monospace;']),
-            ]),
-            Section::make(__('Processing log'))->schema([
-                TextEntry::make('pipeline_log')
-                    ->label('')
-                    ->state(function (AuditRequest $record): string {
-                        $log = $record->pipeline_log ?? [];
-
-                        if ($log === []) {
-                            return __('No processing activity recorded yet.');
-                        }
-
-                        return collect($log)
-                            ->map(fn (array $entry): string => "[{$entry['at']}] {$entry['step']}: {$entry['message']}")
-                            ->implode("\n");
-                    })
-                    ->extraAttributes(['style' => 'white-space: pre-wrap; font-family: monospace;']),
-                TextEntry::make('analysis_started_at')->dateTime(config('app.datetime_format'))->placeholder('—'),
-                TextEntry::make('analysis_completed_at')->dateTime(config('app.datetime_format'))->placeholder('—'),
             ]),
         ]);
     }
