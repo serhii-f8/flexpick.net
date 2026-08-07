@@ -150,6 +150,22 @@ class AuditReports extends Page
                     'reports' => $group,
                     'scores' => $group->reverse()->values()->map(fn ($r) => (int) data_get($r->payload, 'scores.overall', 0)),
                 ]),
+            'deltas' => $reports
+                ->groupBy(fn ($report) => rtrim((string) $report->auditRequest->repo_url, '/'))
+                ->map(function ($group): ?int {
+                    // $reports is ordered latest-first, so index 0 is current.
+                    $scores = $group
+                        ->map(fn ($r): ?int => data_get($r->payload, 'scores.overall'))
+                        ->filter(fn (?int $s): bool => $s !== null)
+                        ->values();
+
+                    if ($scores->count() < 2) {
+                        return null;
+                    }
+
+                    return $scores->get(0) - $scores->get(1);
+                })
+                ->all(),
         ];
     }
 }

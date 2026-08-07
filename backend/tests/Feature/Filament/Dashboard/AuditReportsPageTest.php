@@ -176,6 +176,35 @@ class AuditReportsPageTest extends FeatureTest
             ->assertDontSee('https://github.com/acme/held-repo');
     }
 
+    public function test_repo_section_shows_current_score_and_delta(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+
+        foreach ([[60, 7], [68, 0]] as [$score, $daysAgo]) {
+            $request = AuditRequest::factory()->create([
+                'user_id' => $user->id,
+                'repo_url' => 'https://github.com/acme/app',
+                'status' => AuditRequestStatus::SENT->value,
+                'created_at' => now()->subDays($daysAgo),
+            ]);
+            AuditReport::factory()->create([
+                'audit_request_id' => $request->id,
+                'user_id' => $user->id,
+                'payload' => ['scores' => ['overall' => $score]],
+                'created_at' => now()->subDays($daysAgo),
+            ]);
+        }
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::test(AuditReports::class)
+            ->assertSee('68')
+            ->assertSee('+8');
+    }
+
     private function createTenantFor(User $user): Tenant
     {
         $tenant = Tenant::factory()->create();

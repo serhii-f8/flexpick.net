@@ -267,7 +267,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$auditRequest\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Filament/Dashboard/Pages/AuditReports.php
 
 		-
@@ -279,7 +279,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$payload\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Filament/Dashboard/Pages/AuditReports.php
 
 		-
