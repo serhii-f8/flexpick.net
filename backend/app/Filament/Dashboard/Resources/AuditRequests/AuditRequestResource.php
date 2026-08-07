@@ -11,6 +11,7 @@ use App\Services\AuditReport\AuditEntitlementService;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -160,15 +161,12 @@ class AuditRequestResource extends Resource
                     TextEntry::make('overall_score')
                         ->label(__('Overall score'))
                         ->state(fn (AuditRequest $record): string => (string) data_get($record->report?->payload, 'scores.overall', '—')),
-                    TextEntry::make('category_scores')
+                    ViewEntry::make('category_scores')
                         ->label(__('Category scores'))
-                        ->state(function (AuditRequest $record): string {
-                            $scores = collect(data_get($record->report?->payload, 'scores', []))
-                                ->except('overall')
-                                ->map(fn ($value, $key) => __(ucfirst(str_replace('_', ' ', $key))).': '.$value);
-
-                            return $scores->isEmpty() ? '—' : $scores->implode(' · ');
-                        }),
+                        ->view('filament.dashboard.partials.category-scores')
+                        ->viewData(fn (AuditRequest $record): array => [
+                            'scores' => data_get($record->report?->payload, 'scores', []),
+                        ]),
                     TextEntry::make('risks_summary')
                         ->label(__('Risks'))
                         ->state(function (AuditRequest $record): string {

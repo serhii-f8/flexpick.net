@@ -119,6 +119,31 @@ class AuditRequestResourceTest extends FeatureTest
         $response->assertDontSee(__('Category scores'));
     }
 
+    public function test_category_scores_render_as_bars_not_a_joined_string(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+
+        $audit = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+        AuditReport::factory()->create([
+            'audit_request_id' => $audit->id,
+            'user_id' => $user->id,
+            'payload' => ['scores' => ['overall' => 68, 'security' => 80, 'testing' => 44]],
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->get(AuditRequestResource::getUrl('view', ['record' => $audit->uuid], true, 'dashboard', tenant: $tenant))
+            ->assertSuccessful()
+            ->assertSee('role="meter"', false)
+            ->assertDontSee('Security: 80 · Testing: 44');
+    }
+
     public function test_navigation_visible_for_fresh_user_with_only_free_runs(): void
     {
         $user = User::factory()->create();
