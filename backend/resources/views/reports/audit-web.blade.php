@@ -7,8 +7,13 @@
     @vite('resources/css/app.css')
     <style>
         /* The bundle's daisyUI theme is dark by default; this document is a
-           reading surface and is deliberately light. Scoped to this page. */
-        .reports-page { background: #faf8f4; color: #1c1917; }
+           reading surface and is deliberately light. Scoped to this page.
+           daisyUI paints `:root` itself (background + color), and the
+           shared landing-page rule gives h1/h2/h3 a light-on-dark color and
+           the Syne display font — both bleed through even though nothing on
+           this page opts into them, so both are neutralized explicitly here. */
+        html, .reports-page { background: #faf8f4; color: #1c1917; }
+        .reports-page h1, .reports-page h2, .reports-page h3 { color: #1c1917; font-family: inherit; }
     </style>
 </head>
 <body class="reports-page font-sans text-[15px] leading-relaxed">
