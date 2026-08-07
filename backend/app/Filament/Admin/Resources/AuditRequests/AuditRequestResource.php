@@ -194,7 +194,6 @@ class AuditRequestResource extends Resource
             ])
             ->recordClasses(fn (AuditRequest $record): ?string => match (true) {
                 $record->status === AuditRequestStatus::FAILED->value => 'bg-danger-50 dark:bg-danger-500/10',
-                $record->status === AuditRequestStatus::ANALYZING->value => null,
                 default => null,
             })
             ->defaultSort('created_at', 'desc')

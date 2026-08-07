@@ -17,6 +17,10 @@ return [
     // which is why it lives here and not in config/health.php beside the
     // pipeline and mail windows.
     'expert_review_sla_hours' => (int) env('AUDIT_EXPERT_REVIEW_SLA_HOURS', 24),
+    // Shared window both the dashboard's email tile (AuditAdminStatsWidget)
+    // and the Audit Emails header widget (AuditEmailHealthWidget) read, so
+    // the two cannot report different delivery-rate numbers.
+    'delivery_rate_window_hours' => (int) env('AUDIT_DELIVERY_RATE_WINDOW_HOURS', 168),
     'verification_link_hours' => 48,
     'unverified_purge_days' => 7,
     'benchmark_min_sample' => 20,

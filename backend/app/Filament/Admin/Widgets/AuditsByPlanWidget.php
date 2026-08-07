@@ -23,6 +23,8 @@ class AuditsByPlanWidget extends ChartWidget
 
     protected ?string $pollingInterval = null;
 
+    private ?Collection $countsByPlanCache = null;
+
     public function getHeading(): string|Htmlable|null
     {
         return __('Audits by plan');
@@ -63,7 +65,7 @@ class AuditsByPlanWidget extends ChartWidget
         $startDate = $this->pageFilters['start_date'] ?? null;
         $endDate = $this->pageFilters['end_date'] ?? null;
 
-        return AuditRequest::query()
+        return $this->countsByPlanCache ??= AuditRequest::query()
             ->when($startDate, fn ($query) => $query->where('created_at', '>=', Carbon::parse($startDate)->startOfDay()))
             ->when($endDate, fn ($query) => $query->where('created_at', '<=', Carbon::parse($endDate)->endOfDay()))
             ->with(['user.subscriptions' => fn ($query) => $query

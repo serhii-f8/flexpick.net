@@ -19,12 +19,12 @@ class AuditEmailHealthWidget extends BaseWidget
     // widget's content. This strip is meant to be visible immediately.
     protected static bool $isLazy = false;
 
-    private const WINDOW_HOURS = 168;
-
     protected function getStats(): array
     {
-        $attempted = AuditEmailLog::query()->attemptedWithin(self::WINDOW_HOURS)->count();
-        $failed = AuditEmailLog::query()->failedWithin(self::WINDOW_HOURS)->count();
+        $windowHours = (int) config('audit.delivery_rate_window_hours');
+
+        $attempted = AuditEmailLog::query()->attemptedWithin($windowHours)->count();
+        $failed = AuditEmailLog::query()->failedWithin($windowHours)->count();
 
         $rate = $attempted === 0
             ? '—'
@@ -32,7 +32,7 @@ class AuditEmailHealthWidget extends BaseWidget
 
         return [
             Stat::make(__('Delivered (7 days)'), $rate)
-                ->color($attempted > 0 && $failed / $attempted > 0.25 ? 'danger' : 'success'),
+                ->color($attempted > 0 && ($failed / $attempted * 100) > (int) config('health.flexpick.mail_failure.fail_percent') ? 'danger' : 'success'),
             Stat::make(__('Attempted (7 days)'), $attempted)->color('gray'),
             Stat::make(__('Failed (7 days)'), $failed)->color($failed > 0 ? 'danger' : 'gray'),
         ];

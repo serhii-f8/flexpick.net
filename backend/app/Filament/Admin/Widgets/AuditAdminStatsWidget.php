@@ -31,9 +31,6 @@ class AuditAdminStatsWidget extends BaseWidget
 
     protected ?string $pollingInterval = '60s';
 
-    /** A rate needs a wider base than an alarm to mean anything. */
-    private const DELIVERY_RATE_HOURS = 168;
-
     protected function getHeading(): ?string
     {
         return __('Audit operations');
@@ -46,6 +43,8 @@ class AuditAdminStatsWidget extends BaseWidget
 
     protected function getStats(): array
     {
+        $deliveryRateDescription = $this->deliveryRateDescription();
+
         return [
             $this->problemStat(
                 label: __('Failed audits'),
@@ -90,9 +89,9 @@ class AuditAdminStatsWidget extends BaseWidget
                 color: 'warning',
                 icon: 'heroicon-m-envelope',
                 url: AuditEmailLogResource::getUrl('index', ['activeTab' => 'failed-24h'], panel: 'admin'),
-                description: $this->deliveryRateDescription(),
+                description: $deliveryRateDescription,
                 // The delivery rate is worth reading even when nothing failed.
-                descriptionWhenQuiet: $this->deliveryRateDescription(),
+                descriptionWhenQuiet: $deliveryRateDescription,
             ),
             Stat::make(__('Pipeline'), $this->queueDepth())
                 ->description(__('avg :time · :count audits today', [
@@ -183,13 +182,15 @@ class AuditAdminStatsWidget extends BaseWidget
             return null;
         }
 
-        $attempted = AuditEmailLog::query()->attemptedWithin(self::DELIVERY_RATE_HOURS)->count();
+        $windowHours = (int) config('audit.delivery_rate_window_hours');
+
+        $attempted = AuditEmailLog::query()->attemptedWithin($windowHours)->count();
 
         if ($attempted === 0) {
             return null;
         }
 
-        $failed = AuditEmailLog::query()->failedWithin(self::DELIVERY_RATE_HOURS)->count();
+        $failed = AuditEmailLog::query()->failedWithin($windowHours)->count();
 
         return __(':rate% delivered over 7 days', [
             'rate' => (int) round(($attempted - $failed) / $attempted * 100),
