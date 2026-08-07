@@ -1,5 +1,5 @@
 <x-filament-panels::page>
-    @if ($allowance > 0)
+    @if ($canRun)
         <x-filament::section class="mb-6">
             <div class="flex flex-wrap items-end gap-3">
                 <div class="grow">
@@ -11,7 +11,11 @@
                 <x-filament::button wire:click="launchAudit">{{ __('Run new audit') }}</x-filament::button>
             </div>
             <p class="mt-2 text-sm text-gray-500">
-                {{ __(':remaining of :allowance analyses left this month', ['remaining' => $remainingRuns, 'allowance' => $allowance]) }}
+                @if ($allowance > 0)
+                    {{ __(':remaining of :allowance analyses left this month', ['remaining' => $remainingRuns, 'allowance' => $allowance]) }}
+                @else
+                    {{ __(':remaining free audits remaining', ['remaining' => $freeRunsRemaining]) }}
+                @endif
             </p>
         </x-filament::section>
     @endif

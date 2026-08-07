@@ -46,11 +46,16 @@ class AuditReportsPageTest extends FeatureTest
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
-    public function test_launch_audit_refuses_without_remaining_runs(): void
+    /**
+     * Without a subscription the run falls back to the free-run quota, so the
+     * refusal only applies once that quota is spent too.
+     */
+    public function test_launch_audit_refuses_when_free_runs_are_exhausted(): void
     {
         Queue::fake([GenerateAuditReport::class]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user); // no subscription
+        AuditRequest::factory()->count(3)->freeRun()->create(['email' => $user->email]);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
@@ -64,18 +69,54 @@ class AuditReportsPageTest extends FeatureTest
         Queue::assertNotPushed(GenerateAuditReport::class);
     }
 
-    public function test_navigation_registers_for_subscribed_tenant_without_reports(): void
+    public function test_launch_audit_consumes_a_free_run_without_subscription(): void
     {
+        Queue::fake([GenerateAuditReport::class]);
         $user = User::factory()->create();
-        $tenant = $this->createTenantFor($user);
+        $tenant = $this->createTenantFor($user); // no subscription
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
         Filament::setTenant($tenant);
 
-        $this->mock(AuditEntitlementService::class, function ($mock) {
-            $mock->shouldReceive('subscriptionAllowance')->andReturn(5);
-        });
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://github.com/acme/my-app');
+
+        $request = AuditRequest::where('user_id', $user->id)->firstOrFail();
+        $this->assertSame('dashboard', $request->source);
+        $this->assertTrue($request->free_run, 'A dashboard run without a subscription must consume a free run.');
+        $this->assertSame(1, app(AuditEntitlementService::class)->freeRunsUsed($user->email));
+        Queue::assertPushed(GenerateAuditReport::class);
+    }
+
+    public function test_navigation_registers_for_user_with_only_free_runs(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user); // no subscription, no reports
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->assertTrue(AuditReports::shouldRegisterNavigation());
+    }
+
+    public function test_navigation_registers_for_subscribed_tenant_without_reports(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
+
+        // Remove the free-run quota so the subscription is the only remaining
+        // route to access -- otherwise this passes on free runs alone and
+        // stops proving anything about subscriptions.
+        config(['audit.free_reports_limit' => 0]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
 
         $this->assertTrue(AuditReports::shouldRegisterNavigation());
     }

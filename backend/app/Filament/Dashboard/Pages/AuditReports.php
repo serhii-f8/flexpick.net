@@ -16,6 +16,12 @@ class AuditReports extends Page
 {
     protected string $view = 'filament.dashboard.pages.audit-reports';
 
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Audits';
+
+    protected static ?int $navigationSort = 1;
+
     public ?string $repoUrl = null;
 
     public function getHeading(): string|Htmlable
@@ -30,17 +36,16 @@ class AuditReports extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        if (! auth()->check()) {
+        $user = auth()->user();
+
+        if (! $user) {
             return false;
         }
 
-        if (auth()->user()->auditReports()->exists()) {
-            return true;
-        }
-
-        $tenant = Filament::getTenant();
-
-        return $tenant !== null && app(AuditEntitlementService::class)->subscriptionAllowance($tenant) > 0;
+        // Share the one gate with the audit widgets and the Audits resource.
+        // This page previously demanded a finished report, which hid it from
+        // users whose first audit was still running.
+        return app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
     }
 
     public function launchAudit(?string $repoUrl = null): void
@@ -56,7 +61,10 @@ class AuditReports extends Page
         }
 
         $tenant = Filament::getTenant();
-        if ($tenant === null || $entitlements->remainingDashboardRuns($user, $tenant) < 1) {
+        $hasSubscriptionRun = $tenant !== null && $entitlements->remainingDashboardRuns($user, $tenant) >= 1;
+        $hasFreeRun = $entitlements->hasFreeRun($user->email);
+
+        if (! $hasSubscriptionRun && ! $hasFreeRun) {
             Notification::make()->title(__('No analyses left this month'))->body(__('Upgrade your plan to run more audits.'))->warning()->send();
 
             return;
@@ -71,6 +79,13 @@ class AuditReports extends Page
             'source' => 'dashboard',
             'user_id' => $user->id,
         ]);
+
+        // A subscription allowance is metered by counting dashboard requests,
+        // so it is spent simply by creating one. A free run is not counted that
+        // way -- it has to be flagged on the request to be deducted.
+        if (! $hasSubscriptionRun) {
+            $entitlements->consumeFreeRun($auditRequest);
+        }
 
         GenerateAuditReport::dispatch($auditRequest);
         $this->repoUrl = null;
@@ -116,10 +131,18 @@ class AuditReports extends Page
             ->latest()
             ->get();
 
+        $allowance = $tenant ? $entitlements->subscriptionAllowance($tenant) : 0;
+        $remainingRuns = $tenant ? $entitlements->remainingDashboardRuns($user, $tenant) : 0;
+        $freeRunsRemaining = max(0, $entitlements->freeRunsLimit($user->email) - $entitlements->freeRunsUsed($user->email));
+
         return [
             'reports' => $reports,
-            'allowance' => $tenant ? $entitlements->subscriptionAllowance($tenant) : 0,
-            'remainingRuns' => $tenant ? $entitlements->remainingDashboardRuns($user, $tenant) : 0,
+            'allowance' => $allowance,
+            'remainingRuns' => $remainingRuns,
+            'freeRunsRemaining' => $freeRunsRemaining,
+            // The submit form keyed off $allowance alone, so free-tier users
+            // got a page with no way to start an audit.
+            'canRun' => $remainingRuns > 0 || $freeRunsRemaining > 0,
             'schedules' => AuditSchedule::query()->where('user_id', $user->id)->pluck('frequency', 'repo_url'),
             'repoGroups' => $reports
                 ->groupBy(fn ($report) => rtrim((string) $report->auditRequest->repo_url, '/'))

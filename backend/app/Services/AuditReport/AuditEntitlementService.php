@@ -104,6 +104,14 @@ class AuditEntitlementService
             return true;
         }
 
+        // A user who signs up directly has neither a prior request nor a
+        // subscription, but still holds the free-run quota. Omitting this
+        // deadlocks them: the dashboard UI that creates their first request
+        // stays hidden precisely because they have no request yet.
+        if ($this->hasFreeRun($user->email)) {
+            return true;
+        }
+
         return $tenant !== null && $this->subscriptionAllowance($tenant) > 0;
     }
 }

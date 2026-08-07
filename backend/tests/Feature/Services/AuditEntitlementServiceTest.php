@@ -60,4 +60,27 @@ class AuditEntitlementServiceTest extends FeatureTest
         $this->assertTrue($request->refresh()->free_run);
         $this->assertSame(1, $this->service->freeRunsUsed('c@example.com'));
     }
+
+    /**
+     * A user who registers directly -- rather than arriving from the public
+     * audit form -- has no prior request and no subscription, but still holds
+     * the free-run quota. Without this, the whole dashboard audit UI is hidden
+     * from them and they have no in-app route to create a first request.
+     */
+    public function test_free_runs_alone_grant_audit_access(): void
+    {
+        $user = User::factory()->create(['email' => 'fresh-signup@example.com']);
+
+        $this->assertTrue($this->service->hasFreeRun($user->email));
+        $this->assertTrue($this->service->hasAuditAccess($user, null));
+    }
+
+    public function test_no_audit_access_without_free_runs_subscription_or_requests(): void
+    {
+        config(['audit.free_reports_limit' => 0]);
+        $user = User::factory()->create(['email' => 'no-quota@example.com']);
+
+        $this->assertFalse($this->service->hasFreeRun($user->email));
+        $this->assertFalse($this->service->hasAuditAccess($user, null));
+    }
 }

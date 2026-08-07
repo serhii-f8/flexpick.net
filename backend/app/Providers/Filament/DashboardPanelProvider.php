@@ -108,6 +108,11 @@ class DashboardPanelProvider extends PanelProvider
                 return view('components.layouts.partials.analytics');
             })
             ->navigationGroups([
+                // No icon here on purpose: Filament throws if a navigation
+                // group and its items both carry icons, and the items below it
+                // have their own.
+                NavigationGroup::make()
+                    ->label(__('Audits')),
                 NavigationGroup::make()
                     ->label(__('Team'))
                     ->icon('heroicon-s-users')

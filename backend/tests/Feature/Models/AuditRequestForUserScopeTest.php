@@ -28,17 +28,27 @@ class AuditRequestForUserScopeTest extends FeatureTest
     {
         $entitlements = app(AuditEntitlementService::class);
 
-        // No audits, no tenant → no access
+        // Free-run quota alone → access. This is what lets a directly
+        // registered user reach the dashboard audit UI at all.
         $bare = $this->createUser();
-        $this->assertFalse($entitlements->hasAuditAccess($bare, null));
+        $this->assertTrue($entitlements->hasAuditAccess($bare, null));
 
         // Has an audit → access regardless of tenant
         $withAudit = $this->createUser();
         AuditRequest::factory()->create(['user_id' => $withAudit->id]);
         $this->assertTrue($entitlements->hasAuditAccess($withAudit, null));
 
+        // With the free quota removed, the remaining arms govern on their own.
+        config(['audit.free_reports_limit' => 0]);
+
+        // No audits, no free runs, no tenant → no access
+        $this->assertFalse($entitlements->hasAuditAccess($bare, null));
+
         // Tenant without allowance → no access
         $tenant = Tenant::factory()->create();
         $this->assertFalse($entitlements->hasAuditAccess($bare, $tenant));
+
+        // An existing audit still grants access without any quota
+        $this->assertTrue($entitlements->hasAuditAccess($withAudit, null));
     }
 }

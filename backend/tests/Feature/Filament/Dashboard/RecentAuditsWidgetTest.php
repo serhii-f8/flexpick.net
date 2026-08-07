@@ -41,8 +41,22 @@ class RecentAuditsWidgetTest extends FeatureTest
             ->assertDontSee('foreign-recent'); // isolation
     }
 
-    public function test_hidden_for_user_without_audits_or_allowance(): void
+    public function test_visible_for_fresh_user_with_only_free_runs(): void
     {
+        $user = User::factory()->create();
+        $tenant = Tenant::factory()->create();
+        $tenant->users()->attach($user);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->assertTrue(RecentAuditsWidget::canView());
+    }
+
+    public function test_hidden_without_audits_allowance_or_free_runs(): void
+    {
+        config(['audit.free_reports_limit' => 0]);
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create();
         $tenant->users()->attach($user);
