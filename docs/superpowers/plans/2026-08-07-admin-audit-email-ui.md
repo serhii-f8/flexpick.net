@@ -8,7 +8,7 @@
 
 **Tech Stack:** Laravel 13, PHP 8.4, Filament 5, Livewire 4, PHPUnit 11, Larastan 3, Tailwind CSS.
 
-**Spec:** `backend/docs/superpowers/specs/2026-08-07-admin-audit-email-ui-design.md`
+**Spec:** `docs/superpowers/specs/2026-08-07-admin-audit-email-ui-design.md`
 
 ## Global Constraints
 
