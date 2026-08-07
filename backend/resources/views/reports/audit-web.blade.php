@@ -226,13 +226,13 @@
 
     @if (($payload['deep_review'] ?? null) !== null)
         <div class="card">
-            @include('reports.partials.deep-findings', ['payload' => $payload, 'unlocked' => $unlocked])
+            @include('reports.partials.web.deep-findings', ['payload' => $payload, 'unlocked' => $unlocked])
         </div>
     @endif
 
     @if (($payload['expert_review'] ?? null) !== null)
         <div class="card">
-            @include('reports.partials.expert-review', ['payload' => $payload])
+            @include('reports.partials.web.expert-review', ['payload' => $payload])
         </div>
     @endif
 

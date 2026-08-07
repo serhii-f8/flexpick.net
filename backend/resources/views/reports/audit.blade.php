@@ -110,9 +110,9 @@
         @endforeach
     </table>
 
-    @include('reports.partials.deep-findings', ['payload' => $payload, 'unlocked' => true])
+    @include('reports.partials.pdf.deep-findings', ['payload' => $payload, 'unlocked' => true])
 
-    @include('reports.partials.expert-review', ['payload' => $payload])
+    @include('reports.partials.pdf.expert-review', ['payload' => $payload])
 
     <h2>{{ __('What to fix first') }}</h2>
     <table>
