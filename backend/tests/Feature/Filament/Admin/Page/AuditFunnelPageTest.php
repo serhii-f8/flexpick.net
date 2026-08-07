@@ -23,4 +23,17 @@ class AuditFunnelPageTest extends FeatureTest
             ->assertSee(__('Audit Funnel'))
             ->assertSee('submitted');
     }
+
+    public function test_the_funnel_table_uses_filament_styling_not_raw_borders(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $this->actingAs($admin);
+
+        $response = $this->get('/admin/audit-funnel');
+
+        $response->assertSuccessful();
+        // The hand-rolled `border-t` table was the visual outlier on the page.
+        $this->assertStringNotContainsString('class="border-t"', $response->getContent());
+    }
 }

@@ -19,8 +19,6 @@ class AuditEmailLogResource extends Resource
 {
     protected static ?string $model = AuditEmailLog::class;
 
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-envelope';
-
     public static function getNavigationGroup(): ?string
     {
         return __('Audits');

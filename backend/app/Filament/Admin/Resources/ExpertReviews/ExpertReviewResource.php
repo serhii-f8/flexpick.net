@@ -16,8 +16,6 @@ class ExpertReviewResource extends Resource
 {
     protected static ?string $model = AuditRequest::class;
 
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
-
     protected static ?string $recordTitleAttribute = 'repo_url';
 
     public static function getNavigationGroup(): ?string

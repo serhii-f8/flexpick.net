@@ -68,6 +68,10 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->navigationGroups([
                 NavigationGroup::make()
+                    ->label(fn () => (__('Audits')))
+                    ->icon('heroicon-s-document-magnifying-glass')
+                    ->collapsed(),
+                NavigationGroup::make()
                     ->label(fn () => (__('Revenue')))
                     ->icon('heroicon-s-rocket-launch')
                     ->collapsed(),
