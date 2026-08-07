@@ -4,22 +4,22 @@
     <meta charset="utf-8">
     <title>{{ __('Codebase Health Report') }}</title>
     <style>
-        body { font-family: DejaVu Sans, Helvetica, Arial, sans-serif; color: #1c1917; margin: 32px; font-size: 13px; }
+        body { font-family: DejaVu Sans, Helvetica, Arial, sans-serif; color: #1c1917; background: #faf8f4; margin: 32px; font-size: 13px; }
         h1 { font-size: 22px; margin-bottom: 2px; }
-        h2 { font-size: 15px; margin-top: 26px; border-bottom: 1px solid #d6d3d1; padding-bottom: 4px; }
+        h2 { font-size: 15px; margin-top: 26px; border-bottom: 1px solid #b98e41; padding-bottom: 4px; }
         .muted { color: #78716c; font-size: 11px; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e7e5e4; vertical-align: top; }
+        th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e8e2d6; vertical-align: top; }
         th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #78716c; }
         .impact-high { color: #b91c1c; font-weight: bold; }
         .impact-medium { color: #b45309; font-weight: bold; }
         .impact-low { color: #4d7c0f; font-weight: bold; }
-        .score { font-size: 18px; font-weight: bold; }
+        .score { font-size: 18px; font-weight: bold; color: #b98e41; }
         .badge { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 8px; background: #e7e5e4; color: #44403c; }
         .badge-critical, .badge-high { background: #fee2e2; color: #b91c1c; }
         .badge-medium { background: #fef3c7; color: #b45309; }
         .badge-low, .badge-info { background: #ecfccb; color: #4d7c0f; }
-        .risk { padding: 8px 0; border-bottom: 1px solid #e7e5e4; }
+        .risk { padding: 8px 0; border-bottom: 1px solid #e8e2d6; }
         .risk-title { font-weight: bold; }
         .risk-detail { margin-top: 4px; color: #44403c; }
         .deep-file { margin-top: 12px; }

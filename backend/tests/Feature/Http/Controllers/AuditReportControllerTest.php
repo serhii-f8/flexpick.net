@@ -72,6 +72,7 @@ class AuditReportControllerTest extends FeatureTest
 
         $response->assertStatus(200);
         $response->assertSee('Fixture summary.');
+        $response->assertSee('reports-page', false);
     }
 
     public function test_unsigned_url_is_rejected_with_friendly_page(): void
