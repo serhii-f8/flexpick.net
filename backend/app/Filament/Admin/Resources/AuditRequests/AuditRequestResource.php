@@ -179,10 +179,11 @@ class AuditRequestResource extends Resource
                 IconColumn::make('marketing_consent')->boolean()->label(__('Consent')),
                 IconColumn::make('free_run')->boolean()->label(__('Free run')),
                 TextColumn::make('source'),
-                TextColumn::make('created_at')
+                TextColumn::make('age')
                     ->label(__('Age'))
+                    ->state(fn (AuditRequest $record) => $record->created_at)
                     ->since()
-                    ->sortable(),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('created_at', $direction)),
                 TextColumn::make('email_logs_count')
                     ->label(__('Emails'))
                     ->counts('emailLogs')
