@@ -1,1 +1,13 @@
 .worktrees/
+
+# IDE / editor
+.idea/
+.vscode/
+.fleet/
+
+# AI tooling artifacts (machine-local)
+.ai/
+.serena/
+
+# OS
+.DS_Store
