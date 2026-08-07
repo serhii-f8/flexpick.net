@@ -8,6 +8,7 @@ use App\Filament\Admin\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Filament\Admin\Resources\AuditRequests\Pages\ViewAuditRequest;
 use App\Jobs\GenerateAuditReport;
 use App\Mapper\AuditRequestStatusMapper;
+use App\Models\AuditEmailLog;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditReportService;
@@ -52,6 +53,11 @@ class AuditRequestResource extends Resource
     public static function canEdit($record): bool
     {
         return true;
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('emailLogs');
     }
 
     public static function form(Schema $schema): Schema
@@ -142,7 +148,23 @@ class AuditRequestResource extends Resource
                 IconColumn::make('marketing_consent')->boolean()->label(__('Consent')),
                 IconColumn::make('free_run')->boolean()->label(__('Free run')),
                 TextColumn::make('source'),
+                TextColumn::make('created_at')
+                    ->label(__('Age'))
+                    ->since()
+                    ->sortable(),
+                TextColumn::make('email_logs_count')
+                    ->label(__('Emails'))
+                    ->counts('emailLogs')
+                    ->badge()
+                    ->color(fn (AuditRequest $record): string => $record->emailLogs->contains(
+                        fn ($log): bool => in_array($log->status, [AuditEmailLog::STATUS_FAILED, AuditEmailLog::STATUS_BOUNCED], true),
+                    ) ? 'danger' : 'gray'),
             ])
+            ->recordClasses(fn (AuditRequest $record): ?string => match (true) {
+                $record->status === AuditRequestStatus::FAILED->value => 'bg-danger-50 dark:bg-danger-500/10',
+                $record->status === AuditRequestStatus::ANALYZING->value => null,
+                default => null,
+            })
             ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('status')
