@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources\AuditEmailLogs;
 
 use App\Filament\Admin\Resources\AuditEmailLogs\Pages\ListAuditEmailLogs;
+use App\Filament\Admin\Resources\AuditRequests\AuditRequestResource;
 use App\Mail\StoredAuditEmail;
 use App\Models\AuditEmailLog;
 use App\Services\Mail\RenderSafeMailer;
@@ -12,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class AuditEmailLogResource extends Resource
 {
@@ -43,6 +45,14 @@ class AuditEmailLogResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('auditRequest.repo_url')
+                    ->label(__('Repository'))
+                    ->limit(40)
+                    ->placeholder('—')
+                    ->url(fn (AuditEmailLog $record): ?string => $record->auditRequest === null
+                        ? null
+                        : AuditRequestResource::getUrl('view', ['record' => $record->auditRequest], panel: 'admin'))
+                    ->searchable(),
                 TextColumn::make('recipient')->searchable(),
                 TextColumn::make('mailable')->label(__('Notification'))->badge()->color('gray'),
                 TextColumn::make('status')
@@ -69,6 +79,15 @@ class AuditEmailLogResource extends Resource
                     ->options(fn (): array => AuditEmailLog::query()->distinct()->pluck('mailable', 'mailable')->all()),
             ])
             ->recordActions([
+                Action::make('preview')
+                    ->label(__('Preview'))
+                    ->icon('heroicon-m-eye')
+                    ->color('gray')
+                    ->visible(fn (AuditEmailLog $record): bool => $record->body !== '')
+                    ->modalHeading(fn (AuditEmailLog $record): string => $record->subject !== '' ? $record->subject : __('Email preview'))
+                    ->modalContent(fn (AuditEmailLog $record) => view('filament.admin.audit.email-preview', ['body' => $record->body]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel(__('Close')),
                 Action::make('resend')
                     ->label(__('Resend'))
                     ->visible(fn (AuditEmailLog $record): bool => $record->body !== '')
@@ -100,5 +119,10 @@ class AuditEmailLogResource extends Resource
         return [
             'index' => ListAuditEmailLogs::route('/'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('auditRequest');
     }
 }
