@@ -18,13 +18,13 @@ use Tests\Feature\FeatureTest;
 
 class AuditStatsWidgetTest extends FeatureTest
 {
-    public function test_subscriber_sees_allowance_usage_and_status_counts(): void
+    public function test_subscriber_sees_status_counts(): void
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
 
-        // 2 dashboard runs this month; statuses: 1 in progress, 1 completed
+        // statuses: 1 in progress, 1 completed, 1 failed
         AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::ANALYZING->value]);
         AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::SENT->value]);
         AuditRequest::factory()->create(['user_id' => $user->id, 'status' => AuditRequestStatus::FAILED->value, 'source' => 'web']);
@@ -35,63 +35,40 @@ class AuditStatsWidgetTest extends FeatureTest
 
         Livewire::actingAs($user)
             ->test(AuditStatsWidget::class)
-            ->assertSee('3 / 5')   // remaining of allowance (2 dashboard runs used)
-            ->assertSee('40')      // 40% used
             ->assertSee(__('In progress'))
             ->assertSee(__('Completed'))
             ->assertSee(__('Failed'));
     }
 
-    public function test_free_user_sees_free_quota(): void
-    {
-        $user = User::factory()->create(['email' => 'free-widget@example.com']);
-        $tenant = $this->createTenantFor($user);
-
-        AuditRequest::factory()->freeRun()->create(['email' => 'free-widget@example.com', 'user_id' => $user->id, 'status' => AuditRequestStatus::SENT->value]);
-
-        $this->actingAs($user);
-        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
-        Filament::setTenant($tenant);
-
-        Livewire::actingAs($user)
-            ->test(AuditStatsWidget::class)
-            ->assertSee(__('Free audits remaining'))
-            ->assertSee('2 / 3');
-    }
-
-    public function test_subscriber_with_deep_ai_credits_sees_a_separate_counter(): void
+    public function test_zero_count_buckets_are_not_rendered(): void
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
-        $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5, 'audit_deep_ai_credits' => 2]);
-
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::DEEP_AI->value, 'status' => AuditRequestStatus::SENT->value]);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => AuditRequestStatus::ANALYZING->value,
+        ]);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
         Filament::setTenant($tenant);
 
-        Livewire::actingAs($user)
-            ->test(AuditStatsWidget::class)
-            ->assertSee(__('Deep AI credits remaining this month'))
-            ->assertSee('1 / 2')
-            // A deep_ai run does not also consume the automated allowance.
-            ->assertSee('5 / 5');
+        Livewire::test(AuditStatsWidget::class)
+            ->assertSee(__('In progress'))
+            ->assertDontSee(__('Failed'));
     }
 
-    public function test_subscriber_without_deep_ai_credits_sees_no_counter(): void
+    public function test_quota_stats_are_no_longer_rendered_here(): void
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
-        $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
         Filament::setTenant($tenant);
 
-        Livewire::actingAs($user)
-            ->test(AuditStatsWidget::class)
-            ->assertDontSee(__('Deep AI credits remaining this month'));
+        Livewire::test(AuditStatsWidget::class)
+            ->assertDontSee(__('Free audits remaining'));
     }
 
     public function test_visible_for_fresh_user_with_only_free_runs(): void

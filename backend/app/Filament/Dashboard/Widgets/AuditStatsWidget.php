@@ -38,47 +38,34 @@ class AuditStatsWidget extends BaseWidget
     protected function getStats(): array
     {
         $user = auth()->user();
-        $tenant = Filament::getTenant();
-        $entitlements = app(AuditEntitlementService::class);
-
-        $allowance = $tenant !== null ? $entitlements->subscriptionAllowance($tenant) : 0;
-        $deepAiCredits = $tenant !== null ? $entitlements->deepAiCredits($tenant) : 0;
-        $stats = [];
-
-        if ($allowance > 0) {
-            $used = $entitlements->dashboardRunsUsedThisMonth($user);
-            $remaining = $entitlements->remainingDashboardRuns($user, $tenant);
-            $usagePercent = (int) round(min($used, $allowance) / $allowance * 100);
-
-            $stats[] = Stat::make(__('Analyses remaining this month'), $remaining.' / '.$allowance)
-                ->description(__(':percent% of your plan used', ['percent' => $usagePercent]))
-                ->color($remaining > 0 ? 'success' : 'warning');
-        } else {
-            $limit = $entitlements->freeRunsLimit($user->email);
-            $used = $entitlements->freeRunsUsed($user->email);
-
-            $stats[] = Stat::make(__('Free audits remaining'), max(0, $limit - $used).' / '.$limit)
-                ->description(__(':used of :limit free audits used', ['used' => $used, 'limit' => $limit]))
-                ->color($used < $limit ? 'success' : 'warning');
-        }
-
-        if ($deepAiCredits > 0) {
-            $remainingDeepAi = $entitlements->remainingDeepAiRuns($user, $tenant);
-
-            $stats[] = Stat::make(__('Deep AI credits remaining this month'), $remainingDeepAi.' / '.$deepAiCredits)
-                ->color($remainingDeepAi > 0 ? 'success' : 'warning');
-        }
-
         $buckets = self::statusBuckets();
 
-        return [
-            ...$stats,
-            Stat::make(__('In progress'), AuditRequest::forUser($user)->whereIn('status', $buckets['in_progress'])->count())->color('info'),
-            Stat::make(__('Awaiting expert review'), AuditRequest::forUser($user)->whereIn('status', $buckets['expert_review'])->count())->color('warning'),
-            Stat::make(__('Needs your action'), AuditRequest::forUser($user)->whereIn('status', $buckets['needs_action'])->count())->color('warning'),
-            Stat::make(__('Completed'), AuditRequest::forUser($user)->whereIn('status', $buckets['completed'])->count())->color('success'),
-            Stat::make(__('Failed'), AuditRequest::forUser($user)->whereIn('status', $buckets['failed'])->count())->color('danger'),
+        $definitions = [
+            'in_progress' => [__('In progress'), 'info', 'heroicon-m-arrow-path', __('Being analyzed now')],
+            'expert_review' => [__('Awaiting expert review'), 'warning', 'heroicon-m-eye', __('With a human reviewer')],
+            'needs_action' => [__('Needs your action'), 'warning', 'heroicon-m-exclamation-triangle', __('Blocked until you respond')],
+            'completed' => [__('Completed'), 'success', 'heroicon-m-check-circle', __('Reports delivered')],
+            'failed' => [__('Failed'), 'danger', 'heroicon-m-x-circle', __('Could not be analyzed')],
         ];
+
+        $stats = [];
+
+        foreach ($definitions as $key => [$label, $color, $icon, $description]) {
+            $count = AuditRequest::forUser($user)->whereIn('status', $buckets[$key])->count();
+
+            // A wall of zeroes competes with the states that matter. Only
+            // surface a bucket once it actually holds something.
+            if ($count === 0) {
+                continue;
+            }
+
+            $stats[] = Stat::make($label, $count)
+                ->description($description)
+                ->icon($icon)
+                ->color($color);
+        }
+
+        return $stats;
     }
 
     public static function canView(): bool
