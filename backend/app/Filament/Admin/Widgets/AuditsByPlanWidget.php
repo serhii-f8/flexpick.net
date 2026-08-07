@@ -4,41 +4,78 @@ namespace App\Filament\Admin\Widgets;
 
 use App\Constants\SubscriptionStatus;
 use App\Models\AuditRequest;
-use Filament\Widgets\StatsOverviewWidget as BaseWidget;
-use Filament\Widgets\StatsOverviewWidget\Stat;
+use Filament\Widgets\ChartWidget;
+use Filament\Widgets\Concerns\InteractsWithPageFilters;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
-class AuditsByPlanWidget extends BaseWidget
+/**
+ * A bar chart rather than a stat list: one Stat per plan produced a grid that
+ * went ragged the moment the plan count was not a multiple of the column count.
+ * A chart handles one plan or nine identically.
+ */
+class AuditsByPlanWidget extends ChartWidget
 {
+    use InteractsWithPageFilters;
+
+    protected static ?int $sort = 11;
+
     protected ?string $pollingInterval = null;
 
-    protected function getStats(): array
+    public function getHeading(): string|Htmlable|null
     {
-        $audits = AuditRequest::query()
-            ->where('created_at', '>=', now()->startOfMonth())
+        return __('Audits by plan');
+    }
+
+    public function getDescription(): string|Htmlable|null
+    {
+        return $this->countsByPlan()->isEmpty()
+            ? __('No audits in the selected period.')
+            : __('Audit volume grouped by the submitter\'s active plan.');
+    }
+
+    protected function getType(): string
+    {
+        return 'bar';
+    }
+
+    protected function getData(): array
+    {
+        $byPlan = $this->countsByPlan();
+
+        return [
+            'datasets' => [
+                [
+                    'label' => __('Audits'),
+                    'data' => $byPlan->values()->all(),
+                ],
+            ],
+            'labels' => $byPlan->keys()->all(),
+        ];
+    }
+
+    /**
+     * @return Collection<int|string, int<0, max>>
+     */
+    private function countsByPlan(): Collection
+    {
+        $startDate = $this->pageFilters['start_date'] ?? null;
+        $endDate = $this->pageFilters['end_date'] ?? null;
+
+        return AuditRequest::query()
+            ->when($startDate, fn ($query) => $query->where('created_at', '>=', Carbon::parse($startDate)->startOfDay()))
+            ->when($endDate, fn ($query) => $query->where('created_at', '<=', Carbon::parse($endDate)->endOfDay()))
             ->with(['user.subscriptions' => fn ($query) => $query
                 ->where('status', SubscriptionStatus::ACTIVE->value)
                 ->where('ends_at', '>', now())
                 ->with('plan'), ])
-            ->get();
-
-        $byPlan = $audits
+            ->get()
             ->groupBy(function (AuditRequest $audit): string {
-                $plan = $audit->user?->subscriptions->first()?->plan;
-
-                return $plan?->name ?? __('Free / no plan');
+                return $audit->user?->subscriptions->first()?->plan?->name ?? __('Free / no plan');
             })
             ->map->count()
             ->sortDesc();
-
-        if ($byPlan->isEmpty()) {
-            return [Stat::make(__('Audits by plan (this month)'), 0)];
-        }
-
-        return $byPlan
-            ->map(fn (int $count, string $planName): Stat => Stat::make($planName, $count)
-                ->description(__('audits this month')))
-            ->values()
-            ->all();
     }
 
     public static function canView(): bool
