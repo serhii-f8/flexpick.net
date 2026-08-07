@@ -1,17 +1,7 @@
 @php
-    $deep = $payload['deep_review'] ?? null;
-
-    $severityRank = ['critical' => 5, 'high' => 4, 'medium' => 3, 'low' => 2, 'info' => 1];
-
-    // Grouped by file; files ordered by their worst finding, findings within a
-    // file by severity, then line. A customer opens one file and sees
-    // everything wrong with it instead of jumping around a flat severity list.
-    $byFile = collect($payload['file_findings'] ?? [])
-        // Arrays compare element-wise in PHP, so negating the rank sorts
-        // severity descending and line ascending in one pass.
-        ->sortBy(fn (array $f) => [-($severityRank[$f['severity']] ?? 0), $f['line'] ?? 0])
-        ->groupBy('path')
-        ->sortByDesc(fn ($findings) => $findings->max(fn (array $f) => $severityRank[$f['severity']] ?? 0));
+    $presenter = app(\App\Services\AuditReport\ReportPresenter::class);
+    $deep = $presenter->deepReviewMeta($payload);
+    $byFile = $presenter->findingsByFile($payload);
 @endphp
 
 @if ($deep !== null)
