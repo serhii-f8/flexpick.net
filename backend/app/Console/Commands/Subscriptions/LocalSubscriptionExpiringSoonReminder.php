@@ -4,14 +4,15 @@ namespace App\Console\Commands\Subscriptions;
 
 use App\Mail\Subscription\LocalSubscriptionExpiringSoon;
 use App\Models\User;
+use App\Services\Mail\RenderSafeMailer;
 use App\Services\SubscriptionService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Mail;
 
 class LocalSubscriptionExpiringSoonReminder extends Command
 {
     public function __construct(
-        private SubscriptionService $subscriptionService
+        private SubscriptionService $subscriptionService,
+        private RenderSafeMailer $mailer,
     ) {
         parent::__construct();
     }
@@ -45,7 +46,7 @@ class LocalSubscriptionExpiringSoonReminder extends Command
 
             foreach ($subscriptions as $subscription) {
                 $user = User::find($subscription->user_id);
-                Mail::to($user->email)->send(new LocalSubscriptionExpiringSoon($subscription));
+                $this->mailer->send(new LocalSubscriptionExpiringSoon($subscription), $user->email);
             }
         }
 
@@ -54,7 +55,7 @@ class LocalSubscriptionExpiringSoonReminder extends Command
 
             foreach ($subscriptions as $subscription) {
                 $user = User::find($subscription->user_id);
-                Mail::to($user->email)->send(new LocalSubscriptionExpiringSoon($subscription));
+                $this->mailer->send(new LocalSubscriptionExpiringSoon($subscription), $user->email);
             }
         }
     }

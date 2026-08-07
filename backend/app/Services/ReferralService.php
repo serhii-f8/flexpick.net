@@ -14,11 +14,15 @@ use App\Models\ReferralCode;
 use App\Models\ReferralReward;
 use App\Models\Subscription;
 use App\Models\User;
-use Illuminate\Support\Facades\Mail;
+use App\Services\Mail\RenderSafeMailer;
 use Illuminate\Support\Str;
 
 class ReferralService
 {
+    public function __construct(
+        private RenderSafeMailer $mailer,
+    ) {}
+
     public function isEnabled(): bool
     {
         return (bool) config('app.referral.enabled', false);
@@ -232,8 +236,10 @@ class ReferralService
 
         $discountCode->update(['referral_reward_id' => $reward->id]);
 
-        Mail::to($referral->referrer->email)
-            ->send(new ReferralRewardEarned($referral, $discountCode));
+        $this->mailer->send(
+            new ReferralRewardEarned($referral, $discountCode),
+            $referral->referrer->email,
+        );
     }
 
     private function processCustomEventReward(Referral $referral): void

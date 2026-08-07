@@ -5,13 +5,13 @@ namespace App\Filament\Admin\Resources\AuditEmailLogs;
 use App\Filament\Admin\Resources\AuditEmailLogs\Pages\ListAuditEmailLogs;
 use App\Mail\StoredAuditEmail;
 use App\Models\AuditEmailLog;
+use App\Services\Mail\RenderSafeMailer;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Mail;
 
 class AuditEmailLogResource extends Resource
 {
@@ -78,8 +78,9 @@ class AuditEmailLogResource extends Resource
                         'date' => $record->sent_at?->format(config('app.datetime_format')) ?? __('unknown'),
                     ]))
                     ->action(function (AuditEmailLog $record): void {
-                        Mail::to($record->recipient)->send(
-                            new StoredAuditEmail($record->subject, $record->body)
+                        app(RenderSafeMailer::class)->send(
+                            new StoredAuditEmail($record->subject, $record->body),
+                            $record->recipient,
                         );
 
                         $record->update([

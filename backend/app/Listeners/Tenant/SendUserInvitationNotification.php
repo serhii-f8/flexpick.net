@@ -4,25 +4,20 @@ namespace App\Listeners\Tenant;
 
 use App\Events\Tenant\UserInvitedToTenant;
 use App\Mail\Tenant\UserInvitation;
+use App\Services\Mail\RenderSafeMailer;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Support\Facades\Mail;
 
 class SendUserInvitationNotification implements ShouldQueue
 {
-    /**
-     * Create the event listener.
-     */
-    public function __construct()
-    {
-        //
-    }
+    public function __construct(
+        private RenderSafeMailer $mailer,
+    ) {}
 
-    /**
-     * Handle the event.
-     */
     public function handle(UserInvitedToTenant $event): void
     {
-        Mail::to($event->invitation->email)
-            ->send(new UserInvitation($event->invitation));
+        $this->mailer->send(
+            new UserInvitation($event->invitation),
+            $event->invitation->email,
+        );
     }
 }
