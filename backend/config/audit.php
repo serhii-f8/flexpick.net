@@ -13,6 +13,10 @@ return [
     'github_account' => env('AUDIT_GITHUB_ACCOUNT', 'flexpick-audit'),
     'github_token' => env('AUDIT_GITHUB_TOKEN'),
     'free_reports_limit' => 3,
+    // A delivery promise to the customer, not a system-health threshold —
+    // which is why it lives here and not in config/health.php beside the
+    // pipeline and mail windows.
+    'expert_review_sla_hours' => (int) env('AUDIT_EXPERT_REVIEW_SLA_HOURS', 24),
     'verification_link_hours' => 48,
     'unverified_purge_days' => 7,
     'benchmark_min_sample' => 20,

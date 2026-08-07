@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -69,6 +70,65 @@ class AuditRequest extends Model
         });
     }
 
+    /**
+     * Queued past the queue threshold, or analyzing past the analyzing one.
+     *
+     * @param  Builder<AuditRequest>  $query
+     * @return Builder<AuditRequest>
+     */
+    public function scopeStuck(Builder $query): Builder
+    {
+        $queuedCutoff = now()->subMinutes((int) config('health.flexpick.oldest_queued_minutes'));
+        $analyzingCutoff = now()->subMinutes((int) config('health.flexpick.oldest_analyzing_minutes'));
+
+        return $query->where(function (Builder $query) use ($queuedCutoff, $analyzingCutoff): void {
+            $query
+                ->where(function (Builder $query) use ($queuedCutoff): void {
+                    $query
+                        ->whereIn('status', [AuditRequestStatus::NEW->value, AuditRequestStatus::QUEUED->value])
+                        ->where('created_at', '<', $queuedCutoff);
+                })
+                ->orWhere(function (Builder $query) use ($analyzingCutoff): void {
+                    // COALESCE, not a plain column compare: a pipeline that died
+                    // before stamping analysis_started_at leaves it null, and a
+                    // null would drop the row out of the comparison entirely --
+                    // hiding the very records most likely to be wedged.
+                    $query
+                        ->where('status', AuditRequestStatus::ANALYZING->value)
+                        ->whereRaw('COALESCE(analysis_started_at, updated_at) < ?', [$analyzingCutoff]);
+                });
+        });
+    }
+
+    /**
+     * Waiting on a human, not on the pipeline.
+     *
+     * @param  Builder<AuditRequest>  $query
+     * @return Builder<AuditRequest>
+     */
+    public function scopeNeedsManualAction(Builder $query): Builder
+    {
+        return $query->whereIn('status', [
+            AuditRequestStatus::NEEDS_FOLLOWUP->value,
+            AuditRequestStatus::AWAITING_ACCESS->value,
+            AuditRequestStatus::AWAITING_PAYMENT->value,
+        ]);
+    }
+
+    /**
+     * Expert-tier reports held past the delivery promise.
+     *
+     * @param  Builder<AuditRequest>  $query
+     * @return Builder<AuditRequest>
+     */
+    public function scopeBreachingExpertReviewSla(Builder $query): Builder
+    {
+        return $query
+            ->where('tier', AuditTier::EXPERT->value)
+            ->where('status', AuditRequestStatus::EXPERT_REVIEW->value)
+            ->where('analysis_completed_at', '<', now()->subHours((int) config('audit.expert_review_sla_hours')));
+    }
+
     public function uniqueIds(): array
     {
         return ['uuid'];
@@ -99,6 +159,14 @@ class AuditRequest extends Model
     public function findingGroups(): HasMany
     {
         return $this->hasMany(AuditFindingGroup::class)->orderByDesc('score');
+    }
+
+    /**
+     * @return HasMany<AuditEmailLog, $this>
+     */
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(AuditEmailLog::class)->latest('sent_at');
     }
 
     public function appendPipelineLog(string $step, string $message): void
