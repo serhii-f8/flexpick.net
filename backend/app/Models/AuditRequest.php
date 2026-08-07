@@ -16,6 +16,16 @@ class AuditRequest extends Model
 {
     use HasFactory, HasUuids;
 
+    public const TRIAGE_IN_FLIGHT = 'in_flight';
+
+    public const TRIAGE_NEEDS_MANUAL_ACTION = 'needs_manual_action';
+
+    public const TRIAGE_FAILED = 'failed';
+
+    public const TRIAGE_EXPERT_REVIEW = 'expert_review';
+
+    public const TRIAGE_TERMINAL = 'terminal';
+
     protected $fillable = [
         'name', 'email', 'repo_url', 'message', 'status', 'failure_reason', 'meta', 'metrics',
         'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'tier', 'user_id', 'prepaid',
@@ -127,6 +137,34 @@ class AuditRequest extends Model
             ->where('tier', AuditTier::EXPERT->value)
             ->where('status', AuditRequestStatus::EXPERT_REVIEW->value)
             ->where('analysis_completed_at', '<', now()->subHours((int) config('audit.expert_review_sla_hours')));
+    }
+
+    /**
+     * Every status, classified for operator triage. A test asserts this map is
+     * exhaustive, so adding an AuditRequestStatus case without classifying it
+     * fails the suite rather than quietly vanishing from the admin panel.
+     *
+     * @return array<string, string>
+     */
+    public static function statusTriage(): array
+    {
+        return [
+            AuditRequestStatus::NEW->value => self::TRIAGE_IN_FLIGHT,
+            AuditRequestStatus::QUEUED->value => self::TRIAGE_IN_FLIGHT,
+            AuditRequestStatus::ANALYZING->value => self::TRIAGE_IN_FLIGHT,
+            AuditRequestStatus::PENDING_VERIFICATION->value => self::TRIAGE_IN_FLIGHT,
+
+            AuditRequestStatus::NEEDS_FOLLOWUP->value => self::TRIAGE_NEEDS_MANUAL_ACTION,
+            AuditRequestStatus::AWAITING_ACCESS->value => self::TRIAGE_NEEDS_MANUAL_ACTION,
+            AuditRequestStatus::AWAITING_PAYMENT->value => self::TRIAGE_NEEDS_MANUAL_ACTION,
+
+            AuditRequestStatus::FAILED->value => self::TRIAGE_FAILED,
+            AuditRequestStatus::EXPERT_REVIEW->value => self::TRIAGE_EXPERT_REVIEW,
+
+            AuditRequestStatus::REPORT_READY->value => self::TRIAGE_TERMINAL,
+            AuditRequestStatus::SENT->value => self::TRIAGE_TERMINAL,
+            AuditRequestStatus::HANDLED->value => self::TRIAGE_TERMINAL,
+        ];
     }
 
     public function uniqueIds(): array
