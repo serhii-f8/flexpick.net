@@ -10,6 +10,7 @@ use App\Http\Controllers\PaymentProviders\PaddleController;
 use App\Http\Controllers\ProductCheckoutController;
 use App\Http\Controllers\SubscriptionCheckoutController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Middleware\RepairHtmlEscapedQueryString;
 use App\Services\PlanService;
 use App\Services\SessionService;
 use App\Services\TenantCreationService;
@@ -204,25 +205,25 @@ Route::controller(InvoiceController::class)
 
 Route::get('/audit-requests/{auditRequest:uuid}/verify', [AuditRequestController::class, 'verify'])
     ->name('audit-requests.verify')
-    ->middleware('signed');
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
 
 Route::get('/audit-requests/{auditRequest:uuid}/status', [AuditRequestController::class, 'status'])
     ->name('audit-requests.status')
-    ->middleware('signed');
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
 
 Route::get('/audit-requests/{auditRequest:uuid}/status.json', [AuditRequestController::class, 'statusJson'])
     ->name('audit-requests.status.json')
-    ->middleware('signed');
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
 
 Route::get('/audit-requests/{auditRequest:uuid}/purchase-run', [AuditRequestController::class, 'purchaseRun'])
     ->name('audit-requests.purchase-run')
-    ->middleware('signed');
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
 
 Route::get('/reports/sample', [AuditReportController::class, 'sample'])->name('reports.sample');
 
 Route::get('/reports/{auditReport:uuid}', [AuditReportController::class, 'show'])
     ->name('reports.view')
-    ->middleware('signed');
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
 
 Route::get('/reports/{auditReport:uuid}/download', [AuditReportController::class, 'download'])
     ->name('reports.download')
@@ -230,4 +231,4 @@ Route::get('/reports/{auditReport:uuid}/download', [AuditReportController::class
 
 Route::get('/reports/{auditReport:uuid}/unlock', [AuditReportController::class, 'unlock'])
     ->name('reports.unlock')
-    ->middleware('signed');
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);

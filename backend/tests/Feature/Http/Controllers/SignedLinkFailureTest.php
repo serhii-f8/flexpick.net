@@ -99,18 +99,53 @@ class SignedLinkFailureTest extends FeatureTest
 
     /**
      * The HTML-escaped ampersand a customer gets by copying the link out of
-     * the email source: `signature` is parsed as `amp;signature`, so the
-     * signature is absent while `expires` still reads as current.
+     * the email source, or that a mail client leaves behind: `signature` is
+     * parsed as `amp;signature`. The separator is repaired and the link works.
      */
-    public function test_an_html_escaped_ampersand_is_reported_as_damaged_not_expired(): void
+    public function test_an_html_escaped_ampersand_is_repaired_and_the_report_renders(): void
     {
         $report = AuditReport::factory()->locked()->create();
         $url = str_replace('&', '&amp;', app(AuditReportService::class)->signedUrl($report));
 
-        $this->get($url)
+        $repaired = $this->get($url);
+        $repaired->assertRedirect();
+
+        $this->get($repaired->headers->get('Location'))->assertOk();
+    }
+
+    public function test_an_html_escaped_verification_link_is_repaired_and_verifies(): void
+    {
+        $auditRequest = $this->auditRequest();
+        $url = str_replace('&', '&amp;', app(AuditRequestService::class)->verificationUrl($auditRequest));
+
+        $repaired = $this->get($url);
+        $repaired->assertRedirect();
+
+        $this->get($repaired->headers->get('Location'))->assertRedirect();
+
+        $this->assertNotSame(
+            AuditRequestStatus::PENDING_VERIFICATION->value,
+            $auditRequest->fresh()->status,
+        );
+    }
+
+    /**
+     * Repairing the separator must not become a way in. A link whose signature
+     * was altered is still rejected after the ampersands are fixed — the
+     * middleware restores the transport, never the trust.
+     */
+    public function test_a_forged_signature_is_still_rejected_after_repair(): void
+    {
+        $report = AuditReport::factory()->locked()->create();
+        $signed = app(AuditReportService::class)->signedUrl($report);
+        $forged = preg_replace('/signature=[0-9a-f]{8}/', 'signature=deadbeef', $signed);
+
+        $repaired = $this->get(str_replace('&', '&amp;', (string) $forged));
+        $repaired->assertRedirect();
+
+        $this->get($repaired->headers->get('Location'))
             ->assertStatus(403)
-            ->assertSee(__('This report link looks incomplete'))
-            ->assertDontSee(__('This report link has expired'));
+            ->assertSee(__('This report link looks incomplete'));
     }
 
     public function test_a_valid_report_link_still_renders(): void
