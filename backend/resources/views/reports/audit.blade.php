@@ -4,7 +4,10 @@
     <meta charset="utf-8">
     <title>{{ __('Codebase Health Report') }}</title>
     <style>
-        body { font-family: DejaVu Sans, Helvetica, Arial, sans-serif; color: #1c1917; background: #faf8f4; margin: 32px; font-size: 13px; }
+        {{-- No page background: the web report keeps the cream wash, but a PDF
+             is printed and read on paper-white, where a full-bleed tint costs
+             toner and muddies contrast. --}}
+        body { font-family: DejaVu Sans, Helvetica, Arial, sans-serif; color: #1c1917; margin: 32px; font-size: 13px; }
         h1 { font-size: 22px; margin-bottom: 2px; }
         h2 { font-size: 15px; margin-top: 26px; border-bottom: 1px solid #b98e41; padding-bottom: 4px; }
         .muted { color: #78716c; font-size: 11px; }
