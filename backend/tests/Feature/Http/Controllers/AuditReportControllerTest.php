@@ -82,8 +82,13 @@ class AuditReportControllerTest extends FeatureTest
 
         $response = $this->get(route('reports.view', $report));
 
+        // A URL carrying no `expires` at all has not expired — it arrived
+        // without its signature. Saying "expired" here sent customers to
+        // support to wait out a window that was never the problem. See
+        // SignedLinkFailureTest for the full expired-vs-damaged matrix.
         $response->assertStatus(403);
-        $response->assertSee(__('This report link has expired'));
+        $response->assertSee(__('This report link looks incomplete'));
+        $response->assertDontSee(__('This report link has expired'));
     }
 
     public function test_download_requires_ownership(): void

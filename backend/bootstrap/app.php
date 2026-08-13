@@ -46,8 +46,27 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (InvalidSignatureException $e, Request $request) {
-            if ($request->routeIs('reports.view') || $request->routeIs('audit-requests.verify')) {
-                return response()->view('reports.link-expired', [], 403);
+            $context = match (true) {
+                $request->routeIs('reports.view') => 'report',
+                $request->routeIs('audit-requests.verify') => 'verification',
+                default => null,
+            };
+
+            if ($context === null) {
+                return null;
             }
+
+            // Laravel raises this one exception both for a signature whose
+            // window has passed and for one that is missing, truncated or
+            // altered — mail clients and corporate link rewriters do the
+            // latter routinely. `expires` is a plain query parameter that
+            // survives a damaged signature, so it, not the exception, is what
+            // separates the two.
+            $expires = $request->query('expires');
+
+            return response()->view('reports.link-problem', [
+                'context' => $context,
+                'expired' => is_numeric($expires) && (int) $expires < now()->getTimestamp(),
+            ], 403);
         });
     })->create();
