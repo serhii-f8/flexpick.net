@@ -52,18 +52,19 @@ class GitleaksScanner implements Scanner
                 throw new RuntimeException('gitleaks produced no report');
             }
 
-            return $this->normalize($this->decode($report));
+            return $this->normalize($this->decode($report), $context->path);
         } finally {
             @unlink($report);
         }
     }
 
     /** @return list<Finding> */
-    public function normalize(array $sarif): array
+    public function normalize(array $sarif, string $repoPath): array
     {
         return $this->normalizer->normalize(
             $sarif,
             $this->name(),
+            $repoPath,
             // Gitleaks emits no severity; every leak is critical (spec §5.6).
             fn (): Severity => Severity::CRITICAL,
             fn (): string => 'secrets.credential',

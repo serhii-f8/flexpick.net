@@ -44,7 +44,7 @@ class SccScanner implements Scanner
 
         $decoded = json_decode($result->output(), true, flags: JSON_THROW_ON_ERROR);
 
-        $context->withInventory($this->toInventory(is_array($decoded) ? $decoded : []));
+        $context->withInventory($this->toInventory(is_array($decoded) ? $decoded : [], $context->path));
 
         return $this->normalize($decoded);
     }
@@ -55,8 +55,14 @@ class SccScanner implements Scanner
         return [];
     }
 
-    /** @param array<int, array<string, mixed>> $raw */
-    public function toInventory(array $raw): SccInventory
+    /**
+     * `$repoPath` is the clone root scc was pointed at: it reports `Location`
+     * absolutely, and every consumer of the inventory joins the path back onto
+     * that root.
+     *
+     * @param  array<int, array<string, mixed>>  $raw
+     */
+    public function toInventory(array $raw, string $repoPath): SccInventory
     {
         $files = [];
         $languages = [];
@@ -66,11 +72,17 @@ class SccScanner implements Scanner
             $name = (string) ($language['Name'] ?? 'Unknown');
 
             foreach ($language['Files'] ?? [] as $file) {
+                $path = RepoRelativePath::from($repoPath, (string) ($file['Location'] ?? ''));
+
+                if ($path === '') {
+                    continue;
+                }
+
                 $loc = (int) ($file['Lines'] ?? 0);
                 $complexity = (int) ($file['Complexity'] ?? 0);
 
                 $files[] = [
-                    'path' => ltrim((string) $file['Location'], './'),
+                    'path' => $path,
                     'loc' => $loc,
                     'complexity' => $complexity,
                 ];

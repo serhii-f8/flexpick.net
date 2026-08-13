@@ -60,18 +60,19 @@ class SemgrepScanner implements Scanner
                     $context->path,
                 ]);
 
-            return $this->normalize($this->decode($report));
+            return $this->normalize($this->decode($report), $context->path);
         } finally {
             @unlink($report);
         }
     }
 
     /** @return list<Finding> */
-    public function normalize(array $sarif): array
+    public function normalize(array $sarif, string $repoPath): array
     {
         return $this->normalizer->normalize(
             $sarif,
             $this->name(),
+            $repoPath,
             fn (array $result): Severity => match ($result['level'] ?? 'warning') {
                 'error' => Severity::HIGH,
                 'note' => Severity::LOW,

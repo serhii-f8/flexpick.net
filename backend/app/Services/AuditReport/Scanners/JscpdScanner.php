@@ -58,7 +58,7 @@ class JscpdScanner implements Scanner
             // instance outlives the run inside a Horizon worker.
             $context->record('duplication_pct', $this->duplicationPercentage($decoded));
 
-            return $this->normalize($decoded);
+            return $this->normalize($decoded, $context->path);
         } finally {
             $this->deleteDirectory($outputDir);
         }
@@ -71,7 +71,7 @@ class JscpdScanner implements Scanner
      *
      * @return list<Finding>
      */
-    public function normalize(array $raw): array
+    public function normalize(array $raw, string $repoPath): array
     {
         $findings = [];
 
@@ -85,12 +85,20 @@ class JscpdScanner implements Scanner
                     continue;
                 }
 
+                // jscpd already reports relative to the directory it was given;
+                // normalized anyway so one contract holds across all scanners.
+                $path = RepoRelativePath::from($repoPath, (string) $file['name']);
+
+                if ($path === '') {
+                    continue;
+                }
+
                 $findings[] = new Finding(
                     tool: $this->name(),
                     ruleId: 'jscpd.clone',
                     ruleFamily: 'duplication.clone',
                     severity: Severity::MEDIUM,
-                    path: ltrim((string) $file['name'], './'),
+                    path: $path,
                     line: (int) ($file['start'] ?? 0) ?: null,
                     message: "A block of {$lines} lines is duplicated elsewhere in the repository.",
                     dimension: 'duplication',

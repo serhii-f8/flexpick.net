@@ -9,6 +9,9 @@ use Tests\Feature\FeatureTest;
 
 class GitleaksScannerTest extends FeatureTest
 {
+    /** The clone root the scanner was pointed at — SARIF URIs are absolute. */
+    private const ROOT = '/var/www/html/storage/app/audit-workdirs/0199a1f2';
+
     private function sarif(): array
     {
         return json_decode(
@@ -19,7 +22,7 @@ class GitleaksScannerTest extends FeatureTest
 
     private function normalize(): array
     {
-        return app(GitleaksScanner::class)->normalize($this->sarif());
+        return app(GitleaksScanner::class)->normalize($this->sarif(), self::ROOT);
     }
 
     public function test_normalizes_every_result(): void
@@ -76,6 +79,7 @@ class GitleaksScannerTest extends FeatureTest
         $this->assertSame([], app(SarifNormalizer::class)->normalize(
             ['version' => '2.1.0', 'runs' => []],
             'gitleaks',
+            self::ROOT,
             fn () => Severity::CRITICAL,
             fn () => 'secrets.credential',
             fn () => 'security_hygiene',

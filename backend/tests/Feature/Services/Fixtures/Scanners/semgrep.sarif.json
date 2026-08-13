@@ -14,7 +14,7 @@
           "level": "error",
           "message": { "text": "SQL is assembled by string interpolation." },
           "locations": [ { "physicalLocation": {
-            "artifactLocation": { "uri": "app/Http/Controllers/UserController.php" },
+            "artifactLocation": { "uri": "/var/www/html/storage/app/audit-workdirs/0199a1f2/app/Http/Controllers/UserController.php" },
             "region": { "startLine": 42 } } } ]
         },
         {
@@ -22,7 +22,7 @@
           "level": "warning",
           "message": { "text": "Debug mode is enabled unconditionally." },
           "locations": [ { "physicalLocation": {
-            "artifactLocation": { "uri": "config/app.php" },
+            "artifactLocation": { "uri": "/var/www/html/storage/app/audit-workdirs/0199a1f2/config/app.php" },
             "region": { "startLine": 12 } } } ]
         }
       ]

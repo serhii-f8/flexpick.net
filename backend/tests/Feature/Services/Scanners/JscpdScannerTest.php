@@ -8,6 +8,9 @@ use Tests\Feature\FeatureTest;
 
 class JscpdScannerTest extends FeatureTest
 {
+    /** jscpd reports relative to this root already; normalization is a no-op. */
+    private const ROOT = '/var/www/html/storage/app/audit-workdirs/0199a1f2';
+
     private function raw(): array
     {
         return json_decode(
@@ -18,7 +21,7 @@ class JscpdScannerTest extends FeatureTest
 
     private function normalize(): array
     {
-        return app(JscpdScanner::class)->normalize($this->raw());
+        return app(JscpdScanner::class)->normalize($this->raw(), self::ROOT);
     }
 
     public function test_emits_one_finding_per_occurrence_not_per_pair(): void

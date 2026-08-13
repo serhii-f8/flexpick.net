@@ -6,6 +6,7 @@ use App\Constants\AuditTier;
 use App\Services\AuditReport\Collectors\ExcerptCollector;
 use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\SccInventory;
+use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Illuminate\Support\Facades\File;
 use Tests\Feature\FeatureTest;
@@ -76,6 +77,37 @@ class ExcerptCollectorTest extends FeatureTest
     public function test_ordinary_files_are_still_collected(): void
     {
         $this->assertContains('app/User.php', $this->paths($this->context()));
+    }
+
+    /**
+     * The seam this file previously hand-waved: every test above builds the
+     * inventory from literal relative paths, so none of them exercised what
+     * scc actually emits. scc is invoked with the absolute clone path and
+     * echoes it back, and joining that onto the clone root again resolves to
+     * nothing — the collector silently returned zero excerpts on every real
+     * run while the whole suite stayed green.
+     */
+    public function test_collects_excerpts_from_a_real_scc_inventory(): void
+    {
+        $inventory = app(SccScanner::class)->toInventory([[
+            'Name' => 'PHP',
+            'Files' => [
+                ['Location' => $this->repo.'/app/User.php', 'Lines' => 10, 'Complexity' => 1],
+                ['Location' => $this->repo.'/app/Legacy.php', 'Lines' => 20, 'Complexity' => 1],
+            ],
+        ]], $this->repo);
+
+        $context = new RepoContext(
+            $this->repo,
+            app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+            $inventory,
+        );
+
+        $excerpts = app(ExcerptCollector::class)->collect($context)['excerpts'];
+
+        $this->assertCount(2, $excerpts);
+        $this->assertSame('app/Legacy.php', $excerpts[0]['path']);
+        $this->assertStringContainsString('class User', $excerpts[1]['content']);
     }
 
     /**

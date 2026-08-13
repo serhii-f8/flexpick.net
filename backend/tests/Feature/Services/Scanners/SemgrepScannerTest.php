@@ -12,6 +12,9 @@ use Tests\Feature\FeatureTest;
 
 class SemgrepScannerTest extends FeatureTest
 {
+    /** The clone root the scanner was pointed at — SARIF URIs are absolute. */
+    private const ROOT = '/var/www/html/storage/app/audit-workdirs/0199a1f2';
+
     private function normalize(): array
     {
         $sarif = json_decode(
@@ -19,7 +22,7 @@ class SemgrepScannerTest extends FeatureTest
             true,
         );
 
-        return app(SemgrepScanner::class)->normalize($sarif);
+        return app(SemgrepScanner::class)->normalize($sarif, self::ROOT);
     }
 
     public function test_normalizes_every_result(): void
@@ -111,12 +114,20 @@ class SemgrepScannerTest extends FeatureTest
         });
 
         $context = new RepoContext(
-            path: base_path('tests/Feature/Services/Fixtures/Scanners'),
+            path: self::ROOT,
             tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
         );
 
         $findings = app(SemgrepScanner::class)->scan($context);
 
         $this->assertCount(2, $findings);
+
+        // Semgrep echoes back the absolute clone path it was invoked with.
+        // scan() must hand back repository-relative paths, because every
+        // consumer resolves them by joining onto the clone root again.
+        $this->assertSame(
+            ['app/Http/Controllers/UserController.php', 'config/app.php'],
+            array_map(fn ($finding) => $finding->path, $findings),
+        );
     }
 }

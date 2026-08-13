@@ -11,6 +11,9 @@ use Tests\Feature\FeatureTest;
 
 class SccScannerTest extends FeatureTest
 {
+    /** The clone root scc was pointed at — it reports Location absolutely. */
+    private const ROOT = '/var/www/html/storage/app/audit-workdirs/0199a1f2';
+
     private function inventory(): SccInventory
     {
         $raw = json_decode(
@@ -18,7 +21,7 @@ class SccScannerTest extends FeatureTest
             true,
         );
 
-        return app(SccScanner::class)->toInventory($raw);
+        return app(SccScanner::class)->toInventory($raw, self::ROOT);
     }
 
     public function test_produces_no_findings(): void
