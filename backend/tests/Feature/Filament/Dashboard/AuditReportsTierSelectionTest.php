@@ -3,7 +3,6 @@
 namespace Tests\Feature\Filament\Dashboard;
 
 use App\Constants\AuditFunding;
-use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Jobs\GenerateAuditReport;
@@ -25,11 +24,12 @@ class AuditReportsTierSelectionTest extends FeatureTest
         $this->actAsTenantUser($user, $tenant);
 
         Livewire::test(AuditReports::class)
+            ->assertSet('tier', AuditTier::AUTOMATED->value)
             ->set('repoUrl', 'https://github.com/acme/app')
             ->set('tier', AuditTier::AUTOMATED->value)
             ->call('launchAudit');
 
-        $request = AuditRequest::latest('id')->firstOrFail();
+        $request = AuditRequest::where('user_id', $user->id)->latest('id')->firstOrFail();
 
         $this->assertSame(AuditTier::AUTOMATED, $request->tier);
         $this->assertSame(AuditFunding::ALLOWANCE, $request->funding);
@@ -53,7 +53,7 @@ class AuditReportsTierSelectionTest extends FeatureTest
             ->set('tier', AuditTier::DIAGNOSTIC->value)
             ->call('launchAudit');
 
-        $request = AuditRequest::latest('id')->firstOrFail();
+        $request = AuditRequest::where('user_id', $user->id)->latest('id')->firstOrFail();
 
         $this->assertSame(AuditTier::DIAGNOSTIC, $request->tier);
         $this->assertSame(AuditFunding::FREE, $request->funding);
@@ -79,12 +79,9 @@ class AuditReportsTierSelectionTest extends FeatureTest
             ->set('tier', AuditTier::EXPERT->value)
             ->call('launchAudit');
 
-        $this->assertSame(
-            0,
-            AuditRequest::where('user_id', $user->id)
-                ->where('status', AuditRequestStatus::QUEUED->value)
-                ->count(),
-        );
+        // No status filter: the point is that no run of any status was
+        // created for this user, not merely that none landed at QUEUED.
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
         Queue::assertNothingPushed();
     }
 
