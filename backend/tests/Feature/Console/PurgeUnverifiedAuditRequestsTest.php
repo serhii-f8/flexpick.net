@@ -29,4 +29,25 @@ class PurgeUnverifiedAuditRequestsTest extends FeatureTest
         $this->assertDatabaseHas('audit_requests', ['id' => $freshUnverified->id]);
         $this->assertDatabaseHas('audit_requests', ['id' => $oldVerified->id]);
     }
+
+    public function test_abandoned_checkouts_are_purged_after_the_window(): void
+    {
+        $days = (int) config('audit.unverified_purge_days');
+
+        $stale = AuditRequest::factory()->create([
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+            'email_verified_at' => now(),
+            'created_at' => now()->subDays($days + 1),
+        ]);
+        $recent = AuditRequest::factory()->create([
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+            'email_verified_at' => now(),
+            'created_at' => now()->subDay(),
+        ]);
+
+        $this->artisan('app:purge-unverified-audit-requests')->assertSuccessful();
+
+        $this->assertNull(AuditRequest::find($stale->id));
+        $this->assertNotNull(AuditRequest::find($recent->id));
+    }
 }

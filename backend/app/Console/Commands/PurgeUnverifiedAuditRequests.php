@@ -20,7 +20,14 @@ class PurgeUnverifiedAuditRequests extends Command
             ->where('created_at', '<', now()->subDays((int) config('audit.unverified_purge_days')))
             ->delete();
 
-        $this->info("Purged {$deleted} unverified audit request(s).");
+        // A dashboard checkout intent is email-verified, so it can never match
+        // the sweep above. Separate condition, same retention window.
+        $abandoned = AuditRequest::query()
+            ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value)
+            ->where('created_at', '<', now()->subDays((int) config('audit.unverified_purge_days')))
+            ->delete();
+
+        $this->info("Purged {$deleted} unverified and {$abandoned} abandoned audit request(s).");
 
         return self::SUCCESS;
     }
