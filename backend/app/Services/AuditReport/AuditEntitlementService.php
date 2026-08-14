@@ -161,38 +161,6 @@ class AuditEntitlementService
         return null;
     }
 
-    // Retained so existing call sites keep working while they migrate to the
-    // tier-keyed API above. Removed in full once every caller is converted.
-    public function subscriptionAllowance(Tenant $tenant): int
-    {
-        return $this->allowance($tenant, AuditTier::AUTOMATED);
-    }
-
-    public function deepAiCredits(Tenant $tenant): int
-    {
-        return $this->allowance($tenant, AuditTier::DEEP_AI);
-    }
-
-    public function dashboardRunsUsedThisMonth(User $user): int
-    {
-        return $this->runsUsedThisMonth($user, AuditTier::AUTOMATED);
-    }
-
-    public function deepAiRunsUsedThisMonth(User $user): int
-    {
-        return $this->runsUsedThisMonth($user, AuditTier::DEEP_AI);
-    }
-
-    public function remainingDashboardRuns(User $user, Tenant $tenant): int
-    {
-        return $this->remainingRuns($user, $tenant, AuditTier::AUTOMATED);
-    }
-
-    public function remainingDeepAiRuns(User $user, Tenant $tenant): int
-    {
-        return $this->remainingRuns($user, $tenant, AuditTier::DEEP_AI);
-    }
-
     public function hasAuditAccess(User $user, ?Tenant $tenant): bool
     {
         if (AuditRequest::forUser($user)->exists()) {

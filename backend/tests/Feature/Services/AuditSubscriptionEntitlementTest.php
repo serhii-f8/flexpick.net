@@ -21,8 +21,8 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
 
-        $this->assertSame(0, app(AuditEntitlementService::class)->subscriptionAllowance($tenant));
-        $this->assertSame(0, app(AuditEntitlementService::class)->remainingDashboardRuns($user, $tenant));
+        $this->assertSame(0, app(AuditEntitlementService::class)->allowance($tenant, AuditTier::AUTOMATED));
+        $this->assertSame(0, app(AuditEntitlementService::class)->remainingRuns($user, $tenant, AuditTier::AUTOMATED));
     }
 
     public function test_allowance_reads_product_metadata_of_active_subscription(): void
@@ -31,7 +31,7 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
 
-        $this->assertSame(5, app(AuditEntitlementService::class)->subscriptionAllowance($tenant));
+        $this->assertSame(5, app(AuditEntitlementService::class)->allowance($tenant, AuditTier::AUTOMATED));
     }
 
     public function test_dashboard_runs_this_month_reduce_remaining(): void
@@ -59,8 +59,8 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
         ]);
 
         $service = app(AuditEntitlementService::class);
-        $this->assertSame(2, $service->dashboardRunsUsedThisMonth($user));
-        $this->assertSame(3, $service->remainingDashboardRuns($user, $tenant));
+        $this->assertSame(2, $service->runsUsedThisMonth($user, AuditTier::AUTOMATED));
+        $this->assertSame(3, $service->remainingRuns($user, $tenant, AuditTier::AUTOMATED));
     }
 
     public function test_subscription_allowance_meters_automated_runs_only(): void
@@ -79,7 +79,7 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
             'tier' => AuditTier::DIAGNOSTIC->value, 'created_at' => now(),
         ]);
 
-        $this->assertSame(2, app(AuditEntitlementService::class)->remainingDashboardRuns($user, $tenant));
+        $this->assertSame(2, app(AuditEntitlementService::class)->remainingRuns($user, $tenant, AuditTier::AUTOMATED));
     }
 
     public function test_deep_ai_credits_are_metered_separately(): void
@@ -93,10 +93,10 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
 
         $service = app(AuditEntitlementService::class);
 
-        $this->assertSame(2, $service->deepAiCredits($tenant));
-        $this->assertSame(1, $service->remainingDeepAiRuns($user, $tenant));
+        $this->assertSame(2, $service->allowance($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(1, $service->remainingRuns($user, $tenant, AuditTier::DEEP_AI));
         // A deep_ai run does not also consume an automated run.
-        $this->assertSame(5, $service->remainingDashboardRuns($user, $tenant));
+        $this->assertSame(5, $service->remainingRuns($user, $tenant, AuditTier::AUTOMATED));
     }
 
     public function test_runs_from_a_previous_month_do_not_count(): void
@@ -108,14 +108,14 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
             'tier' => AuditTier::AUTOMATED->value, 'created_at' => now()->subMonth(),
         ]);
 
-        $this->assertSame(5, app(AuditEntitlementService::class)->remainingDashboardRuns($user, $tenant));
+        $this->assertSame(5, app(AuditEntitlementService::class)->remainingRuns($user, $tenant, AuditTier::AUTOMATED));
     }
 
     public function test_a_plan_without_deep_ai_credits_grants_none(): void
     {
         [$user, $tenant] = $this->subscribedTenant(['audit_analyses_per_month' => 5]);
 
-        $this->assertSame(0, app(AuditEntitlementService::class)->remainingDeepAiRuns($user, $tenant));
+        $this->assertSame(0, app(AuditEntitlementService::class)->remainingRuns($user, $tenant, AuditTier::DEEP_AI));
     }
 
     /** @return array{0: User, 1: Tenant} */

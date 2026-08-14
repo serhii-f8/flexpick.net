@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Jobs\GenerateAuditReport;
@@ -47,6 +48,7 @@ class AuditRequestService
             'repo_url' => $data['repo_url'] ?? null,
             'message' => $data['message'] ?? null,
             'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
+            'funding' => AuditFunding::FREE->value,
             'marketing_consent' => $consented,
             'consented_at' => $consented ? now() : null,
             'meta' => $meta,

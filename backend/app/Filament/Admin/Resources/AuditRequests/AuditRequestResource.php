@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources\AuditRequests;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Filament\Admin\Resources\AuditRequests\Pages\EditAuditRequest;
 use App\Filament\Admin\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Filament\Admin\Resources\AuditRequests\Pages\ViewAuditRequest;
@@ -72,6 +73,15 @@ class AuditRequestResource extends Resource
                             ->mapWithKeys(fn (AuditRequestStatus $status) => [$status->value => app(AuditRequestStatusMapper::class)->mapForDisplay($status->value)])
                             ->all()
                     )
+                    ->required(),
+                Select::make('tier')
+                    ->label(__('Audit type'))
+                    ->options(
+                        collect(AuditTier::cases())
+                            ->mapWithKeys(fn (AuditTier $tier): array => [$tier->value => $tier->label()])
+                            ->all()
+                    )
+                    ->helperText(__('Changing this and re-running the pipeline re-analyses at the new tier.'))
                     ->required(),
                 TextInput::make('repo_url')->url()->maxLength(2048),
                 TextInput::make('name')->required()->maxLength(255),

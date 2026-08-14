@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Seeders;
 
+use App\Constants\AuditTier;
 use App\Models\AuditRequest;
 use App\Models\Subscription;
 use App\Models\User;
@@ -21,14 +22,14 @@ class AuditDemoSeederTest extends FeatureTest
         // Active tiers expose their monthly allowance through the tenant subscription
         foreach ([['audit-starter-demo@flexpick.net', 5], ['audit-growth-demo@flexpick.net', 20], ['audit-agency-demo@flexpick.net', 75], ['audit-trial-demo@flexpick.net', 5]] as [$email, $allowance]) {
             $user = User::where('email', $email)->firstOrFail();
-            $this->assertSame($allowance, $entitlements->subscriptionAllowance($user->tenants()->firstOrFail()), $email);
+            $this->assertSame($allowance, $entitlements->allowance($user->tenants()->firstOrFail(), AuditTier::AUTOMATED), $email);
             $this->assertSame(1, $user->subscriptions()->count(), $email);
         }
 
         // Cancelled and expired subscriptions grant no allowance
         foreach (['audit-cancelled-demo@flexpick.net', 'audit-expired-demo@flexpick.net'] as $email) {
             $user = User::where('email', $email)->firstOrFail();
-            $this->assertSame(0, $entitlements->subscriptionAllowance($user->tenants()->firstOrFail()), $email);
+            $this->assertSame(0, $entitlements->allowance($user->tenants()->firstOrFail(), AuditTier::AUTOMATED), $email);
         }
 
         // Free-quota states
