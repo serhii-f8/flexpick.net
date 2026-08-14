@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\AuditFunding;
+use App\Constants\AuditTier;
 use App\Models\AuditRequest;
 use App\Models\User;
 use App\Models\UserParameter;
@@ -82,5 +84,114 @@ class AuditEntitlementServiceTest extends FeatureTest
 
         $this->assertFalse($this->service->hasFreeRun($user->email));
         $this->assertFalse($this->service->hasAuditAccess($user, null));
+    }
+
+    public function test_only_allowance_funded_runs_are_metered(): void
+    {
+        $user = $this->createUser();
+
+        AuditRequest::factory()->count(2)->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+
+        // A purchased run and a free run must not spend plan quota.
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::FREE->value,
+        ]);
+
+        $this->assertSame(2, $this->service->runsUsedThisMonth($user, AuditTier::AUTOMATED));
+    }
+
+    public function test_each_tier_meters_independently(): void
+    {
+        $user = $this->createUser();
+
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+        AuditRequest::factory()->count(3)->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+
+        $this->assertSame(1, $this->service->runsUsedThisMonth($user, AuditTier::AUTOMATED));
+        $this->assertSame(3, $this->service->runsUsedThisMonth($user, AuditTier::DEEP_AI));
+        $this->assertSame(0, $this->service->runsUsedThisMonth($user, AuditTier::EXPERT));
+    }
+
+    public function test_last_months_runs_do_not_count(): void
+    {
+        $user = $this->createUser();
+
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+            'created_at' => now()->startOfMonth()->subDay(),
+        ]);
+
+        $this->assertSame(0, $this->service->runsUsedThisMonth($user, AuditTier::AUTOMATED));
+    }
+
+    public function test_diagnostic_quota_is_the_lifetime_free_quota(): void
+    {
+        $user = $this->createUser();
+        AuditRequest::factory()->freeRun()->create(['email' => $user->email]);
+
+        $quota = $this->service->quotaFor($user, null, AuditTier::DIAGNOSTIC);
+
+        $this->assertTrue($quota->isLifetime);
+        $this->assertSame(3, $quota->limit);
+        $this->assertSame(1, $quota->used);
+        $this->assertSame(2, $quota->remaining());
+        $this->assertFalse($quota->purchasable());
+    }
+
+    public function test_paid_tiers_carry_their_catalog_price(): void
+    {
+        $user = $this->createUser();
+
+        $this->assertSame(4900, $this->service->quotaFor($user, null, AuditTier::AUTOMATED)->priceCents);
+        $this->assertSame(19900, $this->service->quotaFor($user, null, AuditTier::DEEP_AI)->priceCents);
+        $this->assertSame(99900, $this->service->quotaFor($user, null, AuditTier::EXPERT)->priceCents);
+    }
+
+    public function test_quotas_returns_one_entry_per_tier(): void
+    {
+        $user = $this->createUser();
+
+        $quotas = $this->service->quotas($user, null);
+
+        $this->assertCount(count(AuditTier::cases()), $quotas);
+    }
+
+    public function test_a_null_tenant_has_no_allowance(): void
+    {
+        $user = $this->createUser();
+
+        $this->assertSame(0, $this->service->allowance(null, AuditTier::AUTOMATED));
+        $this->assertSame(0, $this->service->remainingRuns($user, null, AuditTier::AUTOMATED));
+    }
+
+    public function test_consuming_a_free_run_marks_the_funding(): void
+    {
+        $request = AuditRequest::factory()->create(['funding' => AuditFunding::ALLOWANCE->value]);
+
+        $this->service->consumeFreeRun($request);
+
+        $this->assertTrue($request->fresh()->free_run);
+        $this->assertSame(AuditFunding::FREE, $request->fresh()->funding);
     }
 }

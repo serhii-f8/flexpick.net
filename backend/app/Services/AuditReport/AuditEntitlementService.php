@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditTier;
 use App\Models\AuditRequest;
 use App\Models\Tenant;
@@ -45,19 +46,35 @@ class AuditEntitlementService
         return $this->freeRunsUsed($email) < $this->freeRunsLimit($email);
     }
 
+    /** Spends a free run. Sets both markers so metering and the lifetime
+     *  count can never disagree about how a run was funded. */
     public function consumeFreeRun(AuditRequest $auditRequest): void
     {
-        $auditRequest->update(['free_run' => true]);
+        $auditRequest->update([
+            'free_run' => true,
+            'funding' => AuditFunding::FREE->value,
+        ]);
     }
 
-    public function subscriptionAllowance(Tenant $tenant): int
-    {
-        return $this->planMetadata($tenant, 'audit_analyses_per_month');
-    }
+    /**
+     * Plan-metadata key per metered tier. DIAGNOSTIC is absent deliberately:
+     * it is funded by the lifetime free quota, not a monthly allowance.
+     */
+    private const QUOTA_KEYS = [
+        AuditTier::AUTOMATED->value => 'audit_analyses_per_month',
+        AuditTier::DEEP_AI->value => 'audit_deep_ai_credits',
+        AuditTier::EXPERT->value => 'audit_expert_credits',
+    ];
 
-    public function deepAiCredits(Tenant $tenant): int
+    public function allowance(?Tenant $tenant, AuditTier $tier): int
     {
-        return $this->planMetadata($tenant, 'audit_deep_ai_credits');
+        $key = self::QUOTA_KEYS[$tier->value] ?? null;
+
+        if ($tenant === null || $key === null) {
+            return 0;
+        }
+
+        return $this->planMetadata($tenant, $key);
     }
 
     private function planMetadata(Tenant $tenant, string $key): int
@@ -67,35 +84,95 @@ class AuditEntitlementService
             ->max();
     }
 
-    /** Automated-tier dashboard runs consume the subscription allowance. */
-    public function dashboardRunsUsedThisMonth(User $user): int
-    {
-        return $this->runsThisMonth($user, AuditTier::AUTOMATED);
-    }
-
-    public function deepAiRunsUsedThisMonth(User $user): int
-    {
-        return $this->runsThisMonth($user, AuditTier::DEEP_AI);
-    }
-
-    private function runsThisMonth(User $user, AuditTier $tier): int
+    /**
+     * Runs this calendar month that came out of the plan.
+     *
+     * Keyed on `funding`, not `source`: a checkout intent awaiting payment and
+     * a purchased run are both dashboard-sourced but neither spends quota.
+     */
+    public function runsUsedThisMonth(User $user, AuditTier $tier): int
     {
         return AuditRequest::query()
             ->where('user_id', $user->id)
-            ->where('source', 'dashboard')
+            ->where('funding', AuditFunding::ALLOWANCE->value)
             ->where('tier', $tier->value)
             ->where('created_at', '>=', now()->startOfMonth())
             ->count();
     }
 
+    public function remainingRuns(User $user, ?Tenant $tenant, AuditTier $tier): int
+    {
+        if ($tier === AuditTier::DIAGNOSTIC) {
+            return max(0, $this->freeRunsLimit($user->email) - $this->freeRunsUsed($user->email));
+        }
+
+        return max(0, $this->allowance($tenant, $tier) - $this->runsUsedThisMonth($user, $tier));
+    }
+
+    public function quotaFor(User $user, ?Tenant $tenant, AuditTier $tier): TierQuota
+    {
+        $isLifetime = $tier === AuditTier::DIAGNOSTIC;
+
+        return new TierQuota(
+            tier: $tier,
+            label: $tier->label(),
+            limit: $isLifetime ? $this->freeRunsLimit($user->email) : $this->allowance($tenant, $tier),
+            used: $isLifetime ? $this->freeRunsUsed($user->email) : $this->runsUsedThisMonth($user, $tier),
+            isLifetime: $isLifetime,
+            priceCents: $this->tierPriceCents($tier),
+        );
+    }
+
+    /** @return list<TierQuota> */
+    public function quotas(User $user, ?Tenant $tenant): array
+    {
+        return array_map(
+            fn (AuditTier $tier): TierQuota => $this->quotaFor($user, $tenant, $tier),
+            AuditTier::cases(),
+        );
+    }
+
+    private function tierPriceCents(AuditTier $tier): ?int
+    {
+        foreach ((array) config('pricing.tiers') as $definition) {
+            if (($definition['tier'] ?? null) === $tier->value) {
+                return (int) $definition['price'];
+            }
+        }
+
+        return null;
+    }
+
+    // Retained so existing call sites keep working while they migrate to the
+    // tier-keyed API above. Removed in full once every caller is converted.
+    public function subscriptionAllowance(Tenant $tenant): int
+    {
+        return $this->allowance($tenant, AuditTier::AUTOMATED);
+    }
+
+    public function deepAiCredits(Tenant $tenant): int
+    {
+        return $this->allowance($tenant, AuditTier::DEEP_AI);
+    }
+
+    public function dashboardRunsUsedThisMonth(User $user): int
+    {
+        return $this->runsUsedThisMonth($user, AuditTier::AUTOMATED);
+    }
+
+    public function deepAiRunsUsedThisMonth(User $user): int
+    {
+        return $this->runsUsedThisMonth($user, AuditTier::DEEP_AI);
+    }
+
     public function remainingDashboardRuns(User $user, Tenant $tenant): int
     {
-        return max(0, $this->subscriptionAllowance($tenant) - $this->dashboardRunsUsedThisMonth($user));
+        return $this->remainingRuns($user, $tenant, AuditTier::AUTOMATED);
     }
 
     public function remainingDeepAiRuns(User $user, Tenant $tenant): int
     {
-        return max(0, $this->deepAiCredits($tenant) - $this->deepAiRunsUsedThisMonth($user));
+        return $this->remainingRuns($user, $tenant, AuditTier::DEEP_AI);
     }
 
     public function hasAuditAccess(User $user, ?Tenant $tenant): bool
@@ -112,6 +189,18 @@ class AuditEntitlementService
             return true;
         }
 
-        return $tenant !== null && $this->subscriptionAllowance($tenant) > 0;
+        if ($tenant === null) {
+            return false;
+        }
+
+        // Any metered tier with a nonzero allowance grants access -- a tenant
+        // holding only Expert credits must not be locked out of the nav.
+        foreach (array_keys(self::QUOTA_KEYS) as $tierValue) {
+            if ($this->allowance($tenant, AuditTier::from($tierValue)) > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

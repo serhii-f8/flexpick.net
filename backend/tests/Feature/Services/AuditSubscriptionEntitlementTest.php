@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditTier;
 use App\Constants\SubscriptionStatus;
 use App\Models\AuditRequest;
@@ -39,9 +40,23 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
 
-        AuditRequest::factory()->count(2)->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value]);
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value, 'created_at' => now()->subMonths(2)]);
-        AuditRequest::factory()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value]); // web source — doesn't count
+        AuditRequest::factory()->count(2)->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+            'created_at' => now()->subMonths(2),
+        ]);
+        // Guest-funnel run: free-funded, so it never touches plan quota.
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::FREE->value,
+        ]);
 
         $service = app(AuditEntitlementService::class);
         $this->assertSame(2, $service->dashboardRunsUsedThisMonth($user));
