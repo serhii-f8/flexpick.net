@@ -21,6 +21,87 @@ use Tests\Feature\FeatureTest;
 
 class HandleAuditTierOrderTest extends FeatureTest
 {
+    public function test_a_completed_tier_order_runs_the_repository_at_that_tier(): void
+    {
+        Queue::fake();
+
+        $user = $this->createUser();
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'repo_url' => 'https://github.com/acme/app',
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+
+        $this->completeOrderFor($user, 'audit-automated');
+
+        $upgraded = AuditRequest::where('user_id', $user->id)
+            ->where('tier', AuditTier::AUTOMATED->value)
+            ->first();
+
+        $this->assertNotNull($upgraded, 'A tier purchase must produce a run at the purchased tier.');
+        $this->assertSame('https://github.com/acme/app', $upgraded->repo_url);
+
+        Queue::assertPushed(GenerateAuditReport::class);
+    }
+
+    public function test_the_original_diagnostic_run_is_left_intact(): void
+    {
+        Queue::fake();
+
+        $user = $this->createUser();
+        $diagnostic = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'repo_url' => 'https://github.com/acme/app',
+        ]);
+
+        $this->completeOrderFor($user, 'audit-automated');
+
+        $this->assertSame(AuditTier::DIAGNOSTIC, $diagnostic->fresh()->tier);
+    }
+
+    public function test_an_unrelated_product_order_is_ignored(): void
+    {
+        Queue::fake();
+
+        $user = $this->createUser();
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
+
+        $this->completeOrderFor($user, 'some-other-product');
+
+        // Not assertNothingPushed(): the Ordered event also has queued
+        // listeners of its own (referral processing, order notification)
+        // that push regardless of which product was purchased.
+        Queue::assertNotPushed(GenerateAuditReport::class);
+    }
+
+    public function test_the_purchased_run_is_not_charged_against_the_free_quota(): void
+    {
+        Queue::fake();
+
+        $user = $this->createUser();
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
+
+        $this->completeOrderFor($user, 'audit-automated');
+
+        $upgraded = AuditRequest::where('user_id', $user->id)
+            ->where('tier', AuditTier::AUTOMATED->value)
+            ->firstOrFail();
+
+        $this->assertFalse((bool) $upgraded->free_run);
+    }
+
     public function test_a_purchased_run_is_prepaid_and_not_metered(): void
     {
         Queue::fake();
@@ -51,6 +132,14 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->seed(AuditMonetizationSeeder::class);
 
         $user = $this->createUser();
+        // A diagnostic must exist so a wrongful clone via the fallback path
+        // is actually possible — otherwise the "still only one deep_ai row"
+        // assertion below would pass even if the intent guard were removed.
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
         $intended = AuditRequest::factory()->create([
             'user_id' => $user->id,
             'email' => $user->email,
@@ -95,5 +184,35 @@ class HandleAuditTierOrderTest extends FeatureTest
         ]);
 
         return $order;
+    }
+
+    /**
+     * Mirrors orderFor() but for products that aren't seeded by
+     * AuditMonetizationSeeder (e.g. an unrelated product slug), and
+     * dispatches the real Ordered event rather than calling the listener
+     * directly — some assertions here depend on the event's other
+     * registered listeners actually running.
+     */
+    private function completeOrderFor(User $user, string $slug): void
+    {
+        $product = OneTimeProduct::firstOrCreate(
+            ['slug' => $slug],
+            ['name' => $slug, 'description' => $slug, 'features' => []],
+        );
+
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => Tenant::factory()->create()->id,
+        ]);
+        $order->items()->create([
+            'one_time_product_id' => $product->id,
+            'quantity' => 1,
+            'currency_id' => $order->currency_id,
+            'price_per_unit' => 100,
+            'price_per_unit_after_discount' => 100,
+            'discount_per_unit' => 0,
+        ]);
+
+        Ordered::dispatch($order);
     }
 }
