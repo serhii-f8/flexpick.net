@@ -46,6 +46,7 @@
             "price_display": "$59",
             "analyses_per_month": 5,
             "deep_ai_credits": 0,
+            "expert_credits": 0,
             "is_popular": false
         },
         "audit-growth": {
@@ -54,6 +55,7 @@
             "price_display": "$149",
             "analyses_per_month": 20,
             "deep_ai_credits": 1,
+            "expert_credits": 0,
             "is_popular": true
         },
         "audit-agency": {
@@ -62,6 +64,7 @@
             "price_display": "$499",
             "analyses_per_month": 75,
             "deep_ai_credits": 4,
+            "expert_credits": 0,
             "is_popular": false
         },
         "audit-enterprise": {
@@ -70,6 +73,7 @@
             "price_display": "$1,500",
             "analyses_per_month": 250,
             "deep_ai_credits": 15,
+            "expert_credits": 0,
             "is_popular": false
         }
     }

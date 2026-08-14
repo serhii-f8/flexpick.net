@@ -67,6 +67,7 @@ class AuditMonetizationSeeder extends Seeder
                 'metadata' => [
                     'audit_analyses_per_month' => $subscription['audit_analyses_per_month'],
                     'audit_deep_ai_credits' => $subscription['audit_deep_ai_credits'],
+                    'audit_expert_credits' => $subscription['audit_expert_credits'],
                 ],
                 'is_default' => false,
             ]);

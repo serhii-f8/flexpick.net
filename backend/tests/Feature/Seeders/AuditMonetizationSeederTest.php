@@ -123,4 +123,23 @@ class AuditMonetizationSeederTest extends FeatureTest
 
         $this->assertStringContainsString("config('pricing", $source);
     }
+
+    public function test_every_plan_carries_an_expert_credits_metadata_key(): void
+    {
+        $this->seed(\Database\Seeders\AuditMonetizationSeeder::class);
+
+        foreach (array_keys(config('pricing.subscriptions')) as $slug) {
+            $product = \App\Models\Product::where('slug', $slug)->firstOrFail();
+
+            $this->assertArrayHasKey(
+                'audit_expert_credits',
+                $product->metadata,
+                "Plan {$slug} is missing audit_expert_credits metadata",
+            );
+            $this->assertSame(
+                config("pricing.subscriptions.{$slug}.audit_expert_credits"),
+                $product->metadata['audit_expert_credits'],
+            );
+        }
+    }
 }

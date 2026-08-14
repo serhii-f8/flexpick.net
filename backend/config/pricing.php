@@ -58,6 +58,10 @@ return [
             'price' => 5900,
             'audit_analyses_per_month' => 5,
             'audit_deep_ai_credits' => 0,
+            // Zero on every plan by design: a $999 audit does not fit inside
+            // any current subscription price. The key exists so a custom deal
+            // is an admin metadata edit rather than a code change.
+            'audit_expert_credits' => 0,
             'is_popular' => false,
         ],
         'audit-growth' => [
@@ -65,6 +69,10 @@ return [
             'price' => 14900,
             'audit_analyses_per_month' => 20,
             'audit_deep_ai_credits' => 1,
+            // Zero on every plan by design: a $999 audit does not fit inside
+            // any current subscription price. The key exists so a custom deal
+            // is an admin metadata edit rather than a code change.
+            'audit_expert_credits' => 0,
             'is_popular' => true,
         ],
         'audit-agency' => [
@@ -72,6 +80,10 @@ return [
             'price' => 49900,
             'audit_analyses_per_month' => 75,
             'audit_deep_ai_credits' => 4,
+            // Zero on every plan by design: a $999 audit does not fit inside
+            // any current subscription price. The key exists so a custom deal
+            // is an admin metadata edit rather than a code change.
+            'audit_expert_credits' => 0,
             'is_popular' => false,
         ],
         'audit-enterprise' => [
@@ -79,6 +91,10 @@ return [
             'price' => 150000,
             'audit_analyses_per_month' => 250,
             'audit_deep_ai_credits' => 15,
+            // Zero on every plan by design: a $999 audit does not fit inside
+            // any current subscription price. The key exists so a custom deal
+            // is an admin metadata edit rather than a code change.
+            'audit_expert_credits' => 0,
             'is_popular' => false,
         ],
     ],

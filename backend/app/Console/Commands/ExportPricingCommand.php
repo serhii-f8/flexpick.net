@@ -71,6 +71,7 @@ class ExportPricingCommand extends Command
                 'price_display' => $this->display($subscription['price']),
                 'analyses_per_month' => $subscription['audit_analyses_per_month'],
                 'deep_ai_credits' => $subscription['audit_deep_ai_credits'],
+                'expert_credits' => $subscription['audit_expert_credits'],
                 'is_popular' => $subscription['is_popular'],
             ];
         }
