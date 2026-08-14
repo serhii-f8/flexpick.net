@@ -177,9 +177,14 @@ rows genuinely executed the diagnostic profile; relabelling them as automated wo
 record and corrupt any cost-per-tier analysis built on the Phase 11 telemetry columns.
 
 `funding` backfills in precedence order: `prepaid` → `purchase`; else `free_run` → `free`; else
-`allowance`. Because metering is scoped to the current calendar month, mislabelled historical rows
-can only affect the month in which the migration runs, and only for rows that were already
-uncounted.
+`source = 'dashboard'` → `allowance`; else `free`. Because metering is scoped to the current
+calendar month, mislabelled historical rows can only affect the month in which the migration runs,
+and only for rows that were already uncounted.
+
+The column default is `allowance`, which is the fail-loud direction. A creation path that forgets
+to set `funding` then over-counts — a customer loses a credit, which is visible and reversible —
+rather than under-counting, which grants unlimited runs silently. That silent failure is precisely
+the defect in §1, and the default should not be able to reproduce it.
 
 ### `funding` values
 
@@ -191,7 +196,8 @@ uncounted.
 
 `free_run` is retained unchanged. It is indexed and drives the lifetime-by-email free count, which
 is a different question from monthly metering; collapsing the two would conflate a lifetime quota
-with a recurring one.
+with a recurring one. To keep the two from drifting, `consumeFreeRun()` sets both — every path that
+spends a free run marks the funding as `free` by the same call.
 
 ### Pricing catalog
 
