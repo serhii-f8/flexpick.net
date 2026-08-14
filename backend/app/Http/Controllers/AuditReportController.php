@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Constants\AuditRequestStatus;
 use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
@@ -18,6 +19,13 @@ class AuditReportController extends Controller
 {
     public function show(AuditReport $auditReport, AuditBenchmarkService $benchmark)
     {
+        // A report held for expert review still carries the raw, un-reviewed
+        // AI payload -- exactly what the review stage exists to catch before
+        // a customer sees it. The blade already hides the link, but a signed
+        // URL bypasses that, so this is the real gate.
+        // @phpstan-ignore-next-line property.notFound (status is a real column on AuditRequest; Larastan can't see it through the auditRequest relation's generic Model return type)
+        abort_if($auditReport->auditRequest->status === AuditRequestStatus::EXPERT_REVIEW->value, 403);
+
         if ($auditReport->auditRequest->source !== 'dashboard') {
             app(AuditFunnelRecorder::class)->record(
                 AuditFunnelRecorder::STAGE_REPORT_VIEWED,
@@ -68,6 +76,8 @@ class AuditReportController extends Controller
     public function download(AuditReport $auditReport)
     {
         abort_unless($auditReport->user_id === auth()->id(), 403);
+        // @phpstan-ignore-next-line property.notFound (status is a real column on AuditRequest; Larastan can't see it through the auditRequest relation's generic Model return type)
+        abort_if($auditReport->auditRequest->status === AuditRequestStatus::EXPERT_REVIEW->value, 403);
         abort_if($auditReport->pdf_path === null, 404);
 
         return Storage::disk('local')->download($auditReport->pdf_path, 'codebase-health-report.pdf');

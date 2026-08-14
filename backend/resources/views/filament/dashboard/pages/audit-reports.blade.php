@@ -8,15 +8,48 @@
                         <x-filament::input id="audit-repo-url" type="url" wire:model="repoUrl" placeholder="https://github.com/you/repo" />
                     </x-filament::input.wrapper>
                 </div>
-                <x-filament::button wire:click="launchAudit">{{ __('Run new audit') }}</x-filament::button>
             </div>
-            <p class="mt-2 text-sm text-gray-500">
-                @if ($allowance > 0)
-                    {{ __(':remaining of :allowance analyses left this month', ['remaining' => $remainingRuns, 'allowance' => $allowance]) }}
-                @else
-                    {{ __(':remaining free audits remaining', ['remaining' => $freeRunsRemaining]) }}
-                @endif
-            </p>
+
+            <fieldset class="mt-4">
+                <legend class="text-sm font-medium">{{ __('Audit type') }}</legend>
+                <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                    @foreach ($quotas as $quota)
+                        <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                            <input type="radio" wire:model.live="tier" value="{{ $quota->tier->value }}" class="mt-1" />
+                            <span>
+                                <span class="block text-sm font-medium">{{ $quota->label }}</span>
+                                <span class="block text-xs text-gray-500 dark:text-gray-400">
+                                    @if ($quota->hasRuns())
+                                        @if ($quota->isLifetime)
+                                            {{ trans_choice('{1} :count free run left|[2,*] :count free runs left', $quota->remaining(), ['count' => $quota->remaining()]) }}
+                                        @else
+                                            {{ __(':remaining of :limit left this month', ['remaining' => $quota->remaining(), 'limit' => $quota->limit]) }}
+                                        @endif
+                                    @elseif ($quota->purchasable())
+                                        {{ __('Buy for $:price', ['price' => number_format($quota->priceCents / 100)]) }}
+                                    @else
+                                        {{ __('None left') }}
+                                    @endif
+                                </span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+            </fieldset>
+
+            @php
+                $selected = collect($quotas)->firstWhere(fn ($q) => $q->tier->value === $tier);
+            @endphp
+
+            <div class="mt-4">
+                <x-filament::button wire:click="launchAudit">
+                    @if ($selected && ! $selected->hasRuns() && $selected->purchasable())
+                        {{ __('Buy this audit — $:price', ['price' => number_format($selected->priceCents / 100)]) }}
+                    @else
+                        {{ __('Run new audit') }}
+                    @endif
+                </x-filament::button>
+            </div>
         </x-filament::section>
     @endif
 
@@ -60,7 +93,12 @@
                 </svg>
             @endif
 
-            @if ($allowance > 0)
+            @php
+                $automated = collect($quotas)->firstWhere(fn ($q) => $q->tier === \App\Constants\AuditTier::AUTOMATED);
+                $originTier = $group['reports']->first()->auditRequest->tier->value;
+            @endphp
+
+            @if ($automated && $automated->limit > 0)
                 <div class="mt-3 flex flex-wrap items-center gap-2">
                     <select
                         class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
@@ -72,7 +110,7 @@
                         @endforeach
                     </select>
 
-                    <x-filament::button size="sm" color="gray" wire:click="launchAudit('{{ $repoUrl }}')">
+                    <x-filament::button size="sm" color="gray" wire:click="launchAudit('{{ $repoUrl }}', '{{ $originTier }}')">
                         {{ __('Re-run') }}
                     </x-filament::button>
                 </div>
@@ -85,13 +123,17 @@
                             {{ $report->created_at->format(config('app.datetime_format', 'd/m/Y H:i')) }}
                         </span>
                         <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium">{{ data_get($report->payload, 'scores.overall', '—') }}</span>
-                            <x-filament::button tag="a" size="xs" color="gray" href="{{ route('reports.download', $report) }}">
-                                {{ __('PDF') }}
-                            </x-filament::button>
-                            <x-filament::button tag="a" size="xs" color="primary" href="{{ app(\App\Services\AuditReport\AuditReportService::class)->signedUrl($report) }}">
-                                {{ __('View') }}
-                            </x-filament::button>
+                            @if ($report->auditRequest->status === \App\Constants\AuditRequestStatus::EXPERT_REVIEW->value)
+                                <x-filament::badge color="warning">{{ __('In expert review') }}</x-filament::badge>
+                            @else
+                                <span class="text-sm font-medium">{{ data_get($report->payload, 'scores.overall', '—') }}</span>
+                                <x-filament::button tag="a" size="xs" color="gray" href="{{ route('reports.download', $report) }}">
+                                    {{ __('PDF') }}
+                                </x-filament::button>
+                                <x-filament::button tag="a" size="xs" color="primary" href="{{ app(\App\Services\AuditReport\AuditReportService::class)->signedUrl($report) }}">
+                                    {{ __('View') }}
+                                </x-filament::button>
+                            @endif
                         </div>
                     </div>
                 @endforeach

@@ -75,6 +75,18 @@ class AuditReportControllerTest extends FeatureTest
         $response->assertSee('reports-page', false);
     }
 
+    public function test_signed_url_is_blocked_while_held_for_expert_review(): void
+    {
+        $this->withExceptionHandling();
+        $report = AuditReport::factory()->create();
+        $report->auditRequest->update(['status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+
+        $url = app(AuditReportService::class)->signedUrl($report);
+        $response = $this->get($url);
+
+        $response->assertStatus(403);
+    }
+
     public function test_unsigned_url_is_rejected_with_friendly_page(): void
     {
         $this->withExceptionHandling();
@@ -101,6 +113,17 @@ class AuditReportControllerTest extends FeatureTest
 
         $this->actingAs($stranger)->get(route('reports.download', $report))->assertStatus(403);
         $this->actingAs($owner)->get(route('reports.download', $report))->assertStatus(200);
+    }
+
+    public function test_download_is_blocked_while_held_for_expert_review(): void
+    {
+        $this->withExceptionHandling();
+        Storage::disk('local')->put('audit-reports/held.pdf', '%PDF-1.4');
+        $owner = $this->createUser();
+        $report = AuditReport::factory()->create(['user_id' => $owner->id, 'pdf_path' => 'audit-reports/held.pdf']);
+        $report->auditRequest->update(['status' => AuditRequestStatus::EXPERT_REVIEW->value]);
+
+        $this->actingAs($owner)->get(route('reports.download', $report))->assertStatus(403);
     }
 
     public function test_report_view_renders_the_expert_review_section_when_present(): void

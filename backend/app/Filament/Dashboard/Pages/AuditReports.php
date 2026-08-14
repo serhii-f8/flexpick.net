@@ -192,16 +192,10 @@ class AuditReports extends Page
             ->latest()
             ->get();
 
-        $allowance = $tenant ? $entitlements->subscriptionAllowance($tenant) : 0;
-        $remainingRuns = $tenant ? $entitlements->remainingDashboardRuns($user, $tenant) : 0;
-        $freeRunsRemaining = max(0, $entitlements->freeRunsLimit($user->email) - $entitlements->freeRunsUsed($user->email));
         $quotas = $entitlements->quotas($user, $tenant);
 
         return [
             'reports' => $reports,
-            'allowance' => $allowance,
-            'remainingRuns' => $remainingRuns,
-            'freeRunsRemaining' => $freeRunsRemaining,
             'quotas' => $quotas,
             // Any tier can start a run: one from quota, the rest by purchase.
             'canRun' => collect($quotas)->contains(
