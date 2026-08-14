@@ -1,6 +1,5 @@
 <?php
 
-use App\Constants\AuditFunding;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -11,7 +10,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('audit_requests', function (Blueprint $table) {
-            $table->string('funding')->default(AuditFunding::ALLOWANCE->value)->after('free_run')->index();
+            $table->string('funding')->default('allowance')->after('free_run')->index();
         });
 
         $this->backfill();
@@ -29,14 +28,14 @@ return new class extends Migration
         // deliberately NOT backfilled -- historical dashboard runs really did
         // execute the diagnostic profile.
         DB::table('audit_requests')->where('prepaid', true)
-            ->update(['funding' => AuditFunding::PURCHASE->value]);
+            ->update(['funding' => 'purchase']);
 
         DB::table('audit_requests')->where('prepaid', false)->where('free_run', true)
-            ->update(['funding' => AuditFunding::FREE->value]);
+            ->update(['funding' => 'free']);
 
         DB::table('audit_requests')->where('prepaid', false)->where('free_run', false)
             ->where('source', '!=', 'dashboard')
-            ->update(['funding' => AuditFunding::FREE->value]);
+            ->update(['funding' => 'free']);
     }
 
     public function down(): void

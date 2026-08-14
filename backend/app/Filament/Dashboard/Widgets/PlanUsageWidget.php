@@ -76,7 +76,12 @@ class PlanUsageWidget extends Widget
             'planName' => $subscription?->plan?->name ?? __('Free'),
             'renewsAt' => $subscription?->ends_at ? Carbon::parse($subscription->ends_at) : null,
             'bars' => $bars,
-            'showUpgrade' => collect($quotas)->every(fn (TierQuota $quota): bool => ! $quota->hasRuns()),
+            // Show it when there is no paid allowance at all (a free user
+            // who hasn't burned their runs yet still needs the conversion
+            // surface), or when everything -- free and paid alike -- is
+            // spent.
+            'showUpgrade' => $metered->every(fn (TierQuota $quota): bool => $quota->limit < 1)
+                || collect($quotas)->every(fn (TierQuota $quota): bool => ! $quota->hasRuns()),
         ];
     }
 }

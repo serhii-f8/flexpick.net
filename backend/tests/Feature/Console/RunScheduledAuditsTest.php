@@ -7,6 +7,7 @@ use App\Constants\AuditTier;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
+use App\Services\AuditReport\AuditEntitlementService;
 use Illuminate\Support\Facades\Queue;
 use Tests\Feature\FeatureTest;
 use Tests\Support\CreatesAuditSubscriptions;
@@ -82,5 +83,37 @@ class RunScheduledAuditsTest extends FeatureTest
 
         $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
         Queue::assertNothingPushed();
+    }
+
+    /**
+     * A diagnostic-tier schedule row is guarded against at creation time
+     * (AuditReports::setSchedule() refuses a lifetime tier), but this proves
+     * the command's own half of the fix independently: if such a row exists
+     * regardless -- a legacy row, or a future caller that skips the dashboard
+     * guard -- it must debit the lifetime free quota, not the monthly
+     * allowance, exactly as launchAudit() would for the same tier.
+     */
+    public function test_a_diagnostic_schedule_debits_the_free_quota_not_the_allowance(): void
+    {
+        Queue::fake();
+        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 2);
+
+        AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/app',
+            'frequency' => 'weekly',
+            'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
+
+        $this->artisan('app:run-scheduled-audits')->assertSuccessful();
+
+        $request = AuditRequest::where('user_id', $user->id)->latest('id')->firstOrFail();
+
+        $this->assertSame(AuditTier::DIAGNOSTIC, $request->tier);
+        $this->assertSame(AuditFunding::FREE, $request->funding);
+        $this->assertTrue($request->free_run);
+        $this->assertSame(1, app(AuditEntitlementService::class)->freeRunsUsed($user->email));
+        Queue::assertPushed(GenerateAuditReport::class);
     }
 }

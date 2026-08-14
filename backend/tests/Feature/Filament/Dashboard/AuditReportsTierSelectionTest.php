@@ -8,6 +8,7 @@ use App\Constants\AuditTier;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
+use App\Models\AuditSchedule;
 use App\Services\AuditReport\AuditEntitlementService;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -113,5 +114,27 @@ class AuditReportsTierSelectionTest extends FeatureTest
         // scope to this test's user rather than asserting a global count.
         $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
         Queue::assertNothingPushed();
+    }
+
+    /**
+     * setSchedule() takes its tier from a client-controlled Livewire method
+     * argument. The blade's tier <select> never offers a lifetime tier, but
+     * that is a rendering hint, not a gate -- a crafted call must still be
+     * refused. A schedule is a subscriber feature; the one-off free-run
+     * quota must never back a recurring run.
+     */
+    public function test_set_schedule_refuses_a_diagnostic_tier_supplied_directly(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(analyses: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(AuditReports::class)
+            ->call('setSchedule', 'https://github.com/acme/app', 'weekly', AuditTier::DIAGNOSTIC->value);
+
+        $this->assertDatabaseMissing('audit_schedules', [
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/app',
+        ]);
+        $this->assertSame(0, AuditSchedule::where('user_id', $user->id)->count());
     }
 }

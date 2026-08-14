@@ -17,6 +17,7 @@ use App\Models\UserParameter;
 use App\Services\AuditReport\AuditEntitlementService;
 use Database\Seeders\AuditMonetizationSeeder;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Tests\Feature\FeatureTest;
 
 class HandleAuditTierOrderTest extends FeatureTest
@@ -163,6 +164,50 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->assertTrue($intended->prepaid);
         $this->assertSame(1, AuditRequest::where('tier', AuditTier::DEEP_AI->value)->where('user_id', $user->id)->count());
         $this->assertNull(UserParameter::where('user_id', $user->id)->where('name', HandleAuditTierOrder::INTENT_PARAM)->first());
+    }
+
+    /**
+     * The stored intent uuid can miss even though the customer really did
+     * start a dashboard checkout for this tier -- an overlapping checkout
+     * overwrote the single per-user intent row, or the purge job removed the
+     * stale awaiting_payment row it pointed at. Either way, the buyer's most
+     * recent awaiting_payment request at the ordered tier is still the
+     * request they meant to pay for, and it must be found and run rather
+     * than silently falling through.
+     */
+    public function test_a_stale_intent_uuid_falls_back_to_the_latest_awaiting_payment_request_at_that_tier(): void
+    {
+        Queue::fake();
+        $this->seed(AuditMonetizationSeeder::class);
+
+        $user = $this->createUser();
+
+        // The intent parameter points at a uuid that no longer resolves to
+        // any request -- e.g. the row it named was purged or overwritten.
+        UserParameter::create([
+            'user_id' => $user->id,
+            'name' => HandleAuditTierOrder::INTENT_PARAM,
+            'value' => (string) Str::uuid(),
+        ]);
+
+        $target = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'repo_url' => 'https://github.com/acme/fallback-target',
+            'tier' => AuditTier::DEEP_AI->value,
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $order = $this->orderFor($user, 'audit-deep-ai');
+        (new HandleAuditTierOrder)->handle(new Ordered($order));
+
+        $target->refresh();
+
+        $this->assertSame(AuditRequestStatus::QUEUED->value, $target->status);
+        $this->assertTrue($target->prepaid);
+        $this->assertSame(1, AuditRequest::where('tier', AuditTier::DEEP_AI->value)->where('user_id', $user->id)->count());
+        Queue::assertPushed(GenerateAuditReport::class);
     }
 
     private function orderFor(User $user, string $slug): Order

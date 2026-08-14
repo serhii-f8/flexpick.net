@@ -195,6 +195,7 @@ class AuditReports extends Page
     {
         $user = auth()->user();
         $tenant = Filament::getTenant();
+        $entitlements = app(AuditEntitlementService::class);
         $selected = AuditTier::tryFrom($tier ?? AuditTier::AUTOMATED->value) ?? AuditTier::AUTOMATED;
 
         if ($tenant === null || ! in_array($frequency, ['off', 'weekly', 'monthly'], true)) {
@@ -206,6 +207,21 @@ class AuditReports extends Page
         if ($frequency === 'off') {
             AuditSchedule::query()->where('user_id', $user->id)->where('repo_url', $repoUrl)->delete();
             Notification::make()->title(__('Scheduled audits turned off'))->success()->send();
+
+            return;
+        }
+
+        // $tier arrives from a client-controlled Livewire method argument, so
+        // the blade's tier <select> (which never offers a lifetime tier) is
+        // a hint and this method is the gate -- the same rule already
+        // applied to launchAudit(). A schedule is a subscriber feature; the
+        // one-off free-run quota must never back a recurring run.
+        if ($entitlements->quotaFor($user, $tenant, $selected)->isLifetime) {
+            Notification::make()
+                ->title(__('Choose an audit type'))
+                ->body(__('Scheduled audits cannot run on the free-run tier.'))
+                ->danger()
+                ->send();
 
             return;
         }

@@ -12,6 +12,7 @@ use App\Models\OneTimeProduct;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\UserParameter;
+use Illuminate\Support\Facades\Log;
 
 /**
  * A completed order for a tier product runs the customer's repository at the
@@ -56,6 +57,13 @@ class HandleAuditTierOrder
             $source = $this->sourceRequestFor($order);
 
             if ($source === null) {
+                // The order is captured but nothing can be run: no intent
+                // request (uuid match or tier/status fallback) and no prior
+                // diagnostic to clone. Silent here means a paid order simply
+                // delivers nothing with no trace, so make it loud instead.
+                Log::error("HandleAuditTierOrder: paid order {$order->id} for tier product '{$slug}' matched no runnable audit request (no intent, no diagnostic to clone).");
+                report(new \RuntimeException("Paid audit tier order #{$order->id} for '{$slug}' produced no runnable audit request."));
+
                 continue;
             }
 
@@ -81,7 +89,17 @@ class HandleAuditTierOrder
         }
     }
 
-    /** The dashboard-created request this order was started to pay for. */
+    /**
+     * The dashboard-created request this order was started to pay for.
+     *
+     * The stored intent uuid can miss even though the customer did start a
+     * dashboard checkout: an overlapping checkout overwrites the single
+     * intent row per user, the purge job deletes stale awaiting_payment rows,
+     * or a guest's row simply ages out mid-checkout. When the uuid lookup
+     * misses, fall back to the buyer's most recent awaiting_payment request
+     * at the ordered tier -- the dashboard purchase flow only ever leaves one
+     * such row per tier, so it is still the request they meant to pay for.
+     */
     private function intentRequestFor(Order $order, string $tierValue): ?AuditRequest
     {
         $intent = UserParameter::query()
@@ -89,21 +107,31 @@ class HandleAuditTierOrder
             ->where('name', self::INTENT_PARAM)
             ->first();
 
-        if ($intent === null) {
-            return null;
+        $request = null;
+
+        if ($intent !== null) {
+            $request = AuditRequest::query()
+                ->where('uuid', $intent->value)
+                ->where('tier', $tierValue)
+                ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value)
+                ->first();
         }
 
-        $request = AuditRequest::query()
-            ->where('uuid', $intent->value)
+        $request ??= AuditRequest::query()
+            ->where('user_id', $order->user_id)
             ->where('tier', $tierValue)
             ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value)
+            ->latest('id')
             ->first();
 
         if ($request === null) {
             return null;
         }
 
-        $intent->delete();
+        // Only delete the intent row when a request was actually consumed --
+        // a miss should not erase a marker that a later attempt might still
+        // resolve.
+        $intent?->delete();
 
         return $request;
     }

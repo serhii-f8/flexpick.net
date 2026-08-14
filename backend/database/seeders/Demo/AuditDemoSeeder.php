@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\Demo;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\SubscriptionStatus;
 use App\Constants\TenancyPermissionConstants;
@@ -131,6 +132,7 @@ class AuditDemoSeeder extends Seeder
                     'status' => $status->value,
                     'email_verified_at' => now(),
                     'free_run' => $freeRun,
+                    'funding' => $freeRun ? AuditFunding::FREE->value : AuditFunding::ALLOWANCE->value,
                     'source' => $source,
                     'user_id' => $user->id,
                 ],

@@ -2,6 +2,7 @@
 
 namespace App\Listeners\Order;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Events\Order\Ordered;
 use App\Jobs\GenerateAuditReport;
@@ -103,6 +104,7 @@ class HandleAuditUnlockOrder
 
         $auditRequest->update([
             'prepaid' => true,
+            'funding' => AuditFunding::PURCHASE->value,
             'status' => AuditRequestStatus::QUEUED->value,
             'meta' => array_merge($auditRequest->meta ?? [], ['paid_order_id' => $order->id]),
         ]);

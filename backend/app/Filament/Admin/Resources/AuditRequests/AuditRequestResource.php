@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\AuditRequests;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Admin\Resources\AuditRequests\Pages\EditAuditRequest;
@@ -251,7 +252,14 @@ class AuditRequestResource extends Resource
                     ], true))
                     ->action(function (AuditRequest $record): void {
                         $entitlements = app(AuditEntitlementService::class);
-                        if ($entitlements->hasFreeRun($record->email)) {
+
+                        // A dashboard checkout intent (funding = purchase) is
+                        // already paid for or being paid for -- spending the
+                        // customer's free quota on it here would both charge
+                        // them twice (their quota AND their card) and leave
+                        // the audit_tier_intent UserParameter dangling so a
+                        // later payment misses this request.
+                        if ($record->funding !== AuditFunding::PURCHASE && $entitlements->hasFreeRun($record->email)) {
                             $entitlements->consumeFreeRun($record);
                         }
 

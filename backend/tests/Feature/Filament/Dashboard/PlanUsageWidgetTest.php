@@ -90,6 +90,32 @@ class PlanUsageWidgetTest extends FeatureTest
             ->assertDontSee('Expert Audit');
     }
 
+    /**
+     * The lost arm from the widget's original showUpgrade expression: a free
+     * user (no subscription) with free runs remaining used to see Upgrade,
+     * and must again -- it is the conversion surface for exactly this
+     * segment, and the "Free audits" bar (rendered because $bars is empty
+     * otherwise) would offer no call to action without it.
+     */
+    public function test_free_user_with_runs_remaining_sees_upgrade(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->tenantFor($user);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(PlanUsageWidget::class)
+            ->assertSee(__('Upgrade'));
+    }
+
+    public function test_subscribed_user_with_allowance_remaining_does_not_see_upgrade(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(analyses: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(PlanUsageWidget::class)
+            ->assertDontSee(__('Upgrade'));
+    }
+
     private function tenantFor(User $user): Tenant
     {
         $tenant = Tenant::factory()->create();

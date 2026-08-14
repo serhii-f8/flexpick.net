@@ -26,8 +26,9 @@ class RunScheduledAudits extends Command
 
         foreach ($due as $schedule) {
             $tier = $schedule->tier;
+            $quota = $entitlements->quotaFor($schedule->user, $schedule->tenant, $tier);
 
-            if ($entitlements->remainingRuns($schedule->user, $schedule->tenant, $tier) < 1) {
+            if (! $quota->hasRuns()) {
                 // Never downgrade to a cheaper tier and never auto-charge:
                 // both deliver something the customer did not agree to at
                 // schedule time. Logged, because a schedule that quietly
@@ -45,9 +46,20 @@ class RunScheduledAudits extends Command
                 'email_verified_at' => now(),
                 'source' => 'dashboard',
                 'tier' => $tier->value,
-                'funding' => AuditFunding::ALLOWANCE->value,
+                'funding' => $quota->isLifetime
+                    ? AuditFunding::FREE->value
+                    : AuditFunding::ALLOWANCE->value,
                 'user_id' => $schedule->user->id,
             ]);
+
+            // An allowance run is metered simply by existing at its tier. A
+            // free run has to be flagged on the request to be deducted --
+            // setSchedule() already refuses to create a lifetime-tier
+            // schedule, but a pre-existing schedule row (created before that
+            // guard existed) could still reach here at a lifetime tier.
+            if ($quota->isLifetime) {
+                $entitlements->consumeFreeRun($auditRequest);
+            }
 
             GenerateAuditReport::dispatch($auditRequest);
             $schedule->update(['last_run_at' => now()]);
