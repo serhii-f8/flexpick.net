@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,7 +29,7 @@ class AuditRequest extends Model
 
     protected $fillable = [
         'name', 'email', 'repo_url', 'message', 'status', 'failure_reason', 'meta', 'metrics',
-        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'source', 'tier', 'user_id', 'prepaid',
+        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'funding', 'source', 'tier', 'user_id', 'prepaid',
         'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
         'risk_files', 'deep_review_input_tokens', 'deep_review_output_tokens', 'deep_review_ms',
@@ -47,6 +48,7 @@ class AuditRequest extends Model
         'analysis_started_at' => 'datetime',
         'analysis_completed_at' => 'datetime',
         'tier' => AuditTier::class,
+        'funding' => AuditFunding::class,
         'ai_input_tokens' => 'integer',
         'ai_output_tokens' => 'integer',
         'scanner_ms' => 'integer',
