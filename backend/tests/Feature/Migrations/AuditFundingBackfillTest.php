@@ -5,6 +5,7 @@ namespace Tests\Feature\Migrations;
 use App\Constants\AuditFunding;
 use App\Models\AuditRequest;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Feature\FeatureTest;
 
 class AuditFundingBackfillTest extends FeatureTest
@@ -32,16 +33,16 @@ class AuditFundingBackfillTest extends FeatureTest
 
         try {
             // Use a distinctive email prefix for test rows
-            $testEmailPrefix = 'backfill-test-' . uniqid() . '-';
+            $testEmailPrefix = 'backfill-test-'.uniqid().'-';
 
             // Sentinel value to prove backfill actually writes to these rows
             $sentinel = 'WRONG';
 
             // Case 1: prepaid=true → expect PURCHASE
             DB::table('audit_requests')->insert([
-                'uuid' => \Illuminate\Support\Str::uuid(),
+                'uuid' => Str::uuid(),
                 'name' => 'Test Case 1',
-                'email' => $testEmailPrefix . 'case1@example.com',
+                'email' => $testEmailPrefix.'case1@example.com',
                 'status' => 'new',
                 'prepaid' => true,
                 'free_run' => false,
@@ -53,9 +54,9 @@ class AuditFundingBackfillTest extends FeatureTest
 
             // Case 2: prepaid=false, free_run=true → expect FREE
             DB::table('audit_requests')->insert([
-                'uuid' => \Illuminate\Support\Str::uuid(),
+                'uuid' => Str::uuid(),
                 'name' => 'Test Case 2',
-                'email' => $testEmailPrefix . 'case2@example.com',
+                'email' => $testEmailPrefix.'case2@example.com',
                 'status' => 'new',
                 'prepaid' => false,
                 'free_run' => true,
@@ -70,9 +71,9 @@ class AuditFundingBackfillTest extends FeatureTest
             // not 4. The "dashboard → allowance" mapping is handled by the column default,
             // not by the backfill UPDATE statements.
             DB::table('audit_requests')->insert([
-                'uuid' => \Illuminate\Support\Str::uuid(),
+                'uuid' => Str::uuid(),
                 'name' => 'Test Case 3',
-                'email' => $testEmailPrefix . 'case3@example.com',
+                'email' => $testEmailPrefix.'case3@example.com',
                 'status' => 'new',
                 'prepaid' => false,
                 'free_run' => false,
@@ -84,9 +85,9 @@ class AuditFundingBackfillTest extends FeatureTest
 
             // Case 4: prepaid=false, free_run=false, source='web' → expect FREE
             DB::table('audit_requests')->insert([
-                'uuid' => \Illuminate\Support\Str::uuid(),
+                'uuid' => Str::uuid(),
                 'name' => 'Test Case 4',
-                'email' => $testEmailPrefix . 'case4@example.com',
+                'email' => $testEmailPrefix.'case4@example.com',
                 'status' => 'new',
                 'prepaid' => false,
                 'free_run' => false,
@@ -102,30 +103,30 @@ class AuditFundingBackfillTest extends FeatureTest
 
             // Assert each case after backfill
             $case1 = DB::table('audit_requests')
-                ->where('email', $testEmailPrefix . 'case1@example.com')
+                ->where('email', $testEmailPrefix.'case1@example.com')
                 ->first();
             $this->assertSame(AuditFunding::PURCHASE->value, $case1->funding, 'Case 1 (prepaid=true) should be updated to PURCHASE');
 
             $case2 = DB::table('audit_requests')
-                ->where('email', $testEmailPrefix . 'case2@example.com')
+                ->where('email', $testEmailPrefix.'case2@example.com')
                 ->first();
             $this->assertSame(AuditFunding::FREE->value, $case2->funding, 'Case 2 (free_run=true) should be updated to FREE');
 
             $case3 = DB::table('audit_requests')
-                ->where('email', $testEmailPrefix . 'case3@example.com')
+                ->where('email', $testEmailPrefix.'case3@example.com')
                 ->first();
             $this->assertSame($sentinel, $case3->funding, 'Case 3 (dashboard source) should keep sentinel - backfill has no UPDATE for it');
 
             $case4 = DB::table('audit_requests')
-                ->where('email', $testEmailPrefix . 'case4@example.com')
+                ->where('email', $testEmailPrefix.'case4@example.com')
                 ->first();
             $this->assertSame(AuditFunding::FREE->value, $case4->funding, 'Case 4 (source!=dashboard) should be updated to FREE');
 
             // Also verify that a row inserted WITHOUT funding gets the schema default
             DB::table('audit_requests')->insert([
-                'uuid' => \Illuminate\Support\Str::uuid(),
+                'uuid' => Str::uuid(),
                 'name' => 'Test Case Default',
-                'email' => $testEmailPrefix . 'case-default@example.com',
+                'email' => $testEmailPrefix.'case-default@example.com',
                 'status' => 'new',
                 'prepaid' => false,
                 'free_run' => false,
@@ -135,7 +136,7 @@ class AuditFundingBackfillTest extends FeatureTest
             ]);
 
             $caseDefault = DB::table('audit_requests')
-                ->where('email', $testEmailPrefix . 'case-default@example.com')
+                ->where('email', $testEmailPrefix.'case-default@example.com')
                 ->first();
             $this->assertSame(AuditFunding::ALLOWANCE->value, $caseDefault->funding, 'Row inserted without funding should get schema default ALLOWANCE');
         } finally {

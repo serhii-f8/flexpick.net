@@ -19,12 +19,6 @@ parameters:
 			path: app/Console/Commands/RunScheduledAudits.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/SendAuditUnlockReminders.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$report\.$#'
 			identifier: property.notFound
 			count: 4
@@ -481,18 +475,6 @@ parameters:
 			path: app/Filament/Dashboard/Widgets/PlanUsageWidget.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/AuditReportController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$source\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuditReportController.php
-
-		-
 			message: '#^Access to an undefined property Laravel\\Socialite\\Contracts\\User\:\:\$email\.$#'
 			identifier: property.notFound
 			count: 2
@@ -833,36 +815,6 @@ parameters:
 			identifier: property.notFound
 			count: 3
 			path: app/Policies/OrderPolicy.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/AuditReport/AuditDeltaService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$repo_url\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/AuditReport/AuditDeltaService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$plan\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/AuditReport/AuditEntitlementService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/AuditReport/AuditReportService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$source\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/AuditReport/AuditReportService.php
 
 		-
 			message: '#^Method App\\Services\\AuditReport\\Collectors\\HotspotCollector\:\:collect\(\) should return array\<string, mixed\> but returns list\<array\<string, int\|string\>\>\.$#'
@@ -1234,12 +1186,6 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$date_identifier\.$#'
 			identifier: property.notFound
 			count: 3
-			path: app/Services/PaymentProviders/Paddle/PaddleProvider.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$description\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Services/PaymentProviders/Paddle/PaddleProvider.php
 
 		-

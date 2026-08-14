@@ -6,10 +6,11 @@ use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Dashboard\Pages\AuditReports;
-use App\Jobs\GenerateAuditReport;
 use App\Listeners\Order\HandleAuditTierOrder;
 use App\Models\AuditRequest;
 use App\Models\UserParameter;
+use App\Services\AuditReport\AuditEntitlementService;
+use Database\Seeders\AuditMonetizationSeeder;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
@@ -22,7 +23,7 @@ class AuditReportsPurchaseTest extends FeatureTest
     public function test_an_exhausted_paid_tier_creates_an_intent_and_redirects(): void
     {
         Queue::fake();
-        $this->seed(\Database\Seeders\AuditMonetizationSeeder::class);
+        $this->seed(AuditMonetizationSeeder::class);
         [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 0);
         $this->actAsTenantUser($user, $tenant);
 
@@ -53,7 +54,7 @@ class AuditReportsPurchaseTest extends FeatureTest
     public function test_an_unpaid_intent_does_not_consume_quota(): void
     {
         Queue::fake();
-        $this->seed(\Database\Seeders\AuditMonetizationSeeder::class);
+        $this->seed(AuditMonetizationSeeder::class);
         [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 1);
         $this->actAsTenantUser($user, $tenant);
 
@@ -72,7 +73,7 @@ class AuditReportsPurchaseTest extends FeatureTest
         // actually spent.
         $this->assertSame(
             1,
-            app(\App\Services\AuditReport\AuditEntitlementService::class)
+            app(AuditEntitlementService::class)
                 ->runsUsedThisMonth($user, AuditTier::DEEP_AI),
         );
     }

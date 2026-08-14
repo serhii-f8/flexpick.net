@@ -5,6 +5,8 @@ namespace App\Services\AuditReport;
 use App\Constants\AuditFunding;
 use App\Constants\AuditTier;
 use App\Models\AuditRequest;
+use App\Models\Plan;
+use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
@@ -94,7 +96,19 @@ class AuditEntitlementService
     private function planMetadata(Tenant $tenant, string $key): int
     {
         return (int) $this->activeSubscriptionsFor($tenant)
-            ->map(fn ($subscription): int => (int) data_get($subscription->plan?->product?->metadata, $key, 0))
+            ->map(function (Subscription $subscription) use ($key): int {
+                /** @var Plan|null $plan */
+                $plan = $subscription->plan;
+
+                if ($plan === null) {
+                    return 0;
+                }
+
+                /** @var Product|null $product */
+                $product = $plan->product;
+
+                return $product === null ? 0 : (int) data_get($product->metadata, $key, 0);
+            })
             ->max();
     }
 
