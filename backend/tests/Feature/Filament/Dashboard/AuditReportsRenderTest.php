@@ -43,6 +43,7 @@ class AuditReportsRenderTest extends FeatureTest
 
         Livewire::test(AuditReports::class)
             ->assertOk()
-            ->assertSee('In expert review');
+            ->assertSee('In expert review')
+            ->assertDontSee(route('reports.download', $report));
     }
 }

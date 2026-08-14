@@ -169,6 +169,16 @@ class AuditRequest extends Model
         ];
     }
 
+    /**
+     * True while the request's report is held for a human reviewer -- the
+     * report row already exists with the raw, un-reviewed AI payload, so
+     * every consumer that might expose that payload gates on this.
+     */
+    public function isHeldForExpertReview(): bool
+    {
+        return $this->status === AuditRequestStatus::EXPERT_REVIEW->value;
+    }
+
     public function uniqueIds(): array
     {
         return ['uuid'];

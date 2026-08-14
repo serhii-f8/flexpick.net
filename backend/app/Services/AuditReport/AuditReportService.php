@@ -103,8 +103,7 @@ class AuditReportService
 
     public function publish(AuditReport $report): void
     {
-        // @phpstan-ignore-next-line property.notFound (status is a real column on AuditRequest; Larastan can't see it through the auditRequest relation's generic Model return type)
-        if ($report->auditRequest->status !== AuditRequestStatus::EXPERT_REVIEW->value) {
+        if (! $report->auditRequest->isHeldForExpertReview()) {
             return;
         }
 

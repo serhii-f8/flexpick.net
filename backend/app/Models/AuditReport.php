@@ -47,6 +47,9 @@ class AuditReport extends Model
         return 'uuid';
     }
 
+    /**
+     * @return BelongsTo<AuditRequest, $this>
+     */
     public function auditRequest(): BelongsTo
     {
         return $this->belongsTo(AuditRequest::class);

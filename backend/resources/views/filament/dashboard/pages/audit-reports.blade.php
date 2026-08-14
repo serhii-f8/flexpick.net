@@ -15,7 +15,7 @@
                 <div class="mt-2 grid gap-2 sm:grid-cols-2">
                     @foreach ($quotas as $quota)
                         <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                            <input type="radio" wire:model.live="tier" value="{{ $quota->tier->value }}" class="mt-1" />
+                            <input type="radio" name="tier" wire:key="tier-{{ $quota->tier->value }}" wire:model.live="tier" value="{{ $quota->tier->value }}" class="mt-1" />
                             <span>
                                 <span class="block text-sm font-medium">{{ $quota->label }}</span>
                                 <span class="block text-xs text-gray-500 dark:text-gray-400">
@@ -123,7 +123,7 @@
                             {{ $report->created_at->format(config('app.datetime_format', 'd/m/Y H:i')) }}
                         </span>
                         <div class="flex items-center gap-2">
-                            @if ($report->auditRequest->status === \App\Constants\AuditRequestStatus::EXPERT_REVIEW->value)
+                            @if ($report->auditRequest->isHeldForExpertReview())
                                 <x-filament::badge color="warning">{{ __('In expert review') }}</x-filament::badge>
                             @else
                                 <span class="text-sm font-medium">{{ data_get($report->payload, 'scores.overall', '—') }}</span>
