@@ -5,14 +5,28 @@ namespace App\Services\AuditReport;
 use App\Constants\AuditFunding;
 use App\Constants\AuditTier;
 use App\Models\AuditRequest;
+use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserParameter;
 use App\Services\SubscriptionService;
+use Illuminate\Support\Collection;
 
 class AuditEntitlementService
 {
     public const BONUS_PARAM = 'audit_bonus_free_runs';
+
+    /**
+     * Per-request memo of active subscriptions, keyed by tenant id.
+     *
+     * hasAuditAccess() and quotas() each call allowance()/planMetadata() once
+     * per metered tier -- without this, a single Filament render fans out
+     * into a handful of duplicate, uncached, non-eager-loaded subscription
+     * queries against the same tenant.
+     *
+     * @var array<int|string, Collection<int, Subscription>>
+     */
+    private array $activeSubscriptions = [];
 
     public function __construct(
         private SubscriptionService $subscriptionService,
@@ -79,9 +93,17 @@ class AuditEntitlementService
 
     private function planMetadata(Tenant $tenant, string $key): int
     {
-        return (int) $this->subscriptionService->findActiveTenantSubscriptions($tenant)
+        return (int) $this->activeSubscriptionsFor($tenant)
             ->map(fn ($subscription): int => (int) data_get($subscription->plan?->product?->metadata, $key, 0))
             ->max();
+    }
+
+    /**
+     * @return Collection<int, Subscription>
+     */
+    private function activeSubscriptionsFor(Tenant $tenant): Collection
+    {
+        return $this->activeSubscriptions[$tenant->id] ??= $this->subscriptionService->findActiveTenantSubscriptions($tenant);
     }
 
     /**
@@ -102,11 +124,7 @@ class AuditEntitlementService
 
     public function remainingRuns(User $user, ?Tenant $tenant, AuditTier $tier): int
     {
-        if ($tier === AuditTier::DIAGNOSTIC) {
-            return max(0, $this->freeRunsLimit($user->email) - $this->freeRunsUsed($user->email));
-        }
-
-        return max(0, $this->allowance($tenant, $tier) - $this->runsUsedThisMonth($user, $tier));
+        return $this->quotaFor($user, $tenant, $tier)->remaining();
     }
 
     public function quotaFor(User $user, ?Tenant $tenant, AuditTier $tier): TierQuota

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -25,7 +26,11 @@ class AuditRequestFactory extends Factory
 
     public function freeRun(): static
     {
-        return $this->state(fn () => ['free_run' => true]);
+        // Mirrors AuditEntitlementService::consumeFreeRun() -- free_run and
+        // funding must move together, or a fixture can build the exact
+        // contradictory state (free-run flagged, allowance-funded) this
+        // column exists to prevent.
+        return $this->state(fn () => ['free_run' => true, 'funding' => AuditFunding::FREE->value]);
     }
 
     public function dashboardSource(): static

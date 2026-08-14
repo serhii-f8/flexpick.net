@@ -4,7 +4,12 @@ namespace Tests\Feature\Services;
 
 use App\Constants\AuditFunding;
 use App\Constants\AuditTier;
+use App\Constants\SubscriptionStatus;
 use App\Models\AuditRequest;
+use App\Models\Plan;
+use App\Models\Product;
+use App\Models\Subscription;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserParameter;
 use App\Services\AuditReport\AuditEntitlementService;
@@ -193,5 +198,66 @@ class AuditEntitlementServiceTest extends FeatureTest
 
         $this->assertTrue($request->fresh()->free_run);
         $this->assertSame(AuditFunding::FREE, $request->fresh()->funding);
+    }
+
+    /**
+     * quotaFor()'s monthly (non-lifetime) branch is the principal new money
+     * API -- the tier selector and usage widget read limit/used/remaining()
+     * off it. Both other quotaFor() tests pass a null tenant, so limit and
+     * used are always 0 there; this is the only test that would catch the
+     * `limit:`/`used:` named arguments being transposed, or allowance() and
+     * runsUsedThisMonth() being swapped.
+     */
+    public function test_quota_for_a_monthly_tier_reflects_a_real_allowance(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_analyses_per_month' => 5]);
+
+        AuditRequest::factory()->count(2)->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::AUTOMATED->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+
+        $quota = $this->service->quotaFor($user, $tenant, AuditTier::AUTOMATED);
+
+        $this->assertFalse($quota->isLifetime);
+        $this->assertSame(5, $quota->limit);
+        $this->assertSame(2, $quota->used);
+        $this->assertSame(3, $quota->remaining());
+    }
+
+    /**
+     * The any-tier loop in hasAuditAccess() exists solely so a tenant holding
+     * only Expert credits (no automated allowance) isn't locked out of the
+     * dashboard nav. Nothing else exercises that branch.
+     */
+    public function test_expert_only_credits_grant_audit_access(): void
+    {
+        config(['audit.free_reports_limit' => 0]);
+        [$user, $tenant] = $this->subscribedTenant(['audit_expert_credits' => 1]);
+
+        $this->assertFalse($this->service->hasFreeRun($user->email));
+        $this->assertTrue($this->service->hasAuditAccess($user, $tenant));
+    }
+
+    /** @return array{0: User, 1: Tenant} */
+    private function subscribedTenant(array $productMetadata): array
+    {
+        $user = $this->createUser();
+        $tenant = $this->createTenant();
+        $tenant->users()->attach($user);
+
+        $product = Product::factory()->create(['metadata' => $productMetadata]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        return [$user, $tenant];
     }
 }
