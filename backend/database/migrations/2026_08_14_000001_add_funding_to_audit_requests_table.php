@@ -14,6 +14,16 @@ return new class extends Migration
             $table->string('funding')->default(AuditFunding::ALLOWANCE->value)->after('free_run')->index();
         });
 
+        $this->backfill();
+    }
+
+    /**
+     * Public so the test can drive the real backfill without schema surgery:
+     * the suite shares one database and never rolls back, so a test may not
+     * drop and re-add the column.
+     */
+    public function backfill(): void
+    {
         // Precedence: a paid run first, then a free-quota run, then anything
         // dashboard-sourced (which came out of the plan), then free. Tier is
         // deliberately NOT backfilled -- historical dashboard runs really did
