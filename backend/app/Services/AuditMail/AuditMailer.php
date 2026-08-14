@@ -19,7 +19,14 @@ class AuditMailer
             // class-based mailable in this app follows, but Larastan can't verify it structurally.
             // @phpstan-ignore-next-line method.notFound
             $subject = (string) $mailable->envelope()->subject;
-            $body = $mailable->render();
+            // Render a COPY. Mailable::render() resolves attachments onto the
+            // instance it runs on, so rendering $mailable itself would leave the
+            // report PDF's bytes in its $rawAttachments — and every audit
+            // mailable is ShouldQueue, so those bytes then have to survive
+            // json_encode() into a queue payload. Binary never does: the send
+            // below died with "Unable to JSON encode payload. Malformed UTF-8"
+            // for exactly the reports that had a PDF to deliver.
+            $body = (clone $mailable)->render();
         } catch (Throwable $e) {
             AuditEmailLog::create([
                 'audit_request_id' => $auditRequest?->id,
