@@ -18,4 +18,22 @@ enum AuditTier: string
             self::EXPERT => __('Expert Audit'),
         };
     }
+
+    /**
+     * Filament badge colour for this tier, shared by every surface that lists
+     * runs so the same tier never appears in two colours.
+     *
+     * `warning` is deliberately unused: the report list paints an
+     * "In expert review" badge warning on the same row, and a tier sharing
+     * that colour would read as one state rather than two.
+     */
+    public function badgeColor(): string
+    {
+        return match ($this) {
+            self::DIAGNOSTIC => 'gray',
+            self::AUTOMATED => 'info',
+            self::DEEP_AI => 'primary',
+            self::EXPERT => 'success',
+        };
+    }
 }

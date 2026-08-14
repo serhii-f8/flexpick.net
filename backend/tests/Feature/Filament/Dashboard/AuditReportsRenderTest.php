@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament\Dashboard;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Models\AuditReport;
 use Livewire\Livewire;
@@ -45,5 +46,31 @@ class AuditReportsRenderTest extends FeatureTest
             ->assertOk()
             ->assertSee('In expert review')
             ->assertDontSee(route('reports.download', $report));
+    }
+
+    public function test_each_listed_report_shows_the_tier_it_ran_at(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 1);
+        $this->actAsTenantUser($user, $tenant);
+
+        $report = AuditReport::factory()->create(['user_id' => $user->id]);
+        $report->auditRequest->update([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'repo_url' => 'https://github.com/acme/deep',
+            'tier' => AuditTier::DEEP_AI->value,
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+
+        $html = Livewire::test(AuditReports::class)->assertOk()->html();
+
+        // A bare assertSee would be vacuous here: the launch form's tier picker
+        // above the list already renders all four labels. Anchor on the repo
+        // heading and look only at what follows it, so this proves the LIST row
+        // carries the tier.
+        $listMarkup = substr($html, (int) strpos($html, 'github.com/acme/deep'));
+
+        $this->assertStringContainsString(AuditTier::DEEP_AI->label(), $listMarkup);
+        $this->assertStringNotContainsString(AuditTier::EXPERT->label(), $listMarkup);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Filament\Dashboard\Resources\AuditRequests;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Filament\Dashboard\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Filament\Dashboard\Resources\AuditRequests\Pages\ViewAuditRequest;
 use App\Mapper\AuditRequestStatusMapper;
@@ -86,6 +87,11 @@ class AuditRequestResource extends Resource
                     ->limit(50)
                     ->placeholder(__('No repository'))
                     ->searchable(),
+                TextColumn::make('tier')
+                    ->label(__('Audit type'))
+                    ->badge()
+                    ->color(fn (AuditTier $state): string => $state->badgeColor())
+                    ->formatStateUsing(fn (AuditTier $state): string => $state->label()),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))

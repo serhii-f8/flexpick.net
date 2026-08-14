@@ -50,4 +50,28 @@ class TierQuotaTest extends TestCase
             $this->assertNotSame('', $tier->label());
         }
     }
+
+    public function test_every_tier_has_a_badge_colour(): void
+    {
+        foreach (AuditTier::cases() as $tier) {
+            $this->assertNotSame('', $tier->badgeColor());
+        }
+    }
+
+    public function test_no_tier_uses_the_colour_reserved_for_the_expert_review_hold(): void
+    {
+        // The list renders an "In expert review" warning badge alongside the
+        // tier badge on the same row. A tier painted warning too would read as
+        // one state rather than two.
+        foreach (AuditTier::cases() as $tier) {
+            $this->assertNotSame('warning', $tier->badgeColor(), $tier->value.' must not reuse the hold colour');
+        }
+    }
+
+    public function test_tier_badge_colours_are_distinct(): void
+    {
+        $colours = array_map(fn (AuditTier $tier): string => $tier->badgeColor(), AuditTier::cases());
+
+        $this->assertSame($colours, array_unique($colours), 'each tier must be distinguishable at a glance');
+    }
 }

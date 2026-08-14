@@ -182,6 +182,11 @@ class AuditRequestResource extends Resource
                 TextColumn::make('name')->searchable(),
                 TextColumn::make('email')->searchable(),
                 TextColumn::make('repo_url')->limit(40)->searchable(),
+                TextColumn::make('tier')
+                    ->label(__('Audit type'))
+                    ->badge()
+                    ->color(fn (AuditTier $state): string => $state->badgeColor())
+                    ->formatStateUsing(fn (AuditTier $state): string => $state->label()),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))

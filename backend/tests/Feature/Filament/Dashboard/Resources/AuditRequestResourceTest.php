@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament\Dashboard\Resources;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
@@ -31,6 +32,32 @@ class AuditRequestResourceTest extends FeatureTest
         $response->assertSee('mine-by-id');
         $response->assertSee('mine-by-email');
         $response->assertDontSee('not-mine');
+    }
+
+    public function test_list_shows_the_tier_each_audit_ran_at(): void
+    {
+        $user = User::factory()->create(['email' => 'tier-column@example.com']);
+        $tenant = $this->createTenantFor($user);
+
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/tier-deep',
+            'tier' => AuditTier::DEEP_AI->value,
+        ]);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/tier-free',
+            'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
+
+        $this->actingAs($user);
+
+        $this->get(AuditRequestResource::getUrl('index', [], true, 'dashboard', tenant: $tenant))
+            ->assertSuccessful()
+            ->assertSee(AuditTier::DEEP_AI->label())
+            ->assertSee(AuditTier::DIAGNOSTIC->label())
+            // Nothing on this page paints a tier the user does not own.
+            ->assertDontSee(AuditTier::EXPERT->label());
     }
 
     public function test_foreign_audit_view_is_not_found(): void

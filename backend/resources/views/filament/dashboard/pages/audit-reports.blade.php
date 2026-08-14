@@ -138,9 +138,13 @@
 
             <div class="mt-4 divide-y divide-gray-200 border-t border-gray-200 pt-2 dark:divide-gray-700 dark:border-gray-700">
                 @foreach ($group['reports'] as $report)
+                    @php($reportTier = $report->auditRequest->tier)
                     <div class="flex flex-wrap items-center justify-between gap-2 py-2">
-                        <span class="text-sm text-gray-500 dark:text-gray-400">
+                        <span class="flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                             {{ $report->created_at->format(config('app.datetime_format', 'd/m/Y H:i')) }}
+                            <x-filament::badge :color="$reportTier->badgeColor()">
+                                {{ $reportTier->label() }}
+                            </x-filament::badge>
                         </span>
                         <div class="flex items-center gap-2">
                             @if ($report->auditRequest->isHeldForExpertReview())

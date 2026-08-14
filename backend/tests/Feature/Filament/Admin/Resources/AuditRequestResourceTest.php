@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament\Admin\Resources;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Filament\Admin\Resources\AuditRequests\AuditRequestResource;
 use App\Filament\Admin\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Jobs\GenerateAuditReport;
@@ -30,6 +31,21 @@ class AuditRequestResourceTest extends FeatureTest
         $response = $this->actingAs($admin)->get(AuditRequestResource::getUrl('index', [], true, 'admin'));
 
         $response->assertStatus(200);
+    }
+
+    public function test_list_shows_the_tier_each_request_ran_at(): void
+    {
+        $admin = $this->createAdminUser();
+        AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value]);
+        AuditRequest::factory()->create(['tier' => AuditTier::AUTOMATED->value]);
+
+        // setUp() truncates audit_requests, so only these two rows are listed
+        // and an absent label really is absent.
+        $this->actingAs($admin)->get(AuditRequestResource::getUrl('index', [], true, 'admin'))
+            ->assertStatus(200)
+            ->assertSee(AuditTier::EXPERT->label())
+            ->assertSee(AuditTier::AUTOMATED->label())
+            ->assertDontSee(AuditTier::DEEP_AI->label());
     }
 
     public function test_launch_action_queues_awaiting_access_request(): void
