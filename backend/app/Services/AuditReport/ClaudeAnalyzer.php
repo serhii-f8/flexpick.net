@@ -2,7 +2,6 @@
 
 namespace App\Services\AuditReport;
 
-use Anthropic\Client;
 use App\Exceptions\AiAnalysisException;
 use App\Services\AuditReport\Tiers\TierProfile;
 
@@ -97,7 +96,10 @@ PROMPT;
         'additionalProperties' => false,
     ];
 
-    public function __construct(private PromptComposer $promptComposer) {}
+    public function __construct(
+        private PromptComposer $promptComposer,
+        private AnthropicClientFactory $clients,
+    ) {}
 
     public function analyze(
         array $metrics,
@@ -106,9 +108,7 @@ PROMPT;
         TierProfile $tier,
         ?string $adminContext = null,
     ): AnalysisResult {
-        $client = new Client(apiKey: (string) config('services.anthropic.api_key'));
-
-        $message = $client->messages->create(
+        $message = $this->clients->make()->messages->create(
             model: (string) config('services.anthropic.model'),
             // Per-tier budget, never hardcoded (F5.12.1).
             maxTokens: $tier->aiMaxTokens,

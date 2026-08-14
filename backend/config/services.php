@@ -120,6 +120,12 @@ return [
     'anthropic' => [
         'api_key' => env('ANTHROPIC_API_KEY'),
         'model' => env('AUDIT_AI_MODEL', 'claude-opus-4-8'),
+        // Seconds. The transport default is 60s of idle time, which a deep
+        // review exceeds on every run — see AnthropicClientFactory.
+        'timeout' => (float) env('ANTHROPIC_TIMEOUT', 600),
+        // Must stay under GenerateAuditReport::$timeout (900s), which is the
+        // budget for the clone and scanners as well as the model calls.
+        'max_duration' => (float) env('ANTHROPIC_MAX_DURATION', 660),
     ],
 
 ];

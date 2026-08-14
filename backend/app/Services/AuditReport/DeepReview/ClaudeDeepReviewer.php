@@ -2,13 +2,13 @@
 
 namespace App\Services\AuditReport\DeepReview;
 
-use Anthropic\Client;
 use App\Exceptions\AiAnalysisException;
+use App\Services\AuditReport\AnthropicClientFactory;
 use App\Services\AuditReport\Findings\FindingGroup;
 
 class ClaudeDeepReviewer implements DeepReviewer
 {
-    private const SYSTEM_PROMPT = <<<'PROMPT'
+    private const SYSTEM_PROMPT_TEMPLATE = <<<'PROMPT'
 You are a senior software auditor performing a deep review of the riskiest files in a client's
 repository. You are given the file contents, the deterministic metrics for the repository, and
 the ranked problem groups its static analyzers produced.
@@ -24,9 +24,14 @@ can find. Where the problem groups flag something in a file you can see, confirm
 against the actual source rather than restating it.
 
 Size effort honestly: S is under an hour, M is up to a day, L is more. Rank by severity.
+
+Report at most :max findings. If you have more, keep the most severe.
 PROMPT;
 
-    public function __construct(private DeepReviewPromptComposer $composer) {}
+    public function __construct(
+        private DeepReviewPromptComposer $composer,
+        private AnthropicClientFactory $clients,
+    ) {}
 
     public function review(
         array $metrics,
@@ -62,13 +67,11 @@ PROMPT;
         RiskFileSelection $selection,
         DeepReviewProfile $profile,
     ): DeepReviewResult {
-        $client = new Client(apiKey: (string) config('services.anthropic.api_key'));
-
-        $message = $client->messages->create(
+        $message = $this->clients->make()->messages->create(
             model: (string) config('services.anthropic.model'),
             maxTokens: $profile->maxTokens,
             thinking: ['type' => 'adaptive'],
-            system: self::SYSTEM_PROMPT,
+            system: $this->systemPrompt(),
             messages: [[
                 'role' => 'user',
                 'content' => $this->composer->compose($metrics, $groups, $selection),
@@ -89,7 +92,7 @@ PROMPT;
                 }
 
                 return new DeepReviewResult(
-                    findings: array_values($decoded['file_findings']),
+                    findings: $this->capFindings(array_values($decoded['file_findings'])),
                     inputTokens: (int) ($message->usage->inputTokens ?? 0),
                     outputTokens: (int) ($message->usage->outputTokens ?? 0),
                 );
@@ -97,6 +100,27 @@ PROMPT;
         }
 
         throw new AiAnalysisException('Deep review returned no text content');
+    }
+
+    private function systemPrompt(): string
+    {
+        return str_replace(
+            ':max',
+            (string) (int) config('audit.deep_review.max_findings'),
+            self::SYSTEM_PROMPT_TEMPLATE,
+        );
+    }
+
+    /**
+     * The prompt asks for the cap; this guarantees it. A model that overshoots
+     * would otherwise push findings past what the report was budgeted to hold.
+     *
+     * @param  list<mixed>  $findings
+     * @return list<mixed>
+     */
+    private function capFindings(array $findings): array
+    {
+        return array_slice($findings, 0, (int) config('audit.deep_review.max_findings'));
     }
 
     /** @return array<string, mixed> */
@@ -107,9 +131,12 @@ PROMPT;
             'properties' => [
                 'file_findings' => [
                     'type' => 'array',
-                    // Bounds the output so the response cannot hit max_tokens
-                    // and arrive as truncated, unparseable JSON.
-                    'maxItems' => (int) config('audit.deep_review.max_findings'),
+                    // The output bound cannot live here: Anthropic's structured
+                    // output subset rejects maxItems outright ("For 'array'
+                    // type, property 'maxItems' is not supported"), which 400s
+                    // the whole request and degrades every deep review. It is
+                    // enforced by systemPrompt() on the model side and
+                    // capFindings() on ours instead.
                     'items' => [
                         'type' => 'object',
                         'properties' => [
