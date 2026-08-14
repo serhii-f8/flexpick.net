@@ -12,9 +12,12 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
+use Tests\Support\CreatesAuditSubscriptions;
 
 class PlanUsageWidgetTest extends FeatureTest
 {
+    use CreatesAuditSubscriptions;
+
     public function test_shows_plan_name_and_allowance_for_subscribed_tenant(): void
     {
         $user = User::factory()->create();
@@ -35,7 +38,7 @@ class PlanUsageWidgetTest extends FeatureTest
 
         Livewire::test(PlanUsageWidget::class)
             ->assertSee('Studio')
-            ->assertSee(__('Analyses this month'));
+            ->assertSee(__('Automated Health Report'));
     }
 
     public function test_shows_free_runs_for_user_without_subscription(): void
@@ -49,7 +52,7 @@ class PlanUsageWidgetTest extends FeatureTest
 
         Livewire::test(PlanUsageWidget::class)
             ->assertSee(__('Free audits'))
-            ->assertDontSee(__('Analyses this month'));
+            ->assertDontSee(__('Automated Health Report'));
     }
 
     public function test_hidden_without_any_entitlement(): void
@@ -63,6 +66,28 @@ class PlanUsageWidgetTest extends FeatureTest
         Filament::setTenant($tenant);
 
         $this->assertFalse(PlanUsageWidget::canView());
+    }
+
+    public function test_a_bar_is_shown_for_every_tier_with_an_allowance(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(analyses: 20, deepAi: 1, expert: 1);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(PlanUsageWidget::class)
+            ->assertSee('Automated Health Report')
+            ->assertSee('Deep AI Code Review')
+            ->assertSee('Expert Audit');
+    }
+
+    public function test_a_tier_with_no_allowance_is_not_advertised(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(analyses: 20, deepAi: 0, expert: 0);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(PlanUsageWidget::class)
+            ->assertSee('Automated Health Report')
+            ->assertDontSee('Deep AI Code Review')
+            ->assertDontSee('Expert Audit');
     }
 
     private function tenantFor(User $user): Tenant

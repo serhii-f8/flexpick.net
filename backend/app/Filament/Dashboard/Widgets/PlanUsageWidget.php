@@ -4,6 +4,7 @@ namespace App\Filament\Dashboard\Widgets;
 
 use App\Models\Subscription;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\TierQuota;
 use App\Services\SubscriptionService;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
@@ -39,34 +40,34 @@ class PlanUsageWidget extends Widget
             ->findActiveTenantSubscriptions($tenant)
             ->first();
 
-        $allowance = $tenant !== null ? $entitlements->subscriptionAllowance($tenant) : 0;
-        $deepAiCredits = $tenant !== null ? $entitlements->deepAiCredits($tenant) : 0;
+        $quotas = $entitlements->quotas($user, $tenant);
+        $metered = collect($quotas)->reject(fn (TierQuota $quota): bool => $quota->isLifetime);
 
+        $colors = ['bg-primary-500', 'bg-secondary-500', 'bg-warning-500'];
         $bars = [];
 
-        if ($allowance > 0) {
-            $bars[] = [
-                'label' => __('Analyses this month'),
-                'used' => $entitlements->dashboardRunsUsedThisMonth($user),
-                'total' => $allowance,
-                'color' => 'bg-primary-500',
-            ];
-
-            // Hidden entirely at zero, matching how the stats widget already
-            // treats Deep AI: a plan without credits should not advertise them.
-            if ($deepAiCredits > 0) {
-                $bars[] = [
-                    'label' => __('Deep AI credits'),
-                    'used' => $entitlements->deepAiRunsUsedThisMonth($user),
-                    'total' => $deepAiCredits,
-                    'color' => 'bg-secondary-500',
-                ];
+        foreach ($metered->values() as $index => $quota) {
+            // Hidden entirely at zero: a plan without credits for a tier
+            // should not advertise them.
+            if ($quota->limit < 1) {
+                continue;
             }
-        } else {
+
+            $bars[] = [
+                'label' => $quota->label,
+                'used' => $quota->used,
+                'total' => $quota->limit,
+                'color' => $colors[$index % count($colors)],
+            ];
+        }
+
+        if ($bars === []) {
+            $free = collect($quotas)->firstWhere(fn (TierQuota $quota): bool => $quota->isLifetime);
+
             $bars[] = [
                 'label' => __('Free audits'),
-                'used' => $entitlements->freeRunsUsed($user->email),
-                'total' => $entitlements->freeRunsLimit($user->email),
+                'used' => $free?->used ?? 0,
+                'total' => $free?->limit ?? 0,
                 'color' => 'bg-primary-500',
             ];
         }
@@ -75,9 +76,7 @@ class PlanUsageWidget extends Widget
             'planName' => $subscription?->plan?->name ?? __('Free'),
             'renewsAt' => $subscription?->ends_at ? Carbon::parse($subscription->ends_at) : null,
             'bars' => $bars,
-            'showUpgrade' => $tenant === null
-                || $allowance === 0
-                || $entitlements->remainingDashboardRuns($user, $tenant) === 0,
+            'showUpgrade' => collect($quotas)->every(fn (TierQuota $quota): bool => ! $quota->hasRuns()),
         ];
     }
 }
