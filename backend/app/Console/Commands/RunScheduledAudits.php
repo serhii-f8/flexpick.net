@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
@@ -24,8 +25,14 @@ class RunScheduledAudits extends Command
         $started = 0;
 
         foreach ($due as $schedule) {
-            if ($entitlements->remainingDashboardRuns($schedule->user, $schedule->tenant) < 1) {
-                $this->warn("Skipping {$schedule->repo_url}: no analyses left for {$schedule->user->email}");
+            $tier = $schedule->tier;
+
+            if ($entitlements->remainingRuns($schedule->user, $schedule->tenant, $tier) < 1) {
+                // Never downgrade to a cheaper tier and never auto-charge:
+                // both deliver something the customer did not agree to at
+                // schedule time. Logged, because a schedule that quietly
+                // stops firing is otherwise invisible.
+                $this->warn("Skipping {$schedule->repo_url}: no {$tier->value} runs left for {$schedule->user->email}");
 
                 continue;
             }
@@ -37,6 +44,8 @@ class RunScheduledAudits extends Command
                 'status' => AuditRequestStatus::QUEUED->value,
                 'email_verified_at' => now(),
                 'source' => 'dashboard',
+                'tier' => $tier->value,
+                'funding' => AuditFunding::ALLOWANCE->value,
                 'user_id' => $schedule->user->id,
             ]);
 

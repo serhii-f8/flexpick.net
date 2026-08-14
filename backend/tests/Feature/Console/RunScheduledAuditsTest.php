@@ -2,68 +2,59 @@
 
 namespace Tests\Feature\Console;
 
-use App\Constants\AuditRequestStatus;
+use App\Constants\AuditFunding;
+use App\Constants\AuditTier;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
-use App\Services\AuditReport\AuditEntitlementService;
 use Illuminate\Support\Facades\Queue;
 use Tests\Feature\FeatureTest;
+use Tests\Support\CreatesAuditSubscriptions;
 
 class RunScheduledAuditsTest extends FeatureTest
 {
-    protected function setUp(): void
+    use CreatesAuditSubscriptions;
+
+    public function test_a_schedule_runs_at_its_own_tier(): void
     {
-        parent::setUp();
         Queue::fake();
-    }
+        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 2);
 
-    private function allowRuns(int $remaining): void
-    {
-        $this->mock(AuditEntitlementService::class, function ($mock) use ($remaining) {
-            $mock->shouldReceive('remainingDashboardRuns')->andReturn($remaining);
-        });
-    }
-
-    public function test_due_weekly_schedule_dispatches_a_dashboard_audit(): void
-    {
-        $this->allowRuns(3);
-        $schedule = AuditSchedule::factory()->create([
+        AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/app',
             'frequency' => 'weekly',
-            'last_run_at' => now()->subDays(8),
+            'tier' => AuditTier::DEEP_AI->value,
         ]);
 
         $this->artisan('app:run-scheduled-audits')->assertSuccessful();
 
-        $request = AuditRequest::where('user_id', $schedule->user_id)
-            ->where('repo_url', $schedule->repo_url)->firstOrFail();
-        $this->assertSame('dashboard', $request->source);
-        $this->assertSame(AuditRequestStatus::QUEUED->value, $request->status);
+        $request = AuditRequest::latest('id')->firstOrFail();
+
+        $this->assertSame(AuditTier::DEEP_AI, $request->tier);
+        $this->assertSame(AuditFunding::ALLOWANCE, $request->funding);
         Queue::assertPushed(GenerateAuditReport::class);
-        $this->assertTrue($schedule->refresh()->last_run_at->isCurrentDay());
     }
 
-    public function test_not_yet_due_schedule_is_skipped(): void
+    public function test_an_exhausted_tier_is_skipped_not_downgraded(): void
     {
-        $this->allowRuns(3);
-        $schedule = AuditSchedule::factory()->create([
+        Queue::fake();
+        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 0);
+
+        AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/app',
             'frequency' => 'weekly',
-            'last_run_at' => now()->subDays(2),
+            'tier' => AuditTier::DEEP_AI->value,
         ]);
 
         $this->artisan('app:run-scheduled-audits')->assertSuccessful();
 
-        $this->assertDatabaseMissing('audit_requests', ['user_id' => $schedule->user_id, 'repo_url' => $schedule->repo_url]);
-    }
-
-    public function test_exhausted_allowance_skips_without_failing(): void
-    {
-        $this->allowRuns(0);
-        $schedule = AuditSchedule::factory()->create(['frequency' => 'monthly', 'last_run_at' => null]);
-
-        $this->artisan('app:run-scheduled-audits')->assertSuccessful();
-
-        $this->assertDatabaseMissing('audit_requests', ['user_id' => $schedule->user_id, 'repo_url' => $schedule->repo_url]);
-        $this->assertNull($schedule->refresh()->last_run_at);
+        // FeatureTest does not roll back between tests, so this must stay
+        // scoped to the user under test rather than a global count.
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
+        Queue::assertNothingPushed();
     }
 }

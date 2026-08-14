@@ -191,10 +191,11 @@ class AuditReports extends Page
         $this->redirect(route('buy.product', ['productSlug' => $slug]));
     }
 
-    public function setSchedule(string $repoUrl, string $frequency): void
+    public function setSchedule(string $repoUrl, string $frequency, ?string $tier = null): void
     {
         $user = auth()->user();
         $tenant = Filament::getTenant();
+        $selected = AuditTier::tryFrom($tier ?? AuditTier::AUTOMATED->value) ?? AuditTier::AUTOMATED;
 
         if ($tenant === null || ! in_array($frequency, ['off', 'weekly', 'monthly'], true)) {
             return;
@@ -211,7 +212,7 @@ class AuditReports extends Page
 
         AuditSchedule::updateOrCreate(
             ['user_id' => $user->id, 'repo_url' => $repoUrl],
-            ['tenant_id' => $tenant->id, 'frequency' => $frequency],
+            ['tenant_id' => $tenant->id, 'frequency' => $frequency, 'tier' => $selected->value],
         );
 
         Notification::make()->title(__('Audits scheduled :frequency', ['frequency' => __($frequency)]))->success()->send();
@@ -237,7 +238,9 @@ class AuditReports extends Page
             'canRun' => collect($quotas)->contains(
                 fn (TierQuota $quota): bool => $quota->hasRuns() || $quota->purchasable(),
             ),
-            'schedules' => AuditSchedule::query()->where('user_id', $user->id)->pluck('frequency', 'repo_url'),
+            'schedules' => AuditSchedule::query()->where('user_id', $user->id)
+                ->get()
+                ->keyBy(fn (AuditSchedule $s): string => rtrim($s->repo_url, '/')),
             'repoGroups' => $reports
                 ->groupBy(fn ($report) => rtrim((string) $report->auditRequest->repo_url, '/'))
                 ->map(fn ($group) => [

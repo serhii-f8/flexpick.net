@@ -99,16 +99,36 @@
             @endphp
 
             @if ($automated && $automated->limit > 0)
+                @php
+                    $schedule = $schedules[rtrim($repoUrl, '/')] ?? null;
+                    $scheduleFrequency = $schedule->frequency ?? 'off';
+                    $scheduleTier = $schedule?->tier->value ?? \App\Constants\AuditTier::AUTOMATED->value;
+                @endphp
+
                 <div class="mt-3 flex flex-wrap items-center gap-2">
                     <select
                         class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
-                        wire:change="setSchedule('{{ $repoUrl }}', $event.target.value)"
+                        wire:change="setSchedule('{{ $repoUrl }}', $event.target.value, '{{ $scheduleTier }}')"
                         aria-label="{{ __('Audit schedule for :repo', ['repo' => $repoUrl]) }}"
                     >
                         @foreach (['off' => __('No schedule'), 'weekly' => __('Audit weekly'), 'monthly' => __('Audit monthly')] as $value => $optionLabel)
-                            <option value="{{ $value }}" @selected(($schedules[rtrim($repoUrl, '/')] ?? 'off') === $value)>{{ $optionLabel }}</option>
+                            <option value="{{ $value }}" @selected($scheduleFrequency === $value)>{{ $optionLabel }}</option>
                         @endforeach
                     </select>
+
+                    @if ($scheduleFrequency !== 'off')
+                        <select
+                            class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
+                            wire:change="setSchedule('{{ $repoUrl }}', '{{ $scheduleFrequency }}', $event.target.value)"
+                            aria-label="{{ __('Scheduled audit type for :repo', ['repo' => $repoUrl]) }}"
+                        >
+                            @foreach ($quotas as $quota)
+                                @if (! $quota->isLifetime)
+                                    <option value="{{ $quota->tier->value }}" @selected($scheduleTier === $quota->tier->value)>{{ $quota->label }}</option>
+                                @endif
+                            @endforeach
+                        </select>
+                    @endif
 
                     <x-filament::button size="sm" color="gray" wire:click="launchAudit('{{ $repoUrl }}', '{{ $originTier }}')">
                         {{ __('Re-run') }}
