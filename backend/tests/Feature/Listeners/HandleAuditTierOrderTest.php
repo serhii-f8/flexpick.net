@@ -162,7 +162,7 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->assertSame(AuditRequestStatus::QUEUED->value, $intended->status);
         $this->assertTrue($intended->prepaid);
         $this->assertSame(1, AuditRequest::where('tier', AuditTier::DEEP_AI->value)->where('user_id', $user->id)->count());
-        $this->assertNull(UserParameter::where('name', HandleAuditTierOrder::INTENT_PARAM)->first());
+        $this->assertNull(UserParameter::where('user_id', $user->id)->where('name', HandleAuditTierOrder::INTENT_PARAM)->first());
     }
 
     private function orderFor(User $user, string $slug): Order

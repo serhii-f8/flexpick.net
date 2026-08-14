@@ -6,8 +6,10 @@ use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Jobs\GenerateAuditReport;
+use App\Listeners\Order\HandleAuditTierOrder;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
+use App\Models\UserParameter;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\TierQuota;
 use Filament\Facades\Filament;
@@ -149,10 +151,44 @@ class AuditReports extends Page
             ->send();
     }
 
-    /** Filled in by Task 8. */
+    /**
+     * Capture the repository and tier now, pay for them next.
+     *
+     * The request is created up front so the choice survives the round trip
+     * through checkout; HandleAuditTierOrder finds it by intent and runs it.
+     * It is funded as a purchase from the start, so a customer who abandons
+     * checkout is never charged a plan credit for it.
+     */
     private function purchase(string $repoUrl, AuditTier $tier): void
     {
-        Notification::make()->title(__('No runs left'))->warning()->send();
+        $user = auth()->user();
+        $slug = collect((array) config('pricing.tiers'))
+            ->search(fn (array $definition): bool => ($definition['tier'] ?? null) === $tier->value);
+
+        if ($slug === false) {
+            Notification::make()->title(__('No :tier runs left', ['tier' => $tier->label()]))->danger()->send();
+
+            return;
+        }
+
+        $auditRequest = AuditRequest::create([
+            'name' => $user->name,
+            'email' => $user->email,
+            'repo_url' => $repoUrl,
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+            'email_verified_at' => now(),
+            'source' => 'dashboard',
+            'tier' => $tier->value,
+            'funding' => AuditFunding::PURCHASE->value,
+            'user_id' => $user->id,
+        ]);
+
+        UserParameter::updateOrCreate(
+            ['user_id' => $user->id, 'name' => HandleAuditTierOrder::INTENT_PARAM],
+            ['value' => $auditRequest->uuid],
+        );
+
+        $this->redirect(route('buy.product', ['productSlug' => $slug]));
     }
 
     public function setSchedule(string $repoUrl, string $frequency): void
