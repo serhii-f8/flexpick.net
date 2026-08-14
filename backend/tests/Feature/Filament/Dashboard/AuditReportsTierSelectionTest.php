@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament\Dashboard;
 
 use App\Constants\AuditFunding;
+use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Jobs\GenerateAuditReport;
@@ -79,10 +80,21 @@ class AuditReportsTierSelectionTest extends FeatureTest
             ->set('tier', AuditTier::EXPERT->value)
             ->call('launchAudit');
 
-        // No status filter: the point is that no run of any status was
-        // created for this user, not merely that none landed at QUEUED.
-        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
+        // The guard routes to checkout, which deliberately creates an
+        // AWAITING_PAYMENT row so the repo URL and tier survive payment.
+        // What must NOT happen is a run entering the pipeline unpaid.
         Queue::assertNothingPushed();
+
+        $this->assertSame(
+            0,
+            AuditRequest::where('user_id', $user->id)
+                ->where('status', AuditRequestStatus::QUEUED->value)
+                ->count(),
+        );
+
+        $intent = AuditRequest::where('user_id', $user->id)->sole();
+        $this->assertSame(AuditRequestStatus::AWAITING_PAYMENT->value, $intent->status);
+        $this->assertSame(AuditFunding::PURCHASE, $intent->funding);
     }
 
     public function test_an_unknown_tier_value_is_rejected(): void
