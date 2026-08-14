@@ -4,7 +4,7 @@ namespace Tests\Unit\Services\AuditReport;
 
 use App\Constants\AuditTier;
 use App\Services\AuditReport\TierQuota;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class TierQuotaTest extends TestCase
 {
