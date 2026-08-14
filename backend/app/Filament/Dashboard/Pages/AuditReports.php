@@ -2,11 +2,14 @@
 
 namespace App\Filament\Dashboard\Pages;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\TierQuota;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -23,6 +26,33 @@ class AuditReports extends Page
     protected static ?int $navigationSort = 1;
 
     public ?string $repoUrl = null;
+
+    public string $tier = '';
+
+    public function mount(): void
+    {
+        $this->tier = $this->defaultTier()->value;
+    }
+
+    /**
+     * Preselect the best tier the user can actually run, so the common case is
+     * one click. Diagnostic is the floor -- it is always offered, even at zero,
+     * because its exhausted state is the free-quota upsell.
+     */
+    private function defaultTier(): AuditTier
+    {
+        $user = auth()->user();
+        $tenant = Filament::getTenant();
+        $entitlements = app(AuditEntitlementService::class);
+
+        foreach ([AuditTier::AUTOMATED, AuditTier::DEEP_AI, AuditTier::EXPERT, AuditTier::DIAGNOSTIC] as $tier) {
+            if ($entitlements->remainingRuns($user, $tenant, $tier) > 0) {
+                return $tier;
+            }
+        }
+
+        return AuditTier::DIAGNOSTIC;
+    }
 
     public function getHeading(): string|Htmlable
     {
@@ -48,11 +78,22 @@ class AuditReports extends Page
         return app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
     }
 
-    public function launchAudit(?string $repoUrl = null): void
+    public function launchAudit(?string $repoUrl = null, ?string $tier = null): void
     {
         $repoUrl ??= $this->repoUrl;
         $user = auth()->user();
+        $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
+
+        // $tier arrives from a client-controlled Livewire property, so the
+        // rendered UI is a hint and this method is the gate.
+        $selected = AuditTier::tryFrom($tier ?? $this->tier);
+
+        if ($selected === null) {
+            Notification::make()->title(__('Choose an audit type'))->danger()->send();
+
+            return;
+        }
 
         if ($repoUrl === null || ! str_starts_with($repoUrl, 'http')) {
             Notification::make()->title(__('Enter a valid repository URL'))->danger()->send();
@@ -60,12 +101,20 @@ class AuditReports extends Page
             return;
         }
 
-        $tenant = Filament::getTenant();
-        $hasSubscriptionRun = $tenant !== null && $entitlements->remainingDashboardRuns($user, $tenant) >= 1;
-        $hasFreeRun = $entitlements->hasFreeRun($user->email);
+        $quota = $entitlements->quotaFor($user, $tenant, $selected);
 
-        if (! $hasSubscriptionRun && ! $hasFreeRun) {
-            Notification::make()->title(__('No analyses left this month'))->body(__('Upgrade your plan to run more audits.'))->warning()->send();
+        if (! $quota->hasRuns()) {
+            if ($quota->purchasable()) {
+                $this->purchase($repoUrl, $selected);
+
+                return;
+            }
+
+            Notification::make()
+                ->title(__('No :tier runs left', ['tier' => $quota->label]))
+                ->body(__('Upgrade your plan to run more audits.'))
+                ->warning()
+                ->send();
 
             return;
         }
@@ -77,20 +126,33 @@ class AuditReports extends Page
             'status' => AuditRequestStatus::QUEUED->value,
             'email_verified_at' => now(),
             'source' => 'dashboard',
+            'tier' => $selected->value,
+            'funding' => $quota->isLifetime
+                ? AuditFunding::FREE->value
+                : AuditFunding::ALLOWANCE->value,
             'user_id' => $user->id,
         ]);
 
-        // A subscription allowance is metered by counting dashboard requests,
-        // so it is spent simply by creating one. A free run is not counted that
-        // way -- it has to be flagged on the request to be deducted.
-        if (! $hasSubscriptionRun) {
+        // An allowance run is metered simply by existing at its tier. A free
+        // run has to be flagged on the request to be deducted.
+        if ($quota->isLifetime) {
             $entitlements->consumeFreeRun($auditRequest);
         }
 
         GenerateAuditReport::dispatch($auditRequest);
         $this->repoUrl = null;
 
-        Notification::make()->title(__('Audit started'))->body(__('You\'ll get an email when the report is ready.'))->success()->send();
+        Notification::make()
+            ->title(__('Audit started'))
+            ->body(__('You\'ll get an email when the report is ready.'))
+            ->success()
+            ->send();
+    }
+
+    /** Filled in by Task 8. */
+    private function purchase(string $repoUrl, AuditTier $tier): void
+    {
+        Notification::make()->title(__('No runs left'))->warning()->send();
     }
 
     public function setSchedule(string $repoUrl, string $frequency): void
@@ -127,22 +189,24 @@ class AuditReports extends Page
 
         $reports = $user->auditReports()
             ->with('auditRequest')
-            ->whereHas('auditRequest', fn ($query) => $query->where('status', '!=', AuditRequestStatus::EXPERT_REVIEW->value))
             ->latest()
             ->get();
 
         $allowance = $tenant ? $entitlements->subscriptionAllowance($tenant) : 0;
         $remainingRuns = $tenant ? $entitlements->remainingDashboardRuns($user, $tenant) : 0;
         $freeRunsRemaining = max(0, $entitlements->freeRunsLimit($user->email) - $entitlements->freeRunsUsed($user->email));
+        $quotas = $entitlements->quotas($user, $tenant);
 
         return [
             'reports' => $reports,
             'allowance' => $allowance,
             'remainingRuns' => $remainingRuns,
             'freeRunsRemaining' => $freeRunsRemaining,
-            // The submit form keyed off $allowance alone, so free-tier users
-            // got a page with no way to start an audit.
-            'canRun' => $remainingRuns > 0 || $freeRunsRemaining > 0,
+            'quotas' => $quotas,
+            // Any tier can start a run: one from quota, the rest by purchase.
+            'canRun' => collect($quotas)->contains(
+                fn (TierQuota $quota): bool => $quota->hasRuns() || $quota->purchasable(),
+            ),
             'schedules' => AuditSchedule::query()->where('user_id', $user->id)->pluck('frequency', 'repo_url'),
             'repoGroups' => $reports
                 ->groupBy(fn ($report) => rtrim((string) $report->auditRequest->repo_url, '/'))

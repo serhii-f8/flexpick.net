@@ -147,7 +147,12 @@ class AuditReportsPageTest extends FeatureTest
         $this->assertDatabaseMissing('audit_schedules', ['user_id' => $user->id]);
     }
 
-    public function test_report_held_for_expert_review_is_not_listed(): void
+    /**
+     * A $999 expert-tier run held for review must not leave the customer
+     * looking at an empty list -- it still shows in the list (Task 7 adds
+     * a dedicated "in review" badge for it).
+     */
+    public function test_report_held_for_expert_review_is_still_listed(): void
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
@@ -173,7 +178,7 @@ class AuditReportsPageTest extends FeatureTest
 
         Livewire::test(AuditReports::class)
             ->assertSee('https://github.com/acme/sent-repo')
-            ->assertDontSee('https://github.com/acme/held-repo');
+            ->assertSee('https://github.com/acme/held-repo');
     }
 
     public function test_repo_section_shows_current_score_and_delta(): void
