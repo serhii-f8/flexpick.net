@@ -2,6 +2,7 @@
 
 namespace App\Listeners\Order;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Events\Order\Ordered;
@@ -10,6 +11,7 @@ use App\Models\AuditRequest;
 use App\Models\OneTimeProduct;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\UserParameter;
 
 /**
  * A completed order for a tier product runs the customer's repository at the
@@ -22,6 +24,9 @@ use App\Models\User;
  */
 class HandleAuditTierOrder
 {
+    /** Written by the dashboard when a user buys a tier for a named repo. */
+    public const INTENT_PARAM = 'audit_tier_intent';
+
     public function handle(Ordered $event): void
     {
         $order = $event->order;
@@ -30,6 +35,21 @@ class HandleAuditTierOrder
             $tierValue = config("pricing.tiers.{$slug}.tier");
 
             if ($tierValue === null) {
+                continue;
+            }
+
+            // A dashboard purchase already named the repository and the tier,
+            // so honour that request rather than cloning an old diagnostic.
+            $intended = $this->intentRequestFor($order, $tierValue);
+
+            if ($intended !== null) {
+                $intended->update([
+                    'prepaid' => true,
+                    'funding' => AuditFunding::PURCHASE->value,
+                    'status' => AuditRequestStatus::QUEUED->value,
+                ]);
+                GenerateAuditReport::dispatch($intended);
+
                 continue;
             }
 
@@ -48,8 +68,10 @@ class HandleAuditTierOrder
                 'tier' => $tierValue,
                 'source' => $source->source,
                 'status' => AuditRequestStatus::QUEUED->value,
-                // A purchased run never consumes the free quota.
+                // A purchased run never consumes the free quota or plan quota.
                 'free_run' => false,
+                'prepaid' => true,
+                'funding' => AuditFunding::PURCHASE->value,
                 'email_verified_at' => $source->email_verified_at,
                 'marketing_consent' => $source->marketing_consent,
                 'consented_at' => $source->consented_at,
@@ -57,6 +79,33 @@ class HandleAuditTierOrder
 
             GenerateAuditReport::dispatch($run);
         }
+    }
+
+    /** The dashboard-created request this order was started to pay for. */
+    private function intentRequestFor(Order $order, string $tierValue): ?AuditRequest
+    {
+        $intent = UserParameter::query()
+            ->where('user_id', $order->user_id)
+            ->where('name', self::INTENT_PARAM)
+            ->first();
+
+        if ($intent === null) {
+            return null;
+        }
+
+        $request = AuditRequest::query()
+            ->where('uuid', $intent->value)
+            ->where('tier', $tierValue)
+            ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value)
+            ->first();
+
+        if ($request === null) {
+            return null;
+        }
+
+        $intent->delete();
+
+        return $request;
     }
 
     /** @return list<string> */
