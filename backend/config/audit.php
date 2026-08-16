@@ -18,6 +18,10 @@ return [
     // reported as unknown cost rather than free — see AuditAiCall::costUsd().
     // These are list prices: they are the right basis for unit economics, but
     // they are not an invoice. Reconcile against the provider's own console.
+    // Window the admin cost widget reports over. Long enough that a quiet week
+    // still shows a cost per report, short enough that a price or model change
+    // works its way out of the average.
+    'cost_window_days' => (int) env('AUDIT_COST_WINDOW_DAYS', 30),
     'model_pricing' => [
         'claude-opus-4-8' => ['input' => 5.0, 'output' => 25.0],
         'claude-opus-5' => ['input' => 5.0, 'output' => 25.0],
