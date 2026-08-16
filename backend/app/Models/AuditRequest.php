@@ -219,6 +219,17 @@ class AuditRequest extends Model
         return $this->hasMany(AuditEmailLog::class)->latest('sent_at');
     }
 
+    /**
+     * Every model call this request has made, across all attempts — the
+     * ai_*_tokens columns describe only the latest one.
+     *
+     * @return HasMany<AuditAiCall, $this>
+     */
+    public function aiCalls(): HasMany
+    {
+        return $this->hasMany(AuditAiCall::class)->oldest();
+    }
+
     public function appendPipelineLog(string $step, string $message): void
     {
         $log = $this->pipeline_log ?? [];

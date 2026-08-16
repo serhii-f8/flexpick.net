@@ -13,6 +13,17 @@ return [
     'github_account' => env('AUDIT_GITHUB_ACCOUNT', 'flexpick-audit'),
     'github_token' => env('AUDIT_GITHUB_TOKEN'),
     'free_reports_limit' => 3,
+    // USD per MILLION tokens, list rates, keyed by the exact model id sent to
+    // the API (services.anthropic.model). A model missing from this table is
+    // reported as unknown cost rather than free — see AuditAiCall::costUsd().
+    // These are list prices: they are the right basis for unit economics, but
+    // they are not an invoice. Reconcile against the provider's own console.
+    'model_pricing' => [
+        'claude-opus-4-8' => ['input' => 5.0, 'output' => 25.0],
+        'claude-opus-5' => ['input' => 5.0, 'output' => 25.0],
+        'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0],
+        'claude-haiku-4-5' => ['input' => 1.0, 'output' => 5.0],
+    ],
     // A delivery promise to the customer, not a system-health threshold —
     // which is why it lives here and not in config/health.php beside the
     // pipeline and mail windows.

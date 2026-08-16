@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport;
 
+use App\Constants\AuditAiStage;
 use App\Constants\AuditRequestStatus;
 use App\Exceptions\AiAnalysisException;
 use App\Exceptions\AuditNotAnalyzableException;
@@ -42,7 +43,13 @@ class AuditPipeline
         private RiskFileSelector $riskFileSelector,
         private DeepReviewer $deepReviewer,
         private DeepFindingSanitizer $sanitizer,
+        private AiCallRecorder $aiCalls,
     ) {}
+
+    private function elapsedMs(float $startedAt): int
+    {
+        return (int) ((microtime(true) - $startedAt) * 1000);
+    }
 
     public function run(AuditRequest $auditRequest): void
     {
@@ -97,16 +104,56 @@ class AuditPipeline
             $this->persistGroups($auditRequest, $groups);
             $auditRequest->appendPipelineLog('metrics', 'Metrics collected, findings grouped and scored');
 
-            $result = $this->analyzer->analyze(
-                $metrics,
-                array_slice($groups, 0, $profile->narratedGroups),
-                $collected['excerpts'],
-                $profile,
-                $auditRequest->admin_context,
-            );
+            $startedAt = microtime(true);
+
+            try {
+                $result = $this->analyzer->analyze(
+                    $metrics,
+                    array_slice($groups, 0, $profile->narratedGroups),
+                    $collected['excerpts'],
+                    $profile,
+                    $auditRequest->admin_context,
+                );
+            } catch (\Throwable $e) {
+                // The provider bills a call it answered even when the SDK
+                // raises on the way back (a client-side timeout on a response
+                // the model already generated is the common case). Record the
+                // attempt before rethrowing, so the retry that follows is
+                // visibly the second billed call and not the first.
+                $this->aiCalls->recordFailure(
+                    $auditRequest,
+                    AuditAiStage::ANALYSIS,
+                    $e::class,
+                    $this->elapsedMs($startedAt),
+                );
+
+                throw $e;
+            }
 
             $payload = $result->payload;
             $payload['scores'] = $scoreSet->toPayloadScores();
+
+            // Cost telemetry is written HERE, not after delivery. The model
+            // call is billed the moment it returns, and delivery is the
+            // stage most likely to fail (PDF render, mail transport) — a
+            // failure there re-runs the whole pipeline from the clone and
+            // bills again. Writing spend after delivery therefore recorded
+            // only the runs that never needed re-running.
+            $this->aiCalls->recordSuccess(
+                $auditRequest,
+                AuditAiStage::ANALYSIS,
+                $result->inputTokens,
+                $result->outputTokens,
+                $this->elapsedMs($startedAt),
+            );
+
+            $auditRequest->update([
+                'ai_input_tokens' => $result->inputTokens,
+                'ai_output_tokens' => $result->outputTokens,
+                'scanner_ms' => $suite->totalWallMs(),
+                'repo_size_kb' => $this->cloner->sizeKb($path),
+            ]);
+
             $auditRequest->appendPipelineLog('analyzed', 'AI analysis finished');
 
             // The tier-1 payload is complete and valid at this point, which is
@@ -126,13 +173,10 @@ class AuditPipeline
 
             $this->reportService->createAndDeliver($auditRequest, $payload, $scoreSet->scoringVersion);
 
-            $auditRequest->update([
-                'analysis_completed_at' => now(),
-                'ai_input_tokens' => $result->inputTokens,
-                'ai_output_tokens' => $result->outputTokens,
-                'scanner_ms' => $suite->totalWallMs(),
-                'repo_size_kb' => $this->cloner->sizeKb($path),
-            ]);
+            // Only the completion stamp stays behind delivery: it marks the
+            // run as done for the stuck-run scopes and health checks, which
+            // is exactly what it must not claim while a report is unsent.
+            $auditRequest->update(['analysis_completed_at' => now()]);
             $auditRequest->appendPipelineLog('report', 'Report stored and sent');
         } catch (AuditNotAnalyzableException $e) {
             $auditRequest->appendPipelineLog('not_analyzable', $e->getMessage());
@@ -203,6 +247,8 @@ class AuditPipeline
         array $payload,
     ): array {
         $startedAt = microtime(true);
+        $callStartedAt = $startedAt;
+        $callInFlight = false;
         $selection = null;
 
         try {
@@ -250,7 +296,28 @@ class AuditPipeline
                 return $payload;
             }
 
+            $callStartedAt = microtime(true);
+            $callInFlight = true;
             $review = $this->deepReviewer->review($metrics, $groups, $selection, $profile->deepReview);
+            $callInFlight = false;
+
+            // Recorded before the sanitizer and validator run. Both can reject
+            // this response — a review whose findings were all fabricated is
+            // discarded — but the tokens that produced it are billed either
+            // way, and a degraded section is not a free one.
+            $this->aiCalls->recordSuccess(
+                $auditRequest,
+                AuditAiStage::DEEP_REVIEW,
+                $review->inputTokens,
+                $review->outputTokens,
+                $this->elapsedMs($callStartedAt),
+            );
+
+            $auditRequest->update([
+                'deep_review_input_tokens' => $review->inputTokens,
+                'deep_review_output_tokens' => $review->outputTokens,
+                'deep_review_ms' => $this->elapsedMs($startedAt),
+            ]);
 
             $sanitized = $this->sanitizer->sanitize(
                 $review->findings,
@@ -270,12 +337,6 @@ class AuditPipeline
             if ($sanitized['findings'] === [] && $sanitized['dropped'] > 0) {
                 throw new AiAnalysisException('Every deep finding referenced a file that was never sent');
             }
-
-            $auditRequest->update([
-                'deep_review_input_tokens' => $review->inputTokens,
-                'deep_review_output_tokens' => $review->outputTokens,
-                'deep_review_ms' => (int) ((microtime(true) - $startedAt) * 1000),
-            ]);
 
             $payload['file_findings'] = $sanitized['findings'];
             $payload['deep_review'] = [
@@ -307,6 +368,19 @@ class AuditPipeline
             // echo customer source back into an unscrubbed DB log/email
             // (spec §5.4; see logScannerOutcomes() for the same convention).
             $reason = $e::class;
+
+            // Only when the reviewer call itself was in flight. A selection or
+            // sanitizer failure is not a billed call, and recording one would
+            // put phantom spend in the ledger; a reviewer call that already
+            // returned was recorded on the success path above.
+            if ($callInFlight) {
+                $this->aiCalls->recordFailure(
+                    $auditRequest,
+                    AuditAiStage::DEEP_REVIEW,
+                    $reason,
+                    $this->elapsedMs($callStartedAt),
+                );
+            }
 
             $auditRequest->appendPipelineLog('deep_review_degraded', 'Deep review did not complete: '.$reason);
             $this->alert($auditRequest, 'Deep review failed: '.$reason);
