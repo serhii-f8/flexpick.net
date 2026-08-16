@@ -26,8 +26,14 @@ class AuditAiCall extends Model
 
     public const OUTCOME_FAILED = 'failed';
 
+    /** Observed by the pipeline as the call returned. */
+    public const SOURCE_PIPELINE = 'pipeline';
+
+    /** Transcribed from the provider's console after the fact. */
+    public const SOURCE_BACKFILL = 'backfill';
+
     protected $fillable = [
-        'audit_request_id', 'stage', 'model', 'outcome',
+        'audit_request_id', 'stage', 'model', 'outcome', 'source',
         'input_tokens', 'output_tokens', 'failure_reason', 'duration_ms',
     ];
 

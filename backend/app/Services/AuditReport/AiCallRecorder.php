@@ -34,6 +34,7 @@ class AiCallRecorder
             'stage' => $stage->value,
             'model' => (string) config('services.anthropic.model'),
             'outcome' => AuditAiCall::OUTCOME_OK,
+            'source' => AuditAiCall::SOURCE_PIPELINE,
             'input_tokens' => $inputTokens,
             'output_tokens' => $outputTokens,
             'duration_ms' => $durationMs,
@@ -62,6 +63,7 @@ class AiCallRecorder
             'stage' => $stage->value,
             'model' => (string) config('services.anthropic.model'),
             'outcome' => AuditAiCall::OUTCOME_FAILED,
+            'source' => AuditAiCall::SOURCE_PIPELINE,
             'failure_reason' => mb_substr($reason, 0, 255),
             'duration_ms' => $durationMs,
         ]);

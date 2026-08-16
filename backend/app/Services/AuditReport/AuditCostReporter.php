@@ -42,9 +42,20 @@ class AuditCostReporter
         // that currently exist rather than every delivery ever made. Spend and
         // delivery can also straddle the window edge (a run billed late on one
         // day can deliver on the next), which over a 30-day window is noise.
+        //
+        // Counted only where the ledger holds a call for that request in the
+        // window. Reports that predate the ledger — or seeded demo data — carry
+        // no cost, and dividing real spend by a denominator padded with free
+        // reports understates cost per report exactly when the figure is most
+        // load-bearing: the first weeks after this shipped.
         $reports = DB::table('audit_reports')
             ->join('audit_requests', 'audit_requests.id', '=', 'audit_reports.audit_request_id')
             ->where('audit_reports.created_at', '>=', $since)
+            ->whereExists(fn ($query) => $query
+                ->select(DB::raw(1))
+                ->from('audit_ai_calls')
+                ->whereColumn('audit_ai_calls.audit_request_id', 'audit_requests.id')
+                ->where('audit_ai_calls.created_at', '>=', $since))
             ->groupBy('audit_requests.tier')
             ->selectRaw('audit_requests.tier as tier, COUNT(*) as aggregate')
             ->pluck('aggregate', 'tier');

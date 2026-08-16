@@ -102,6 +102,21 @@ class AuditCostWidgetTest extends FeatureTest
         $this->assertSame(1, $spend->unsizedCalls);
     }
 
+    public function test_reports_with_no_recorded_spend_do_not_dilute_the_average(): void
+    {
+        $this->deepAiRun();
+
+        // A report from before the ledger existed, or from seeded demo data:
+        // real delivery, no cost on file. Counting it would halve the figure.
+        $legacy = AuditRequest::factory()->create(['tier' => AuditTier::DEEP_AI->value]);
+        AuditReport::factory()->for($legacy, 'auditRequest')->create();
+
+        $spend = app(AuditCostReporter::class)->byTier()[AuditTier::DEEP_AI->value];
+
+        $this->assertSame(1, $spend->reports);
+        $this->assertEqualsWithDelta(1.869725, $spend->costPerReport(), 0.000001);
+    }
+
     public function test_calls_outside_the_window_are_excluded(): void
     {
         $request = $this->deepAiRun();
