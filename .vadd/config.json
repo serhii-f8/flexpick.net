@@ -1,0 +1,24 @@
+{
+  "verify": {
+    "setup": [
+      { "id": "link-vendor", "run": "test -d backend/vendor || cp -al /var/www/html/flexpick.net/backend/vendor backend/vendor || true", "cwd": "." },
+      { "id": "link-vendor-fallback", "run": "cp -a --no-clobber /var/www/html/flexpick.net/backend/vendor/. backend/vendor/", "cwd": "." },
+      { "id": "link-public-build", "run": "test -d backend/public/build || cp -al /var/www/html/flexpick.net/backend/public/build backend/public/build || true", "cwd": "." },
+      { "id": "link-public-build-fallback", "run": "cp -a --no-clobber /var/www/html/flexpick.net/backend/public/build/. backend/public/build/", "cwd": "." },
+      { "id": "env-testing", "run": "cp .vadd/backend.env.testing backend/.env.testing", "cwd": "." }
+    ],
+    "commands": [
+      { "id": "collectors", "run": "php artisan test --filter=CollectorsTest", "required": true, "allowWarn": false, "cwd": "backend" },
+      { "id": "suite", "run": "php artisan test", "required": false, "allowWarn": true, "cwd": "backend" },
+      { "id": "phpstan", "run": "vendor/bin/phpstan analyse --no-progress", "required": true, "allowWarn": false, "cwd": "backend" }
+    ],
+    "checks": [
+      "A malformed manifest produces an explicit operator-visible signal rather than a silent zero dependency count."
+    ],
+    "timeoutSec": 240
+  },
+  "policy": {
+    "protectedGlobs": ["backend/.env*", "backend/vendor/**", "backend/database/migrations/**"],
+    "maxFastFixLines": 150
+  }
+}
