@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport\Collectors;
 
 use App\Services\AuditReport\Scanners\RepoContext;
+use Illuminate\Support\Facades\Log;
 
 class ManifestCollector implements Collector
 {
@@ -20,11 +21,23 @@ class ManifestCollector implements Collector
             if (! file_exists($repoPath.'/'.$manifest)) {
                 continue;
             }
-            $data = json_decode((string) file_get_contents($repoPath.'/'.$manifest), true) ?? [];
+
+            $raw = (string) file_get_contents($repoPath.'/'.$manifest);
+            $data = json_decode($raw, true);
+            $parseError = ! is_array($data);
+
+            if ($parseError) {
+                Log::warning("ManifestCollector: failed to parse {$manifest}", [
+                    'json_error' => json_last_error_msg(),
+                ]);
+                $data = [];
+            }
+
             $manifests[$manifest] = [
                 'dependencies' => count($data['require'] ?? $data['dependencies'] ?? []),
                 'dev_dependencies' => count($data['require-dev'] ?? $data['devDependencies'] ?? []),
                 'lockfile' => file_exists($repoPath.'/'.$lock),
+                'parse_error' => $parseError,
             ];
         }
 

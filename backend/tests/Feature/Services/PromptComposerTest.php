@@ -143,6 +143,24 @@ class PromptComposerTest extends FeatureTest
         $this->assertStringContainsString(':17', $prompt);
     }
 
+    public function test_manifest_parse_error_is_visible_in_composed_prompt(): void
+    {
+        $metrics = [
+            'manifests' => [
+                'composer.json' => [
+                    'dependencies' => 0,
+                    'dev_dependencies' => 0,
+                    'lockfile' => true,
+                    'parse_error' => true,
+                ],
+            ],
+        ];
+
+        $prompt = app(PromptComposer::class)->compose($metrics, [], []);
+
+        $this->assertStringContainsString('"parse_error": true', $prompt);
+    }
+
     public function test_admin_context_is_appended_identically_by_compose_and_preview(): void
     {
         // §18.2 defect: the append block was duplicated verbatim between the two.

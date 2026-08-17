@@ -105,6 +105,7 @@ class CollectorsTest extends FeatureTest
         $this->assertSame(1, $manifests['composer.json']['dependencies']);
         $this->assertSame(2, $manifests['composer.json']['dev_dependencies']);
         $this->assertTrue($manifests['composer.json']['lockfile']);
+        $this->assertFalse($manifests['composer.json']['parse_error']);
     }
 
     public function test_tooling_collector_detects_static_analysis_and_env_example(): void
@@ -133,6 +134,34 @@ class CollectorsTest extends FeatureTest
         $excerpts = app(ExcerptCollector::class)->collect($this->context())['excerpts'];
 
         $this->assertSame('app/Service.php', $excerpts[0]['path']);
+    }
+
+    public function test_manifest_collector_flags_unparseable_composer_json(): void
+    {
+        // Overwrite the valid composer.json with truncated/corrupt JSON.
+        file_put_contents($this->repo.'/composer.json', '{"require": {"laravel/framework": "^13.0"');
+        exec('git -C '.escapeshellarg($this->repo).' commit -aqm corrupt 2>&1');
+
+        $manifests = app(ManifestCollector::class)->collect($this->context());
+
+        $this->assertArrayHasKey('composer.json', $manifests);
+        $this->assertTrue($manifests['composer.json']['parse_error']);
+        $this->assertSame(0, $manifests['composer.json']['dependencies']);
+        $this->assertSame(0, $manifests['composer.json']['dev_dependencies']);
+    }
+
+    public function test_manifest_collector_flags_unparseable_package_json(): void
+    {
+        // Write a package.json with a trailing comma (common JS-style comment issue).
+        file_put_contents($this->repo.'/package.json', '{"dependencies": {"vue": "^3.0",}}');
+        exec('git -C '.escapeshellarg($this->repo).' add -A && git -C '.escapeshellarg($this->repo).' commit -qm pkg 2>&1');
+
+        $manifests = app(ManifestCollector::class)->collect($this->context());
+
+        $this->assertArrayHasKey('package.json', $manifests);
+        $this->assertTrue($manifests['package.json']['parse_error']);
+        $this->assertSame(0, $manifests['package.json']['dependencies']);
+        $this->assertSame(0, $manifests['package.json']['dev_dependencies']);
     }
 
     public function test_hotspot_collector_ranks_churned_files_above_stable_ones(): void
