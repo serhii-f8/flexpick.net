@@ -14,6 +14,14 @@ class UserDashboardService
             return route('filament.dashboard.pages.dashboard', ['tenant' => $tenant]);
         }
 
+        // An admin has no tenant to show a customer dashboard for -- send
+        // them to the panel they actually operate instead of the landing
+        // page, which reads as "/dashboard is broken" more than "logged in
+        // as an operator, not a customer".
+        if ($user->isAdmin()) {
+            return route('filament.admin.pages.dashboard');
+        }
+
         return route('home');
     }
 }
