@@ -27,7 +27,7 @@ class TokenScrubberTest extends TestCase
             'Failed cloning https://x-access-token:'.self::TOKEN.'@github.com/acme/app.git'
         );
 
-        $scrubbed = (new TokenScrubber)($event, new EventHint);
+        $scrubbed = TokenScrubber::handle($event, new EventHint);
 
         $this->assertNotNull($scrubbed);
         $this->assertStringNotContainsString(self::TOKEN, $scrubbed->getMessage());
@@ -41,7 +41,7 @@ class TokenScrubberTest extends TestCase
         $event = Event::createEvent();
         $event->setMessage('git exited 128; token was '.self::TOKEN);
 
-        $scrubbed = (new TokenScrubber)($event, new EventHint);
+        $scrubbed = TokenScrubber::handle($event, new EventHint);
 
         $this->assertStringNotContainsString(self::TOKEN, $scrubbed->getMessage());
     }
@@ -53,7 +53,7 @@ class TokenScrubberTest extends TestCase
             'command' => 'git clone https://x-access-token:'.self::TOKEN.'@github.com/acme/app.git /tmp/x',
         ]);
 
-        $scrubbed = (new TokenScrubber)($event, new EventHint);
+        $scrubbed = TokenScrubber::handle($event, new EventHint);
 
         $this->assertStringNotContainsString(self::TOKEN, json_encode($scrubbed->getExtra()));
     }
@@ -65,7 +65,7 @@ class TokenScrubberTest extends TestCase
         $event = Event::createEvent();
         $event->setMessage('https://x-access-token:some-other-secret@github.com/acme/app.git');
 
-        $scrubbed = (new TokenScrubber)($event, new EventHint);
+        $scrubbed = TokenScrubber::handle($event, new EventHint);
 
         $this->assertStringNotContainsString('some-other-secret', $scrubbed->getMessage());
     }
@@ -75,7 +75,7 @@ class TokenScrubberTest extends TestCase
         $event = Event::createEvent();
         $event->setMessage('Repository could not be cloned: https://github.com/acme/app.git');
 
-        $scrubbed = (new TokenScrubber)($event, new EventHint);
+        $scrubbed = TokenScrubber::handle($event, new EventHint);
 
         $this->assertSame(
             'Repository could not be cloned: https://github.com/acme/app.git',
@@ -97,7 +97,7 @@ class TokenScrubberTest extends TestCase
         $event = Event::createEvent();
         $event->setExceptions([new ExceptionDataBag($exception)]);
 
-        $scrubbed = (new TokenScrubber)($event, new EventHint);
+        $scrubbed = TokenScrubber::handle($event, new EventHint);
 
         $value = $scrubbed->getExceptions()[0]->getValue();
         $this->assertStringNotContainsString(self::TOKEN, $value);
@@ -119,7 +119,7 @@ class TokenScrubberTest extends TestCase
         $event = Event::createEvent();
         $event->setBreadcrumb([$breadcrumb]);
 
-        $scrubbed = (new TokenScrubber)($event, new EventHint);
+        $scrubbed = TokenScrubber::handle($event, new EventHint);
 
         $scrubbedBreadcrumb = $scrubbed->getBreadcrumbs()[0];
         $this->assertStringNotContainsString(self::TOKEN, (string) $scrubbedBreadcrumb->getMessage());

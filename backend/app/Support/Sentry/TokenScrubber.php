@@ -16,25 +16,30 @@ class TokenScrubber
 {
     private const REPLACEMENT = '[REDACTED]';
 
-    public function __invoke(Event $event, ?EventHint $hint): ?Event
+    // Static so config/sentry.php can reference it as a [Class, method]
+    // callable — a plain array of strings, which var_export() (used by
+    // `config:cache`) can serialize. A closure or an instantiated object
+    // cannot: both fail with "could not be serialized" / "undefined method
+    // __set_state()" the moment config:cache runs.
+    public static function handle(Event $event, ?EventHint $hint): ?Event
     {
         $message = $event->getMessage();
 
         if ($message !== null) {
-            $event->setMessage($this->scrub($message));
+            $event->setMessage(self::scrub($message));
         }
 
         $extra = $event->getExtra();
 
         if ($extra !== []) {
-            $event->setExtra($this->scrubArray($extra));
+            $event->setExtra(self::scrubArray($extra));
         }
 
         $tags = $event->getTags();
 
         if ($tags !== []) {
             /** @var array<string, string> $scrubbedTags */
-            $scrubbedTags = $this->scrubArray($tags);
+            $scrubbedTags = self::scrubArray($tags);
             $event->setTags($scrubbedTags);
         }
 
@@ -44,7 +49,7 @@ class TokenScrubber
         // separately from `Event::getMessage()`, which only carries explicit
         // string captures.
         foreach ($event->getExceptions() as $exceptionDataBag) {
-            $exceptionDataBag->setValue($this->scrub($exceptionDataBag->getValue()));
+            $exceptionDataBag->setValue(self::scrub($exceptionDataBag->getValue()));
         }
 
         // Command/SQL breadcrumbs are enabled by default (config/sentry.php),
@@ -54,7 +59,7 @@ class TokenScrubber
 
         if ($breadcrumbs !== []) {
             $event->setBreadcrumb(array_map(
-                fn (Breadcrumb $breadcrumb): Breadcrumb => $this->scrubBreadcrumb($breadcrumb),
+                fn (Breadcrumb $breadcrumb): Breadcrumb => self::scrubBreadcrumb($breadcrumb),
                 $breadcrumbs
             ));
         }
@@ -62,36 +67,36 @@ class TokenScrubber
         $request = $event->getRequest();
 
         if ($request !== []) {
-            $event->setRequest($this->scrubArray($request));
+            $event->setRequest(self::scrubArray($request));
         }
 
         foreach ($event->getContexts() as $name => $data) {
-            $event->setContext($name, $this->scrubArray($data));
+            $event->setContext($name, self::scrubArray($data));
         }
 
         return $event;
     }
 
-    private function scrubBreadcrumb(Breadcrumb $breadcrumb): Breadcrumb
+    private static function scrubBreadcrumb(Breadcrumb $breadcrumb): Breadcrumb
     {
         $message = $breadcrumb->getMessage();
 
         if ($message !== null) {
-            $breadcrumb = $breadcrumb->withMessage($this->scrub($message));
+            $breadcrumb = $breadcrumb->withMessage(self::scrub($message));
         }
 
         foreach ($breadcrumb->getMetadata() as $key => $value) {
             if (is_string($value)) {
-                $breadcrumb = $breadcrumb->withMetadata($key, $this->scrub($value));
+                $breadcrumb = $breadcrumb->withMetadata($key, self::scrub($value));
             } elseif (is_array($value)) {
-                $breadcrumb = $breadcrumb->withMetadata($key, $this->scrubArray($value));
+                $breadcrumb = $breadcrumb->withMetadata($key, self::scrubArray($value));
             }
         }
 
         return $breadcrumb;
     }
 
-    private function scrub(string $value): string
+    private static function scrub(string $value): string
     {
         // Any embedded credential pair, whether or not it is our token.
         $value = (string) preg_replace(
@@ -113,13 +118,13 @@ class TokenScrubber
      * @param  array<array-key, mixed>  $values
      * @return array<array-key, mixed>
      */
-    private function scrubArray(array $values): array
+    private static function scrubArray(array $values): array
     {
         foreach ($values as $key => $value) {
             if (is_string($value)) {
-                $values[$key] = $this->scrub($value);
+                $values[$key] = self::scrub($value);
             } elseif (is_array($value)) {
-                $values[$key] = $this->scrubArray($value);
+                $values[$key] = self::scrubArray($value);
             }
         }
 
