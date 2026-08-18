@@ -12,38 +12,33 @@ use Tests\Feature\FeatureTest;
 
 class AuditDemoSeederTest extends FeatureTest
 {
-    public function test_seeds_demo_users_with_expected_entitlements_idempotently(): void
+    public function test_seeds_one_demo_user_subscribed_to_the_mid_range_plan_with_a_full_quota_idempotently(): void
     {
         $this->seed(AuditDemoSeeder::class);
         $this->seed(AuditDemoSeeder::class); // idempotent
 
+        $user = User::where('email', AuditDemoSeeder::EMAIL)->firstOrFail();
+        $tenant = $user->tenants()->firstOrFail();
+
         $entitlements = app(AuditEntitlementService::class);
 
-        // Active tiers expose their monthly allowance through the tenant subscription
-        foreach ([['audit-starter-demo@flexpick.net', 5], ['audit-growth-demo@flexpick.net', 20], ['audit-agency-demo@flexpick.net', 75], ['audit-trial-demo@flexpick.net', 5]] as [$email, $allowance]) {
-            $user = User::where('email', $email)->firstOrFail();
-            $this->assertSame($allowance, $entitlements->allowance($user->tenants()->firstOrFail(), AuditTier::AUTOMATED), $email);
-            $this->assertSame(1, $user->subscriptions()->count(), $email);
-        }
+        // Growth is the mid-range, "popular" plan (config/pricing.php).
+        $this->assertSame(20, $entitlements->allowance($tenant, AuditTier::AUTOMATED));
+        $this->assertSame(1, $user->subscriptions()->count());
+        $this->assertSame(1, Subscription::whereHas('user', fn ($q) => $q->where('email', AuditDemoSeeder::EMAIL))->count());
 
-        // Cancelled and expired subscriptions grant no allowance
-        foreach (['audit-cancelled-demo@flexpick.net', 'audit-expired-demo@flexpick.net'] as $email) {
-            $user = User::where('email', $email)->firstOrFail();
-            $this->assertSame(0, $entitlements->allowance($user->tenants()->firstOrFail(), AuditTier::AUTOMATED), $email);
-        }
+        // "Reset the limits": the one seeded report is dated last month, so
+        // this month's allowance starts fully unused.
+        $this->assertSame(0, $entitlements->runsUsedThisMonth($user, AuditTier::AUTOMATED));
 
-        // Free-quota states
-        $this->assertTrue($entitlements->hasFreeRun('audit-free-demo@flexpick.net'));
-        $this->assertFalse($entitlements->hasFreeRun('audit-exhausted-demo@flexpick.net'));
-        $this->assertSame(3, AuditRequest::where('email', 'audit-exhausted-demo@flexpick.net')->where('free_run', true)->count());
+        // Idempotency: no duplicate users or requests.
+        $this->assertSame(1, User::where('email', AuditDemoSeeder::EMAIL)->count());
+        $this->assertSame(1, AuditRequest::where('email', AuditDemoSeeder::EMAIL)->count());
 
-        // Idempotency: no duplicate users or subscriptions
-        $this->assertSame(1, User::where('email', 'audit-starter-demo@flexpick.net')->count());
-        $this->assertSame(1, Subscription::whereHas('user', fn ($q) => $q->where('email', 'audit-cancelled-demo@flexpick.net'))->count());
-
-        // Completed demo audits carry a report
-        $sent = AuditRequest::where('email', 'audit-starter-demo@flexpick.net')->where('status', 'sent')->first();
+        // There's a finished, unlocked report ready to open immediately.
+        $sent = AuditRequest::where('email', AuditDemoSeeder::EMAIL)->where('status', 'sent')->first();
         $this->assertNotNull($sent);
         $this->assertNotNull($sent->report);
+        $this->assertNotNull($sent->report->unlocked_at);
     }
 }
