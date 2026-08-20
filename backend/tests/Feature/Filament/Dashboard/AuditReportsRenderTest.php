@@ -21,7 +21,7 @@ class AuditReportsRenderTest extends FeatureTest
 
         Livewire::test(AuditReports::class)
             ->assertOk()
-            ->assertSee('Free Diagnostic')
+            ->assertSee('Diagnostic Report')
             ->assertSee('Automated Health Report')
             ->assertSee('Deep AI Code Review')
             ->assertSee('Expert Audit');

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament\Dashboard;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Constants\SubscriptionStatus;
@@ -47,10 +48,12 @@ class AuditReportsPageTest extends FeatureTest
     }
 
     /**
-     * Without a subscription the run falls back to the free-run quota, so the
-     * refusal only applies once that quota is spent too.
+     * Without a subscription the run falls back to the free-run quota. Once
+     * that quota is spent, the Diagnostic tier is priced in the catalog, so
+     * quotaFor(...)->purchasable() is true and launchAudit() redirects to
+     * checkout instead of refusing outright.
      */
-    public function test_launch_audit_refuses_when_free_runs_are_exhausted(): void
+    public function test_launch_audit_redirects_to_purchase_when_free_runs_are_exhausted(): void
     {
         Queue::fake([GenerateAuditReport::class]);
         $user = User::factory()->create();
@@ -63,9 +66,12 @@ class AuditReportsPageTest extends FeatureTest
 
         Livewire::actingAs($user)
             ->test(AuditReports::class)
-            ->call('launchAudit', 'https://github.com/acme/my-app');
+            ->call('launchAudit', 'https://github.com/acme/my-app')
+            ->assertRedirect(route('buy.product', ['productSlug' => 'audit-diagnostic']));
 
-        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
+        $request = AuditRequest::where('user_id', $user->id)->sole();
+        $this->assertSame(AuditRequestStatus::AWAITING_PAYMENT->value, $request->status);
+        $this->assertSame(AuditFunding::PURCHASE, $request->funding);
         Queue::assertNotPushed(GenerateAuditReport::class);
     }
 
