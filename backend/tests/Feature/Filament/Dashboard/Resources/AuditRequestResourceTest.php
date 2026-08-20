@@ -34,7 +34,7 @@ class AuditRequestResourceTest extends FeatureTest
         $response->assertDontSee('not-mine');
     }
 
-    public function test_list_shows_the_tier_each_audit_ran_at(): void
+    public function test_list_shows_the_tier_and_price_each_audit_ran_at(): void
     {
         $user = User::factory()->create(['email' => 'tier-column@example.com']);
         $tenant = $this->createTenantFor($user);
@@ -54,10 +54,10 @@ class AuditRequestResourceTest extends FeatureTest
 
         $this->get(AuditRequestResource::getUrl('index', [], true, 'dashboard', tenant: $tenant))
             ->assertSuccessful()
-            ->assertSee(AuditTier::DEEP_AI->label())
-            ->assertSee(AuditTier::DIAGNOSTIC->label())
+            ->assertSee(AuditTier::DEEP_AI->labelWithPrice())
+            ->assertSee(AuditTier::DIAGNOSTIC->labelWithPrice())
             // Nothing on this page paints a tier the user does not own.
-            ->assertDontSee(AuditTier::EXPERT->label());
+            ->assertDontSee(AuditTier::EXPERT->labelWithPrice());
     }
 
     public function test_foreign_audit_view_is_not_found(): void

@@ -91,7 +91,7 @@ class AuditRequestResource extends Resource
                     ->label(__('Audit type'))
                     ->badge()
                     ->color(fn (AuditTier $state): string => $state->badgeColor())
-                    ->formatStateUsing(fn (AuditTier $state): string => $state->label()),
+                    ->formatStateUsing(fn (AuditTier $state): string => $state->labelWithPrice()),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))
