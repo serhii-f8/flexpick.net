@@ -166,13 +166,7 @@ class AuditEntitlementService
 
     private function tierPriceCents(AuditTier $tier): ?int
     {
-        foreach ((array) config('pricing.tiers') as $definition) {
-            if (($definition['tier'] ?? null) === $tier->value) {
-                return (int) $definition['price'];
-            }
-        }
-
-        return null;
+        return $tier->priceCents();
     }
 
     public function hasAuditAccess(User $user, ?Tenant $tenant): bool

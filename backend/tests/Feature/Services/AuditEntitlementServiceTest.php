@@ -168,6 +168,7 @@ class AuditEntitlementServiceTest extends FeatureTest
     {
         $user = $this->createUser();
 
+        $this->assertSame(500, $this->service->quotaFor($user, null, AuditTier::DIAGNOSTIC)->priceCents);
         $this->assertSame(4900, $this->service->quotaFor($user, null, AuditTier::AUTOMATED)->priceCents);
         $this->assertSame(19900, $this->service->quotaFor($user, null, AuditTier::DEEP_AI)->priceCents);
         $this->assertSame(99900, $this->service->quotaFor($user, null, AuditTier::EXPERT)->priceCents);
