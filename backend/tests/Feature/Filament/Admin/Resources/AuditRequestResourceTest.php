@@ -33,7 +33,7 @@ class AuditRequestResourceTest extends FeatureTest
         $response->assertStatus(200);
     }
 
-    public function test_list_shows_the_tier_each_request_ran_at(): void
+    public function test_list_shows_the_tier_and_price_each_request_ran_at(): void
     {
         $admin = $this->createAdminUser();
         AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value]);
@@ -43,9 +43,9 @@ class AuditRequestResourceTest extends FeatureTest
         // and an absent label really is absent.
         $this->actingAs($admin)->get(AuditRequestResource::getUrl('index', [], true, 'admin'))
             ->assertStatus(200)
-            ->assertSee(AuditTier::EXPERT->label())
-            ->assertSee(AuditTier::AUTOMATED->label())
-            ->assertDontSee(AuditTier::DEEP_AI->label());
+            ->assertSee(AuditTier::EXPERT->labelWithPrice())
+            ->assertSee(AuditTier::AUTOMATED->labelWithPrice())
+            ->assertDontSee(AuditTier::DEEP_AI->labelWithPrice());
     }
 
     public function test_launch_action_queues_awaiting_access_request(): void

@@ -31,4 +31,17 @@ class AuditRequestTierTest extends FeatureTest
 
         $this->assertSame(AuditTier::DEEP_AI, $request->fresh()->tier);
     }
+
+    public function test_the_tier_select_options_show_price(): void
+    {
+        $admin = $this->createAdminUser();
+        $request = AuditRequest::factory()->create(['tier' => AuditTier::DIAGNOSTIC->value]);
+
+        $this->actingAs($admin);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::test(EditAuditRequest::class, ['record' => $request->uuid])
+            ->assertSee(AuditTier::EXPERT->labelWithPrice())
+            ->assertSee(AuditTier::DIAGNOSTIC->labelWithPrice());
+    }
 }

@@ -79,7 +79,7 @@ class AuditRequestResource extends Resource
                     ->label(__('Audit type'))
                     ->options(
                         collect(AuditTier::cases())
-                            ->mapWithKeys(fn (AuditTier $tier): array => [$tier->value => $tier->label()])
+                            ->mapWithKeys(fn (AuditTier $tier): array => [$tier->value => $tier->labelWithPrice()])
                             ->all()
                     )
                     ->helperText(__('Changing this and re-running the pipeline re-analyses at the new tier.'))
@@ -186,7 +186,7 @@ class AuditRequestResource extends Resource
                     ->label(__('Audit type'))
                     ->badge()
                     ->color(fn (AuditTier $state): string => $state->badgeColor())
-                    ->formatStateUsing(fn (AuditTier $state): string => $state->label()),
+                    ->formatStateUsing(fn (AuditTier $state): string => $state->labelWithPrice()),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))
