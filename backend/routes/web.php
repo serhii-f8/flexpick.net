@@ -47,7 +47,7 @@ Route::get('/', function (UserDashboardService $dashboardService) {
 
 Route::get('/pricing', function () {
     return view('pricing');
-})->name('pricing')->middleware('sitemapped');
+})->name('pricing')->middleware('auth');
 
 Route::get('/dashboard', function (UserDashboardService $dashboardService) {
     return redirect($dashboardService->getUserDashboardUrl(Auth::user()));

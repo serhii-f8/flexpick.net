@@ -6,19 +6,21 @@ use Tests\Feature\FeatureTest;
 
 class PricingPageTest extends FeatureTest
 {
-    public function test_pricing_page_renders(): void
+    public function test_authenticated_user_can_view_pricing(): void
     {
-        $response = $this->get(route('pricing'));
+        $user = $this->createUser();
+
+        $response = $this->actingAs($user)->get(route('pricing'));
 
         $response->assertStatus(200);
         $response->assertSee(__('Plans & Pricing'));
     }
 
-    public function test_pricing_page_shows_auth_links_for_guests(): void
+    public function test_guest_is_redirected_to_login(): void
     {
+        $this->withExceptionHandling();
         $response = $this->get(route('pricing'));
 
-        $response->assertSee(route('login'));
-        $response->assertSee(route('register'));
+        $response->assertRedirect(route('login'));
     }
 }

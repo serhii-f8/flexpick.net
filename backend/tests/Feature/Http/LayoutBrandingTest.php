@@ -12,7 +12,16 @@ class LayoutBrandingTest extends FeatureTest
      */
     public function test_app_layout_pages_render_flexpick_branding_on_dark_canvas(): void
     {
-        foreach ([route('pricing'), '/terms-of-service', '/privacy-policy'] as $url) {
+        $user = $this->createUser();
+
+        // pricing requires authentication
+        $response = $this->actingAs($user)->get(route('pricing'));
+        $response->assertOk();
+        $response->assertSee('data-brand="flexpick"', false);
+        $response->assertSee('bg-ink', false);
+
+        // terms and privacy are public
+        foreach (['/terms-of-service', '/privacy-policy'] as $url) {
             $response = $this->get($url);
 
             $response->assertOk();
