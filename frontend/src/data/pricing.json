@@ -2,6 +2,17 @@
     "_generated": "php artisan app:export-pricing \u2014 do not edit by hand",
     "currency": "USD",
     "tiers": {
+        "audit-diagnostic": {
+            "name": "Diagnostic Report",
+            "description": "A fast scan of one repository \u2014 dependency, security, and structure signals with a plain-language summary.",
+            "price_cents": 500,
+            "price_display": "$5",
+            "features": [
+                "Three static analyzers across security and dependencies",
+                "Plain-language summary of what needs attention",
+                "A starting point before a deeper paid tier"
+            ]
+        },
         "audit-automated": {
             "name": "Automated Health Report",
             "description": "A scanner-backed health report on one repository, with a prioritized fix-first plan.",

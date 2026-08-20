@@ -14,6 +14,17 @@ return [
     'currency' => 'USD',
 
     'tiers' => [
+        'audit-diagnostic' => [
+            'tier' => 'diagnostic',
+            'name' => 'Diagnostic Report',
+            'description' => 'A fast scan of one repository — dependency, security, and structure signals with a plain-language summary.',
+            'price' => 500,
+            'features' => [
+                'Three static analyzers across security and dependencies',
+                'Plain-language summary of what needs attention',
+                'A starting point before a deeper paid tier',
+            ],
+        ],
         'audit-automated' => [
             'tier' => 'automated',
             'name' => 'Automated Health Report',

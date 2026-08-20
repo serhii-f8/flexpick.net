@@ -15,17 +15,31 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->seed(AuditMonetizationSeeder::class);
     }
 
-    public function test_seeds_the_three_one_time_tier_products(): void
+    public function test_seeds_the_four_one_time_tier_products(): void
     {
         $this->seedCatalog();
 
-        foreach (['audit-automated' => 4900, 'audit-deep-ai' => 19900, 'audit-expert' => 99900] as $slug => $cents) {
+        foreach ([
+            'audit-diagnostic' => 500,
+            'audit-automated' => 4900,
+            'audit-deep-ai' => 19900,
+            'audit-expert' => 99900,
+        ] as $slug => $cents) {
             $product = OneTimeProduct::where('slug', $slug)->first();
 
             $this->assertNotNull($product, "Missing one-time product [{$slug}].");
             $this->assertTrue((bool) $product->is_active);
             $this->assertSame($cents, (int) $product->prices()->first()->price);
         }
+    }
+
+    public function test_diagnostic_product_carries_the_diagnostic_tier_metadata(): void
+    {
+        $this->seedCatalog();
+
+        $product = OneTimeProduct::where('slug', 'audit-diagnostic')->firstOrFail();
+
+        $this->assertSame('diagnostic', $product->metadata['audit_tier']);
     }
 
     public function test_seeds_the_pitch_subscription_grid(): void
@@ -113,7 +127,7 @@ class AuditMonetizationSeederTest extends FeatureTest
         // is one edit and the marketing export cannot drift from the charge.
         $source = (string) file_get_contents(database_path('seeders/AuditMonetizationSeeder.php'));
 
-        foreach (['4900', '19900', '99900', '5900', '14900', '49900', '150000'] as $literal) {
+        foreach (['500', '4900', '19900', '99900', '5900', '14900', '49900', '150000'] as $literal) {
             $this->assertStringNotContainsString(
                 $literal,
                 $source,
