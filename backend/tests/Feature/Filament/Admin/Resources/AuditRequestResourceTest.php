@@ -50,6 +50,7 @@ class AuditRequestResourceTest extends FeatureTest
 
     public function test_launch_action_queues_awaiting_access_request(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         Queue::fake([GenerateAuditReport::class]);
         $record = AuditRequest::factory()->verified()->create([
             'status' => AuditRequestStatus::AWAITING_ACCESS->value,

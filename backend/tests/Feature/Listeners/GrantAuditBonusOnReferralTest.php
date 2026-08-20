@@ -31,6 +31,6 @@ class GrantAuditBonusOnReferralTest extends FeatureTest
             ->value('value');
 
         $this->assertSame('2', $value);
-        $this->assertSame(5, app(AuditEntitlementService::class)->freeRunsLimit($referrer->email));
+        $this->assertSame(2, app(AuditEntitlementService::class)->freeRunsLimit($referrer->email));
     }
 }

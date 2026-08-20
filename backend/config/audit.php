@@ -12,7 +12,7 @@ return [
     'reports_dir' => 'audit-reports',
     'github_account' => env('AUDIT_GITHUB_ACCOUNT', 'flexpick-audit'),
     'github_token' => env('AUDIT_GITHUB_TOKEN'),
-    'free_reports_limit' => 3,
+    'free_reports_limit' => 0,
     // USD per MILLION tokens, list rates, keyed by the exact model id sent to
     // the API (services.anthropic.model). A model missing from this table is
     // reported as unknown cost rather than free — see AuditAiCall::costUsd().

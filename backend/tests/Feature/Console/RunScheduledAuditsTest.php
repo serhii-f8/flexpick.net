@@ -95,6 +95,7 @@ class RunScheduledAuditsTest extends FeatureTest
      */
     public function test_a_diagnostic_schedule_debits_the_free_quota_not_the_allowance(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         Queue::fake();
         [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 2);
 

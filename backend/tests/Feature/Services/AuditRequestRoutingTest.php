@@ -43,6 +43,7 @@ class AuditRequestRoutingTest extends FeatureTest
 
     public function test_public_repo_with_free_quota_queues_and_consumes_run(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         $request = AuditRequest::factory()->verified()->create([
             'repo_url' => 'file://'.$this->fixtureRepo,
             'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
@@ -55,6 +56,22 @@ class AuditRequestRoutingTest extends FeatureTest
         $this->assertTrue($request->free_run);
         Queue::assertPushed(GenerateAuditReport::class);
         Mail::assertQueued(AuditRequestReceived::class);
+    }
+
+    public function test_public_repo_awaits_payment_by_default_with_no_prior_free_runs(): void
+    {
+        $request = AuditRequest::factory()->verified()->create([
+            'repo_url' => 'file://'.$this->fixtureRepo,
+            'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
+        ]);
+
+        $this->route($request);
+
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::AWAITING_PAYMENT->value, $request->status);
+        $this->assertFalse($request->free_run);
+        Queue::assertNotPushed(GenerateAuditReport::class);
+        Mail::assertQueued(AuditQuotaExhausted::class);
     }
 
     public function test_public_repo_without_quota_awaits_payment(): void

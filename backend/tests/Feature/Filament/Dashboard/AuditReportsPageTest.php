@@ -71,6 +71,7 @@ class AuditReportsPageTest extends FeatureTest
 
     public function test_launch_audit_consumes_a_free_run_without_subscription(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         Queue::fake([GenerateAuditReport::class]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user); // no subscription
@@ -92,6 +93,7 @@ class AuditReportsPageTest extends FeatureTest
 
     public function test_navigation_registers_for_user_with_only_free_runs(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user); // no subscription, no reports
 

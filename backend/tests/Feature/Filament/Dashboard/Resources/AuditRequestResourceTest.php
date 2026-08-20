@@ -173,6 +173,7 @@ class AuditRequestResourceTest extends FeatureTest
 
     public function test_navigation_visible_for_fresh_user_with_only_free_runs(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
 

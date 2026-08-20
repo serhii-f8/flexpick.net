@@ -12,6 +12,7 @@ class DashboardPageTest extends FeatureTest
 {
     public function test_run_audit_header_action_is_present_for_entitled_user(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create();
         $tenant->users()->attach($user);

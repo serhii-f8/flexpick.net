@@ -26,6 +26,7 @@ class AuditRequestForUserScopeTest extends FeatureTest
 
     public function test_has_audit_access_rules(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         $entitlements = app(AuditEntitlementService::class);
 
         // Free-run quota alone → access. This is what lets a directly

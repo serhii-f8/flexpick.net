@@ -25,15 +25,24 @@ class AuditEntitlementServiceTest extends FeatureTest
         $this->service = app(AuditEntitlementService::class);
     }
 
-    public function test_fresh_email_has_three_free_runs(): void
+    public function test_fresh_email_has_no_free_runs_by_default(): void
     {
-        $this->assertSame(3, $this->service->freeRunsLimit('fresh@example.com'));
+        $this->assertSame(0, $this->service->freeRunsLimit('fresh@example.com'));
         $this->assertSame(0, $this->service->freeRunsUsed('fresh@example.com'));
-        $this->assertTrue($this->service->hasFreeRun('fresh@example.com'));
+        $this->assertFalse($this->service->hasFreeRun('fresh@example.com'));
+    }
+
+    public function test_an_explicit_limit_still_grants_free_runs(): void
+    {
+        config(['audit.free_reports_limit' => 3]);
+
+        $this->assertSame(3, $this->service->freeRunsLimit('configured@example.com'));
+        $this->assertTrue($this->service->hasFreeRun('configured@example.com'));
     }
 
     public function test_only_free_run_flagged_requests_count(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         AuditRequest::factory()->count(2)->freeRun()->create(['email' => 'used@example.com']);
         AuditRequest::factory()->create(['email' => 'used@example.com']); // not flagged — e.g. a failed submission
 
@@ -52,10 +61,12 @@ class AuditEntitlementServiceTest extends FeatureTest
     {
         $user = User::factory()->create(['email' => 'bonus@example.com']);
         UserParameter::create(['user_id' => $user->id, 'name' => AuditEntitlementService::BONUS_PARAM, 'value' => '2']);
-        AuditRequest::factory()->count(3)->freeRun()->create(['email' => 'bonus@example.com']);
 
-        $this->assertSame(5, $this->service->freeRunsLimit('bonus@example.com'));
+        $this->assertSame(2, $this->service->freeRunsLimit('bonus@example.com'));
         $this->assertTrue($this->service->hasFreeRun('bonus@example.com'));
+
+        AuditRequest::factory()->count(2)->freeRun()->create(['email' => 'bonus@example.com']);
+        $this->assertFalse($this->service->hasFreeRun('bonus@example.com'));
     }
 
     public function test_consume_free_run_sets_flag(): void
@@ -77,6 +88,7 @@ class AuditEntitlementServiceTest extends FeatureTest
     public function test_free_runs_alone_grant_audit_access(): void
     {
         $user = User::factory()->create(['email' => 'fresh-signup@example.com']);
+        UserParameter::create(['user_id' => $user->id, 'name' => AuditEntitlementService::BONUS_PARAM, 'value' => '1']);
 
         $this->assertTrue($this->service->hasFreeRun($user->email));
         $this->assertTrue($this->service->hasAuditAccess($user, null));
@@ -152,6 +164,7 @@ class AuditEntitlementServiceTest extends FeatureTest
 
     public function test_diagnostic_quota_is_the_lifetime_free_quota(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         $user = $this->createUser();
         AuditRequest::factory()->freeRun()->create(['email' => $user->email]);
 
@@ -161,7 +174,8 @@ class AuditEntitlementServiceTest extends FeatureTest
         $this->assertSame(3, $quota->limit);
         $this->assertSame(1, $quota->used);
         $this->assertSame(2, $quota->remaining());
-        $this->assertFalse($quota->purchasable());
+        $this->assertSame(500, $quota->priceCents);
+        $this->assertTrue($quota->purchasable());
     }
 
     public function test_paid_tiers_carry_their_catalog_price(): void

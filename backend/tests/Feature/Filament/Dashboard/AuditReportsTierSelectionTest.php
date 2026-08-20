@@ -46,6 +46,7 @@ class AuditReportsTierSelectionTest extends FeatureTest
 
     public function test_a_diagnostic_run_spends_a_free_run_not_the_allowance(): void
     {
+        config(['audit.free_reports_limit' => 3]);
         Queue::fake();
         [$user, $tenant] = $this->userWithAllowance(analyses: 5);
         $this->actAsTenantUser($user, $tenant);
