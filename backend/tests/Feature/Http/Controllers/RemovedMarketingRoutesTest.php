@@ -21,6 +21,8 @@ class RemovedMarketingRoutesTest extends FeatureTest
 
     public function test_pricing_page_has_no_dead_links(): void
     {
+        $this->actingAs($this->createUser());
+
         $response = $this->get(route('pricing'));
 
         $response->assertStatus(200);

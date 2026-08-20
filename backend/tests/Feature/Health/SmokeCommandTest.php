@@ -138,8 +138,8 @@ class SmokeCommandTest extends FeatureTest
         config()->set('app.env', 'production');
 
         // backend/public/build/manifest.json exists in this working tree, so
-        // this exercises the genuine file_exists() + /pricing check rather
-        // than the `! inProduction()` shortcut the other tests rely on.
+        // this exercises the genuine file_exists() + /terms-of-service check
+        // rather than the `! inProduction()` shortcut the other tests rely on.
         // FeatureTest::setUp() calls withoutVite(), which only fakes Blade's
         // @vite directive rendering - it does not touch this file_exists()
         // check or short-circuit the underlying assertion.

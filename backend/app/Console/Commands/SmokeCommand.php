@@ -143,8 +143,11 @@ class SmokeCommand extends Command
     }
 
     /**
-     * Guards the documented "Vite manifest not found" 500 that takes out
-     * /pricing — precisely the class of breakage a smoke gate exists to catch.
+     * Guards the documented "Vite manifest not found" 500 that takes out any
+     * page rendered through the shared app layout. Probes /terms-of-service
+     * rather than /pricing because /pricing now requires auth — this is the
+     * class of breakage a smoke gate exists to catch, on a page that stays
+     * genuinely public.
      */
     private function publicPageRenders(): bool
     {
@@ -153,7 +156,7 @@ class SmokeCommand extends Command
         }
 
         return file_exists(public_path('build/manifest.json'))
-            && $this->getReturnsOk('/pricing');
+            && $this->getReturnsOk('/terms-of-service');
     }
 
     /**

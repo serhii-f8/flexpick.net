@@ -22,7 +22,7 @@ class AnnouncementBannerTest extends FeatureTest
 
         Livewire::withoutLazyLoading();
 
-        $response = $this->get(route('pricing'));
+        $response = $this->get(route('terms-of-service'));
 
         $response->assertStatus(200);
 
@@ -43,7 +43,7 @@ class AnnouncementBannerTest extends FeatureTest
 
         Livewire::withoutLazyLoading();
 
-        $response = $this->get(route('pricing'));
+        $response = $this->get(route('terms-of-service'));
 
         $response->assertStatus(200);
 

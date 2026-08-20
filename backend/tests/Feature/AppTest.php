@@ -6,7 +6,7 @@ class AppTest extends FeatureTest
 {
     public function test_the_application_returns_a_successful_response(): void
     {
-        $response = $this->get('/pricing');
+        $response = $this->get('/terms-of-service');
 
         $response->assertStatus(200);
     }
@@ -16,7 +16,7 @@ class AppTest extends FeatureTest
         config(['app.tracking_scripts' => '<javascript>Google Analytics</javascript>']);
         config(['cookie-consent.enabled' => false]);
 
-        $response = $this->get('/pricing');
+        $response = $this->get('/terms-of-service');
 
         $response->assertSeeHtml('<javascript>Google Analytics</javascript>');
     }
@@ -26,7 +26,7 @@ class AppTest extends FeatureTest
         config(['app.tracking_scripts' => '<javascript>Google Analytics</javascript>']);
         config(['cookie-consent.enabled' => true]);
 
-        $response = $this->get('/pricing');
+        $response = $this->get('/terms-of-service');
 
         $response->assertDontSeeHtml('<javascript>Google Analytics</javascript>');
     }
@@ -36,7 +36,7 @@ class AppTest extends FeatureTest
         config(['app.tracking_scripts' => '<javascript>Google Analytics</javascript>']);
         config(['cookie-consent.enabled' => true]);
 
-        $response = $this->withCookie(config('cookie-consent.cookie_name'), 'accepted')->get('/pricing');
+        $response = $this->withCookie(config('cookie-consent.cookie_name'), 'accepted')->get('/terms-of-service');
 
         $response->assertSeeHtml('<javascript>Google Analytics</javascript>');
     }
