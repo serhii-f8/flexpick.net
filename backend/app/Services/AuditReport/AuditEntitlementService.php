@@ -197,10 +197,11 @@ class AuditEntitlementService
         // free quota at its production default of zero, this is the arm that
         // keeps a fresh direct signup out of a deadlock: no request, no free
         // run and no subscription used to hide the entire dashboard audit UI,
-        // including the only in-app route to a checkout. quotaFor() handles a
-        // null tenant, so this holds with or without a workspace.
+        // including the only in-app route to a checkout. A plain config
+        // lookup (not quotaFor()) -- purchasable() is priceCents !== null,
+        // and quotaFor() would re-run hasFreeRun()'s queries for no reason.
         foreach (AuditTier::cases() as $tier) {
-            if ($this->quotaFor($user, $tenant, $tier)->purchasable()) {
+            if ($tier->priceCents() !== null) {
                 return true;
             }
         }

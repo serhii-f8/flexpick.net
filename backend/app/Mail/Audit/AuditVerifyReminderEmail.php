@@ -22,7 +22,7 @@ class AuditVerifyReminderEmail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __('Still want your free codebase audit?'),
+            subject: __('Still want your codebase audit?'),
         );
     }
 

@@ -236,7 +236,8 @@
             <h2 class="text-base font-bold mb-3">{{ __('Unlock full report') }}</h2>
             <p class="text-stone-300">{{ __('Get every finding\'s evidence and recommendation, the prioritized fix-first plan, and PDF export.') }}</p>
             <a class="inline-block rounded-lg bg-primary-500 px-6 py-3 font-bold text-stone-900 no-underline" href="{{ $unlockUrl }}">{{ __('Unlock for $5') }}</a>
-            <a class="inline-block rounded-lg border border-stone-600 px-6 py-3 font-bold text-stone-50 no-underline" href="{{ route('register') }}">{{ __('Or subscribe from $10/mo') }}</a>
+            @php($cheapestPlan = collect(config('pricing.subscriptions'))->sortBy('price')->first())
+            <a class="inline-block rounded-lg border border-stone-600 px-6 py-3 font-bold text-stone-50 no-underline" href="{{ route('register') }}">{{ __('Or subscribe from $:price/mo', ['price' => number_format(($cheapestPlan['price'] ?? 0) / 100)]) }}</a>
         </div>
     @endif
 

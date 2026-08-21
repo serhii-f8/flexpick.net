@@ -21,9 +21,13 @@
                 <a href="{{ $purchaseUrl }}" style="color: #2563eb; text-decoration: underline;">{{ __('Run this audit now for $:price — full report included', ['price' => $diagnosticPrice]) }}</a>
             </p>
             {{-- /pricing requires authentication; this email's reader is not
-                 logged in, so register is the reachable next step. --}}
+                 logged in, so register is the reachable next step. Cheapest
+                 plan pulled from the catalog for the same reason as the price
+                 above -- it drifted out of sync with a hardcoded "$10" once. --}}
+            @php($cheapestPlan = collect(config('pricing.subscriptions'))->sortBy('price')->first())
+            @php($subscribePrice = number_format(($cheapestPlan['price'] ?? 0) / 100))
             <p style="margin: 12px 0 0; line-height: 24px">
-                <a href="{{ route('register') }}" style="color: #2563eb; text-decoration: underline;">{{ __('Or subscribe from $10/month for 5 analyses') }}</a>
+                <a href="{{ route('register') }}" style="color: #2563eb; text-decoration: underline;">{{ __('Or subscribe from $:price/month for :count analyses', ['price' => $subscribePrice, 'count' => $cheapestPlan['audit_analyses_per_month'] ?? 0]) }}</a>
             </p>
         </td>
     </tr>

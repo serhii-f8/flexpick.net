@@ -22,7 +22,7 @@ class AuditVerifyEmail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __('Confirm your email to start your free audit'),
+            subject: __('Confirm your email to get started'),
         );
     }
 

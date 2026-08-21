@@ -43,6 +43,10 @@ class PlanUsageWidgetTest extends FeatureTest
 
     public function test_shows_free_runs_for_user_without_subscription(): void
     {
+        // A genuine free allotment: at the production default (0) there is
+        // none to show, and the bar is suppressed rather than rendering
+        // "0 of 0 used" for someone who was never offered a free run.
+        config(['audit.free_reports_limit' => 3]);
         $user = User::factory()->create();
         $tenant = $this->tenantFor($user);
 
@@ -53,6 +57,25 @@ class PlanUsageWidgetTest extends FeatureTest
         Livewire::test(PlanUsageWidget::class)
             ->assertSee(__('Free audits'))
             ->assertDontSee(__('Automated Health Report'));
+    }
+
+    /**
+     * The production default is zero free runs. A fresh signup with no
+     * subscription still needs an upgrade CTA, but the "Free audits" bar
+     * itself must not render "0 of 0 used" for an allotment they never had.
+     */
+    public function test_free_audits_bar_is_suppressed_at_the_production_default(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->tenantFor($user);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::test(PlanUsageWidget::class)
+            ->assertDontSee(__('Free audits'))
+            ->assertSee(__('Upgrade'));
     }
 
     /**

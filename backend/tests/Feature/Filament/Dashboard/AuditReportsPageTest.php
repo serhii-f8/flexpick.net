@@ -117,10 +117,11 @@ class AuditReportsPageTest extends FeatureTest
 
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
 
-        // Remove the free-run quota so the subscription is the only remaining
-        // route to access -- otherwise this passes on free runs alone and
-        // stops proving anything about subscriptions.
-        config(['audit.free_reports_limit' => 0]);
+        // Remove the free-run quota AND empty the tier catalog so the
+        // subscription is the only remaining route to access -- otherwise
+        // this passes on free runs, or on any tier simply being purchasable,
+        // and stops proving anything about subscriptions.
+        config(['audit.free_reports_limit' => 0, 'pricing.tiers' => []]);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));

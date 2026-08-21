@@ -64,12 +64,19 @@ class PlanUsageWidget extends Widget
         if ($bars === []) {
             $free = collect($quotas)->firstWhere(fn (TierQuota $quota): bool => $quota->isLifetime);
 
-            $bars[] = [
-                'label' => __('Free audits'),
-                'used' => $free?->used ?? 0,
-                'total' => $free?->limit ?? 0,
-                'color' => 'bg-primary-500',
-            ];
+            // Only worth a bar if there was ever a free allotment to show --
+            // at the production default (limit 0) a fresh signup never had
+            // one, so "Free audits -- 0 of 0 used" would misreport "used up"
+            // for someone who was never offered any. The upgrade button
+            // above (still shown via $showUpgrade below) is their CTA.
+            if ($free !== null && $free->limit > 0) {
+                $bars[] = [
+                    'label' => __('Free audits'),
+                    'used' => $free->used,
+                    'total' => $free->limit,
+                    'color' => 'bg-primary-500',
+                ];
+            }
         }
 
         return [

@@ -1,6 +1,6 @@
 <x-layouts.email>
     <x-slot name="preview">
-        {{ __('Still want your free codebase audit?') }}
+        {{ __('Still want your codebase audit?') }}
     </x-slot>
 
     <tr>
@@ -9,7 +9,7 @@
                 {{ __('Hi :name,', ['name' => $auditRequest->name]) }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
-                {{ __('You asked for a free codebase audit yesterday but haven\'t confirmed your email yet — the audit only starts after that click.') }}
+                {{ __('You asked for a codebase audit yesterday but haven\'t confirmed your email yet — the audit only starts after that click.') }}
             </p>
             <p style="margin: 24px 0 0; line-height: 24px">
                 <a href="{{ $verifyUrl }}" style="color: #2563eb; text-decoration: underline;">{{ __('Confirm my email and start the audit') }}</a>
