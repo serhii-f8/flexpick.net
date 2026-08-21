@@ -85,9 +85,9 @@ a conversation because it's arithmetic, not a model's opinion.
 
 | Tier | Price | Scanners | AI involvement |
 |---|---|---|---|
-| **Diagnostic Report** | $5 | scc, gitleaks, OSV (3) | Narration only, small token budget |
-| **Automated Health Report** | $49 | + jscpd, Semgrep (5) | Narration, larger token budget, PDF export |
-| **Deep AI Code Review** | $199 | Same 5 | + individual AI review of the 20–40 riskiest files |
+| **Diagnostic Report** | $49 | scc, gitleaks, OSV (3) | Narration only, small token budget |
+| **Automated Health Report** | $119 | + jscpd, Semgrep (5) | Narration, larger token budget, PDF export |
+| **Deep AI Code Review** | $249 | Same 5 | + individual AI review of the 20–40 riskiest files |
 | **Expert Audit** | $999 | Same 5 | Same deep review, **plus a human reviewer signs off before delivery** |
 
 The Expert tier's "human review" is a real gate, not a label: the request is
@@ -107,9 +107,8 @@ Partner allowance) reveals the full report and generates the PDF.
 
 This was built specifically for this conversation. Your tenant is on a hidden,
 non-self-serve plan (`audit-partner-monthly`, $0, never listed publicly) that
-grants **999 runs per month on every tier — Diagnostic, Automated, Deep AI,
-and Expert** — which is treated as effectively unlimited for any realistic
-usage pattern. Billing for what you actually use is handled manually,
+grants **99 runs per month on every tier — Diagnostic, Automated, Deep AI,
+and Expert**. Billing for what you actually use is handled manually,
 directly between FlexPick and you, outside the app's own payment flow.
 
 Nothing about how the product works changes for you: you log into your own
