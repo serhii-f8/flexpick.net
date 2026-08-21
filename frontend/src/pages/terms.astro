@@ -1,6 +1,8 @@
 ---
 import Layout from '~/layouts/Layout.astro';
+import pricing from '~/data/pricing.json';
 
+const diagnosticTier = pricing.tiers['audit-diagnostic'];
 const metadata = { title: 'Terms of Service' };
 ---
 
@@ -14,9 +16,11 @@ const metadata = { title: 'Terms of Service' };
 
     <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">The service</h2>
     <p>
-      FlexPick produces automated codebase health reports and offers related engineering services. Free audits are
-      limited to 3 per email address. Full report contents can be unlocked with a one-time payment, and subscriptions
-      include a monthly allowance of audit runs as described on the pricing page.
+      FlexPick produces automated codebase health reports and offers related engineering services. A {
+        diagnosticTier.name
+      }
+      starts at {diagnosticTier.price_display} per repository. Full report contents can be unlocked with a one-time payment,
+      and subscriptions include a monthly allowance of audit runs as described on the pricing page.
     </p>
 
     <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">Your repository</h2>

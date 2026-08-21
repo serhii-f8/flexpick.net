@@ -4,6 +4,7 @@ import ContactModal from '~/components/widgets/ContactModal.astro';
 import { PRODUCT_APP } from 'flexpick:config';
 import pricing from '~/data/pricing.json';
 
+const diagnosticTier = pricing.tiers['audit-diagnostic'];
 const automatedTier = pricing.tiers['audit-automated'];
 const starterPlan = pricing.subscriptions['audit-starter'];
 const enterprisePlan = pricing.subscriptions['audit-enterprise'];
@@ -52,7 +53,7 @@ const structuredData = {
           name: 'What do you need from me to start?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Read access to your repository and about 30 minutes of your time to walk us through the product. That is enough for the free audit. We are happy to sign an NDA first.',
+            text: 'Read access to your repository and about 30 minutes of your time to walk us through the product. That is enough for the audit. We are happy to sign an NDA first.',
           },
         },
         {
@@ -60,7 +61,7 @@ const structuredData = {
           name: 'What if the audit finds nothing serious?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Then we tell you exactly that, and you walk away with a free health report confirming your codebase is in good shape. We only take on projects where we are confident we can make a real difference.',
+            text: 'Then we tell you exactly that, and you walk away with a health report confirming your codebase is in good shape. We only take on projects where we are confident we can make a real difference.',
           },
         },
         {
@@ -145,7 +146,7 @@ const hotspots = [
           <a href="#faq" class="fp-navlink" data-nav="faq">FAQ</a>
           <a href={`${PRODUCT_APP.url}/login`} class="fp-navlink" rel="nofollow" data-auth-entry>Log in</a>
           <button type="button" class="fp-btn" data-audit-open style="font-size: 14px; padding: 10px 20px;"
-            >Get a free audit</button
+            >Get an audit</button
           >
         </div>
       </div>
@@ -192,14 +193,14 @@ const hotspots = [
           </p>
           <div style="display: flex; gap: 16px; flex-wrap: wrap;">
             <button type="button" class="fp-btn" data-audit-open style="font-size: 16px; padding: 14px 28px;"
-              >Get a free audit →</button
+              >Get an audit →</button
             >
             <a
               class="fp-ghost"
               href={`${PRODUCT_APP.url}/reports/sample`}
               target="_blank"
               rel="noopener"
-              style="font-size: 14px; align-self: center;"
+              style="font-size: 16px; padding: 14px 28px;"
             >
               See a sample audit →
             </a>
@@ -319,10 +320,10 @@ const hotspots = [
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015); animation: fpSettleA 1ms linear both; animation-timeline: view(); animation-range: entry 5% entry 45%;"
           >
             <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">01</span> · audit/</p>
-            <h3 class="fp-card-title">Free codebase audit</h3>
+            <h3 class="fp-card-title">Codebase audit</h3>
             <p class="fp-card-body">
               We dig into your repository and tell you honestly where it stands — the risks, the debt, and what it will
-              take to fix. If we can't help, we tell you straight. No charge, no strings.
+              take to fix. If we can't help, we tell you straight.
             </p>
           </div>
           <div
@@ -410,8 +411,8 @@ const hotspots = [
             <p class="fp-num">01</p>
             <h3 class="fp-proc-title">Show us your codebase</h3>
             <p class="fp-proc-body">
-              Repository access and a 30-minute call — that's all we need. We audit the code for free and give you an
-              honest verdict. If we can't help, we say so.
+              Repository access and a 30-minute call — that's all we need. We audit the code and give you an honest
+              verdict. If we can't help, we say so.
             </p>
           </div>
           <div
@@ -777,8 +778,8 @@ const hotspots = [
             <div class="fp-dash"></div>
             <p class="fp-trust-title">We'll tell you if we can't help</p>
             <p class="fp-trust-body">
-              The audit is free and the verdict is honest. If your codebase is healthier than you feared — or beyond
-              what we can save — we say exactly that.
+              The audit starts at {diagnosticTier.price_display} and the verdict is honest. If your codebase is healthier
+              than you feared — or beyond what we can save — we say exactly that.
             </p>
           </div>
           <div
@@ -826,11 +827,11 @@ const hotspots = [
             class="fp-card"
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015);"
           >
-            <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">01</span> · free/</p>
-            <h3 class="fp-card-title">Free health check</h3>
+            <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">01</span> · diagnostic/</p>
+            <h3 class="fp-card-title">{diagnosticTier.name} — {diagnosticTier.price_display}</h3>
             <p class="fp-card-body">
               Submit a repo, confirm your email, and get a real report: overall health score, five sub-scores, measured
-              repository facts, and every risk we found. First 3 audits per email are on us.
+              repository facts, and every risk we found.
             </p>
           </div>
           <div
@@ -868,7 +869,7 @@ const hotspots = [
           >
             See a sample report →
           </a>
-          <a href={`${PRODUCT_APP.url}/pricing`} rel="nofollow" class="fp-footlink" style="color: #d4a853;">
+          <a href={`${PRODUCT_APP.url}/register`} rel="nofollow" class="fp-footlink" style="color: #d4a853;">
             View plans →
           </a>
         </div>
@@ -976,7 +977,7 @@ const hotspots = [
           >
           <p class="fp-faq-a">
             Read access to your repository and about 30 minutes of your time to walk us through the product. That's
-            enough for the free audit. We're happy to sign an NDA first.
+            enough for the audit. We're happy to sign an NDA first.
           </p>
         </details>
         <details class="fp-details">
@@ -987,8 +988,8 @@ const hotspots = [
             ></summary
           >
           <p class="fp-faq-a">
-            Then we tell you exactly that, and you walk away with a free health report confirming your codebase is in
-            good shape. We only take on projects where we're confident we can make a real difference.
+            Then we tell you exactly that, and you walk away with a health report confirming your codebase is in good
+            shape. We only take on projects where we're confident we can make a real difference.
           </p>
         </details>
         <details class="fp-details">
@@ -1039,7 +1040,7 @@ const hotspots = [
         <p
           style="margin: 0 auto 40px; max-width: 520px; font-size: 17px; line-height: 1.65; color: rgba(232,230,222,0.55);"
         >
-          Tell us about your product. You'll get an honest assessment of where your codebase stands — free, whatever the
+          Tell us about your product. You'll get an honest assessment of where your codebase stands, whatever the
           verdict.
         </p>
         <button
@@ -1048,7 +1049,7 @@ const hotspots = [
           class="fp-btn"
           data-audit-open
           style="font-size: 17px; padding: 16px 40px; transition: transform 0.25s ease-out, background 0.2s ease, box-shadow 0.2s ease;"
-          >Get a free audit →</button
+          >Get an audit →</button
         >
       </div>
     </section>

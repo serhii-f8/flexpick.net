@@ -2,6 +2,9 @@
 // Audit request modal — matches the "Stabilize" landing redesign.
 // Submits to the backend audit-requests endpoint (see PRODUCT_APP config).
 import { PRODUCT_APP } from 'flexpick:config';
+import pricing from '~/data/pricing.json';
+
+const diagnosticTier = pricing.tiers['audit-diagnostic'];
 ---
 
 <!-- Audit request modal -->
@@ -15,14 +18,14 @@ import { PRODUCT_APP } from 'flexpick:config';
     class="fp-modal"
     role="dialog"
     aria-modal="true"
-    aria-label="Request a free audit"
+    aria-label="Request an audit"
     aria-labelledby="fp-modal-title"
   >
     <button type="button" class="fp-close" data-modal-close aria-label="Close">×</button>
 
     <!-- Form state -->
     <div data-modal-form>
-      <p class="fp-mono fp-eyebrow" style="color: #d4a853; margin: 0 0 10px;">FREE AUDIT</p>
+      <p class="fp-mono fp-eyebrow" style="color: #d4a853; margin: 0 0 10px;">{diagnosticTier.name.toUpperCase()}</p>
       <h3 id="fp-modal-title" class="fp-modal-heading">Tell us about your product</h3>
       <p class="fp-modal-sub">We reply within one business day. Happy to sign an NDA first.</p>
 
@@ -85,8 +88,10 @@ import { PRODUCT_APP } from 'flexpick:config';
         <p class="fp-mono" data-modal-error hidden style="color: #dc6b5a; font-size: 12px; margin: 0 0 10px;">
           Something went wrong — please try again, or email hello@flexpick.net.
         </p>
-        <button type="submit" class="fp-btn fp-btn-full">Request my free audit →</button>
-        <p class="fp-mono fp-modal-footnote">FIRST 3 AUDITS FREE · CONFIRM YOUR EMAIL TO START · HONEST VERDICT</p>
+        <button type="submit" class="fp-btn fp-btn-full">Request my audit →</button>
+        <p class="fp-mono fp-modal-footnote">
+          {diagnosticTier.name.toUpperCase()} · {diagnosticTier.price_display} · CONFIRM YOUR EMAIL TO START · HONEST VERDICT
+        </p>
       </form>
     </div>
 
@@ -95,7 +100,7 @@ import { PRODUCT_APP } from 'flexpick:config';
       <div class="fp-check">✓</div>
       <h3 class="fp-modal-heading" style="margin-bottom: 10px;">Check your inbox</h3>
       <p class="fp-modal-sub" style="max-width: 320px; margin: 0 auto 28px;">
-        We sent you a confirmation link — click it to start your free audit. The link expires in 48 hours.
+        We sent you a confirmation link — click it to start your audit. The link expires in 48 hours.
       </p>
       <button type="button" class="fp-ghost fp-ghost-btn" data-modal-close>Done</button>
     </div>
