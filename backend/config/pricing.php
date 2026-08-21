@@ -103,11 +103,29 @@ return [
     ],
 
     /**
-     * Q32: retired. The row survives so already-unlocked reports keep
-     * rendering; only new purchases stop.
+     * Standalone one-time products that are not part of the priced tier
+     * catalog above -- reachable only from a specific in-app flow, never
+     * listed on the public pricing page or exported to the marketing site.
      */
+    'one_time' => [
+        'audit-report-unlock' => [
+            'name' => 'Full Audit Report Unlock',
+            'description' => 'Unlock the full report for a free diagnostic you already ran.',
+            // Same price as buying the Diagnostic tier outright (Q32
+            // superseded: no longer a distinct discount, just a distinct
+            // product so a fresh diagnostic purchase and an unlock of an
+            // existing report stay unambiguous to the order listeners).
+            'price' => 500,
+            'features' => [
+                'Every finding\'s evidence and recommendation',
+                'The prioritized fix-first plan',
+                'PDF export',
+            ],
+        ],
+    ],
+
     'retired' => [
-        'one_time' => ['audit-report-unlock'],
+        'one_time' => [],
         // Starter and Growth reuse their old slugs at new prices; Scale has
         // no successor and is the only plan genuinely orphaned by this catalog.
         'plans' => ['audit-scale-monthly'],

@@ -50,9 +50,11 @@ class ExportPricingCommandTest extends FeatureTest
         $this->artisan('app:export-pricing', ['--check' => true])->assertFailed();
     }
 
-    public function test_the_retired_unlock_price_is_not_exported(): void
+    public function test_the_report_unlock_price_is_not_exported(): void
     {
-        // Q32: the $5 unlock is retired; no marketing surface may show it.
+        // audit-report-unlock lives in pricing.one_time, not pricing.tiers --
+        // it's reachable only from a signed unlock link, never browsed to,
+        // so no marketing surface may show it.
         $this->artisan('app:export-pricing')->assertSuccessful();
 
         $exported = (string) file_get_contents($this->target());

@@ -68,21 +68,23 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->assertArrayHasKey('audit_deep_ai_credits', $growth->metadata);
     }
 
-    public function test_the_legacy_five_dollar_unlock_is_deactivated_not_deleted(): void
+    /**
+     * audit-report-unlock is a live, standalone product again (not part of
+     * pricing.tiers, so HandleAuditTierOrder never sees it) -- priced to
+     * match Diagnostic, but kept distinct so the "unlock the report you
+     * already have" flow stays unambiguous from "buy a fresh diagnostic run".
+     * Not visible: reachable only from the unlock link, never browsed to.
+     */
+    public function test_the_report_unlock_product_is_seeded_active_and_priced_like_diagnostic(): void
     {
-        // Q32: existing unlocks are grandfathered. Deleting the row would
-        // re-lock reports customers already paid for (spec §8.2).
-        OneTimeProduct::updateOrCreate(['slug' => 'audit-report-unlock'], [
-            'name' => 'Full audit report unlock', 'is_active' => true, 'is_visible' => true,
-        ]);
-
         $this->seedCatalog();
 
         $unlock = OneTimeProduct::where('slug', 'audit-report-unlock')->first();
 
-        $this->assertNotNull($unlock, 'The unlock product row must survive to back existing purchases.');
-        $this->assertFalse((bool) $unlock->is_active);
+        $this->assertNotNull($unlock, 'Missing one-time product [audit-report-unlock].');
+        $this->assertTrue((bool) $unlock->is_active);
         $this->assertFalse((bool) $unlock->is_visible);
+        $this->assertSame(500, (int) $unlock->prices()->first()->price);
     }
 
     public function test_legacy_subscription_plans_are_deactivated_not_deleted(): void

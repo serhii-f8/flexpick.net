@@ -80,9 +80,12 @@ class AuditPrepaidRunTest extends FeatureTest
      * The "run this audit now" link from the quota-exhausted email is the
      * standard next step for a first-time lead, so its checkout target has to
      * be a product that can actually be bought. It previously pointed at
-     * config('audit.unlock_product_slug'), which the seeder retires
-     * (is_active = false) — and checkout resolves active products only, so
-     * every one of those links 404'd at the till.
+     * config('audit.unlock_product_slug'), which at the time was retired
+     * (is_active = false) by the seeder — and checkout resolves active
+     * products only, so every one of those links 404'd at the till. The
+     * unlock product is live again now (a separate fix, distinct product),
+     * but purchaseRun() must still resolve the requested tier's own slug,
+     * not fall back onto whatever the unlock slug happens to be.
      */
     public function test_purchase_run_link_checks_out_a_live_product_for_the_requested_tier(): void
     {

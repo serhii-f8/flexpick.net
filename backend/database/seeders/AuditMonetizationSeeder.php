@@ -29,6 +29,7 @@ class AuditMonetizationSeeder extends Seeder
         $month = Interval::where('slug', 'month')->firstOrFail();
 
         $this->seedTierProducts($currency);
+        $this->seedOneTimeProducts($currency);
         $this->seedSubscriptions($currency, $month);
         $this->retire();
     }
@@ -47,6 +48,29 @@ class AuditMonetizationSeeder extends Seeder
             ]);
 
             $product->prices()->updateOrCreate(['currency_id' => $currency->id], ['price' => $tier['price']]);
+        }
+    }
+
+    /**
+     * Standalone one-time products with no tier metadata -- deliberately
+     * kept out of pricing.tiers so HandleAuditTierOrder's per-tier purchase
+     * loop never sees them, and unmarked visible/active only where the flow
+     * that sells them wants it (audit-report-unlock is a real product but
+     * not one anybody browses to, so is_visible stays false).
+     */
+    private function seedOneTimeProducts(Currency $currency): void
+    {
+        foreach (config('pricing.one_time') as $slug => $item) {
+            $product = OneTimeProduct::updateOrCreate(['slug' => $slug], [
+                'name' => $item['name'],
+                'description' => $item['description'],
+                'features' => array_map(fn (string $f): array => ['feature' => $f], $item['features']),
+                'max_quantity' => 1,
+                'is_active' => true,
+                'is_visible' => false,
+            ]);
+
+            $product->prices()->updateOrCreate(['currency_id' => $currency->id], ['price' => $item['price']]);
         }
     }
 
