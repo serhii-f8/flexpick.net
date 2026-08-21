@@ -108,14 +108,28 @@ class DashboardPanelProvider extends PanelProvider
                 return view('components.layouts.partials.analytics');
             })
             ->navigationGroups([
+                // Keyed by the exact label each resource declares
+                // (getNavigationGroup() / $navigationGroup): Filament's sort
+                // only matches a resource's group to its position in this
+                // list via that exact string, via array_search() against
+                // this array's keys. An unkeyed, sequential list (the
+                // previous shape here) can't be found by that lookup, so
+                // every resource's group silently fell through to the same
+                // "not found" fallback sort value and ordered arbitrarily --
+                // "Team Management" (Roles/Teams/Invitations/Users) rendered
+                // above "Audits" despite Audits being listed first, because
+                // "Team" (the old label here) matches no resource at all.
+                //
                 // No icon here on purpose: Filament throws if a navigation
                 // group and its items both carry icons, and the items below it
                 // have their own.
-                NavigationGroup::make()
+                'Audits' => NavigationGroup::make()
                     ->label(__('Audits')),
-                NavigationGroup::make()
-                    ->label(__('Team'))
-                    ->icon('heroicon-s-users')
+                'Team Management' => NavigationGroup::make()
+                    ->label(__('Team Management'))
+                    ->collapsed(),
+                'Referrals' => NavigationGroup::make()
+                    ->label(__('Referrals'))
                     ->collapsed(),
             ])
             ->renderHook(
