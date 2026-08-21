@@ -27,6 +27,11 @@ class OrderResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema
