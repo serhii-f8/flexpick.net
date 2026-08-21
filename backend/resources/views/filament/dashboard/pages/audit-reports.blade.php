@@ -17,7 +17,7 @@
                         <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
                             <input type="radio" name="tier" wire:key="tier-{{ $quota->tier->value }}" wire:model.live="tier" value="{{ $quota->tier->value }}" class="mt-1" />
                             <span>
-                                <span class="block text-sm font-medium">{{ $quota->label }}</span>
+                                <span class="block text-sm font-medium">{{ $quota->tier->labelWithPrice() }}</span>
                                 <span class="block text-xs text-gray-500 dark:text-gray-400">
                                     @if ($quota->hasRuns())
                                         @if ($quota->isLifetime)
@@ -124,7 +124,7 @@
                         >
                             @foreach ($quotas as $quota)
                                 @if (! $quota->isLifetime)
-                                    <option value="{{ $quota->tier->value }}" @selected($scheduleTier === $quota->tier->value)>{{ $quota->label }}</option>
+                                    <option value="{{ $quota->tier->value }}" @selected($scheduleTier === $quota->tier->value)>{{ $quota->tier->labelWithPrice() }}</option>
                                 @endif
                             @endforeach
                         </select>
