@@ -68,8 +68,8 @@ class AuditPrepaidRunTest extends FeatureTest
             'one_time_product_id' => $product->id,
             'quantity' => 1,
             'currency_id' => $order->currency_id,
-            'price_per_unit' => 500,
-            'price_per_unit_after_discount' => 500,
+            'price_per_unit' => 4900,
+            'price_per_unit_after_discount' => 4900,
             'discount_per_unit' => 0,
         ]);
 

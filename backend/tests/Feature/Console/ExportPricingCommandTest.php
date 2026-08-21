@@ -29,8 +29,8 @@ class ExportPricingCommandTest extends FeatureTest
 
         // Both, so the marketing site never formats money itself and never
         // drifts from the figure the backend charges.
-        $this->assertSame(4900, $exported['tiers']['audit-automated']['price_cents']);
-        $this->assertSame('$49', $exported['tiers']['audit-automated']['price_display']);
+        $this->assertSame(11900, $exported['tiers']['audit-automated']['price_cents']);
+        $this->assertSame('$119', $exported['tiers']['audit-automated']['price_display']);
         $this->assertSame('$1,500', $exported['subscriptions']['audit-enterprise']['price_display']);
     }
 

@@ -20,9 +20,9 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->seedCatalog();
 
         foreach ([
-            'audit-diagnostic' => 500,
-            'audit-automated' => 4900,
-            'audit-deep-ai' => 19900,
+            'audit-diagnostic' => 4900,
+            'audit-automated' => 11900,
+            'audit-deep-ai' => 24900,
             'audit-expert' => 99900,
         ] as $slug => $cents) {
             $product = OneTimeProduct::where('slug', $slug)->first();
@@ -73,10 +73,10 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->assertSame(0, (int) $plan->prices()->first()->price);
 
         $metadata = $plan->product->metadata;
-        $this->assertSame(999, (int) $metadata['audit_diagnostic_credits']);
-        $this->assertSame(999, (int) $metadata['audit_analyses_per_month']);
-        $this->assertSame(999, (int) $metadata['audit_deep_ai_credits']);
-        $this->assertSame(999, (int) $metadata['audit_expert_credits']);
+        $this->assertSame(99, (int) $metadata['audit_diagnostic_credits']);
+        $this->assertSame(99, (int) $metadata['audit_analyses_per_month']);
+        $this->assertSame(99, (int) $metadata['audit_deep_ai_credits']);
+        $this->assertSame(99, (int) $metadata['audit_expert_credits']);
     }
 
     public function test_subscription_products_carry_allowance_metadata(): void
@@ -153,7 +153,7 @@ class AuditMonetizationSeederTest extends FeatureTest
         // is one edit and the marketing export cannot drift from the charge.
         $source = (string) file_get_contents(database_path('seeders/AuditMonetizationSeeder.php'));
 
-        foreach (['500', '4900', '19900', '99900', '5900', '14900', '49900', '150000'] as $literal) {
+        foreach (['4900', '11900', '24900', '99900', '5900', '14900', '49900', '150000'] as $literal) {
             $this->assertStringNotContainsString(
                 $literal,
                 $source,

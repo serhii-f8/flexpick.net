@@ -137,10 +137,10 @@ class AuditMonetizationSeeder extends Seeder
                 ['feature' => 'Unlimited expert audit credits'],
             ],
             'metadata' => [
-                'audit_diagnostic_credits' => 999,
-                'audit_analyses_per_month' => 999,
-                'audit_deep_ai_credits' => 999,
-                'audit_expert_credits' => 999,
+                'audit_diagnostic_credits' => 99,
+                'audit_analyses_per_month' => 99,
+                'audit_deep_ai_credits' => 99,
+                'audit_expert_credits' => 99,
             ],
             'is_default' => false,
         ]);

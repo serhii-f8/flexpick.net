@@ -223,8 +223,8 @@ class HandleAuditTierOrderTest extends FeatureTest
             'one_time_product_id' => $product->id,
             'quantity' => 1,
             'currency_id' => $order->currency_id,
-            'price_per_unit' => 19900,
-            'price_per_unit_after_discount' => 19900,
+            'price_per_unit' => 24900,
+            'price_per_unit_after_discount' => 24900,
             'discount_per_unit' => 0,
         ]);
 

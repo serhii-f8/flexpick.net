@@ -18,7 +18,7 @@ return [
             'tier' => 'diagnostic',
             'name' => 'Diagnostic Report',
             'description' => 'A fast scan of one repository — dependency, security, and structure signals with a plain-language summary.',
-            'price' => 500,
+            'price' => 4900,
             'features' => [
                 'Three static analyzers across security and dependencies',
                 'Plain-language summary of what needs attention',
@@ -29,7 +29,7 @@ return [
             'tier' => 'automated',
             'name' => 'Automated Health Report',
             'description' => 'A scanner-backed health report on one repository, with a prioritized fix-first plan.',
-            'price' => 4900,
+            'price' => 11900,
             'features' => [
                 'Five static analyzers across security, duplication, and dependencies',
                 'Problems grouped and explained, not a raw lint dump',
@@ -41,7 +41,7 @@ return [
             'tier' => 'deep_ai',
             'name' => 'Deep AI Code Review',
             'description' => 'Everything in the Automated Health Report, plus AI review of your riskiest files.',
-            'price' => 19900,
+            'price' => 24900,
             'features' => [
                 'Everything in the Automated Health Report',
                 'AI review of the 20-40 riskiest files',

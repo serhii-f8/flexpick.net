@@ -193,7 +193,7 @@ class AuditEntitlementServiceTest extends FeatureTest
         $this->assertSame(3, $quota->limit);
         $this->assertSame(1, $quota->used);
         $this->assertSame(2, $quota->remaining());
-        $this->assertSame(500, $quota->priceCents);
+        $this->assertSame(4900, $quota->priceCents);
         $this->assertTrue($quota->purchasable());
     }
 
@@ -201,9 +201,9 @@ class AuditEntitlementServiceTest extends FeatureTest
     {
         $user = $this->createUser();
 
-        $this->assertSame(500, $this->service->quotaFor($user, null, AuditTier::DIAGNOSTIC)->priceCents);
-        $this->assertSame(4900, $this->service->quotaFor($user, null, AuditTier::AUTOMATED)->priceCents);
-        $this->assertSame(19900, $this->service->quotaFor($user, null, AuditTier::DEEP_AI)->priceCents);
+        $this->assertSame(4900, $this->service->quotaFor($user, null, AuditTier::DIAGNOSTIC)->priceCents);
+        $this->assertSame(11900, $this->service->quotaFor($user, null, AuditTier::AUTOMATED)->priceCents);
+        $this->assertSame(24900, $this->service->quotaFor($user, null, AuditTier::DEEP_AI)->priceCents);
         $this->assertSame(99900, $this->service->quotaFor($user, null, AuditTier::EXPERT)->priceCents);
     }
 

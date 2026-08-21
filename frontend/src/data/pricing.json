@@ -5,8 +5,8 @@
         "audit-diagnostic": {
             "name": "Diagnostic Report",
             "description": "A fast scan of one repository \u2014 dependency, security, and structure signals with a plain-language summary.",
-            "price_cents": 500,
-            "price_display": "$5",
+            "price_cents": 4900,
+            "price_display": "$49",
             "features": [
                 "Three static analyzers across security and dependencies",
                 "Plain-language summary of what needs attention",
@@ -16,8 +16,8 @@
         "audit-automated": {
             "name": "Automated Health Report",
             "description": "A scanner-backed health report on one repository, with a prioritized fix-first plan.",
-            "price_cents": 4900,
-            "price_display": "$49",
+            "price_cents": 11900,
+            "price_display": "$119",
             "features": [
                 "Five static analyzers across security, duplication, and dependencies",
                 "Problems grouped and explained, not a raw lint dump",
@@ -28,8 +28,8 @@
         "audit-deep-ai": {
             "name": "Deep AI Code Review",
             "description": "Everything in the Automated Health Report, plus AI review of your riskiest files.",
-            "price_cents": 19900,
-            "price_display": "$199",
+            "price_cents": 24900,
+            "price_display": "$249",
             "features": [
                 "Everything in the Automated Health Report",
                 "AI review of the 20-40 riskiest files",
