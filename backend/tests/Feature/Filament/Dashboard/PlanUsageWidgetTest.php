@@ -55,9 +55,28 @@ class PlanUsageWidgetTest extends FeatureTest
             ->assertDontSee(__('Automated Health Report'));
     }
 
+    /**
+     * The production default is zero free runs, so a fresh signup clears no
+     * quota arm -- but every tier is priced, and being able to buy one is
+     * itself access.
+     */
+    public function test_visible_for_a_fresh_signup_at_the_production_default(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->tenantFor($user);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->assertTrue(PlanUsageWidget::canView());
+    }
+
     public function test_hidden_without_any_entitlement(): void
     {
-        config(['audit.free_reports_limit' => 0]);
+        // An empty catalog is what makes this a real negative now: with one,
+        // any authenticated user can always reach a purchase.
+        config(['audit.free_reports_limit' => 0, 'pricing.tiers' => []]);
         $user = User::factory()->create();
         $tenant = $this->tenantFor($user);
 

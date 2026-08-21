@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Constants\AuditRequestStatus;
 use App\Http\Requests\StoreAuditRequestRequest;
 use App\Jobs\RouteVerifiedAuditRequest;
-use App\Listeners\Order\HandleAuditUnlockOrder;
+use App\Listeners\Order\HandleAuditTierOrder;
 use App\Models\AuditRequest;
 use App\Models\UserParameter;
 use App\Services\AuditGuestAccountService;
@@ -66,9 +66,29 @@ class AuditRequestController extends Controller
         ]);
     }
 
+    /**
+     * "Run this audit now" from the quota-exhausted email: send the visitor to
+     * checkout for the tier they already asked for.
+     *
+     * The product is resolved from the tier catalog, exactly as the dashboard's
+     * purchase flow does. It must not be the single `audit.unlock_product_slug`
+     * product: that slug is retired (config('pricing.retired.one_time')) and
+     * deactivated on every seed, and checkout only resolves active products, so
+     * every one of these links would 404 at the till.
+     */
     public function purchaseRun(AuditRequest $auditRequest, AuditGuestAccountService $guestAccounts)
     {
         abort_unless($auditRequest->status === AuditRequestStatus::AWAITING_PAYMENT->value, 404);
+
+        $slug = collect((array) config('pricing.tiers'))
+            ->search(fn (array $definition): bool => ($definition['tier'] ?? null) === $auditRequest->tier->value);
+
+        // Every tier is priced today, so this is purely defensive — but a link
+        // that cannot be honoured must not create an account and then 500 on
+        // its way to a nonexistent product.
+        if ($slug === false) {
+            abort(404);
+        }
 
         $user = $guestAccounts->resolveUser($auditRequest);
 
@@ -79,12 +99,15 @@ class AuditRequestController extends Controller
             ));
         }
 
+        // HandleAuditTierOrder::intentRequestFor() matches this uuid against an
+        // awaiting_payment request at the ordered tier, which is precisely this
+        // request, and runs it once the order completes.
         UserParameter::updateOrCreate(
-            ['user_id' => $user->id, 'name' => HandleAuditUnlockOrder::RUN_INTENT_PARAM],
+            ['user_id' => $user->id, 'name' => HandleAuditTierOrder::INTENT_PARAM],
             ['value' => $auditRequest->uuid],
         );
 
-        return redirect()->route('buy.product', ['productSlug' => config('audit.unlock_product_slug')]);
+        return redirect()->route('buy.product', ['productSlug' => $slug]);
     }
 
     private function label(string $status): string
@@ -97,7 +120,7 @@ class AuditRequestController extends Controller
             'report_ready', 'sent' => __('Your report is ready'),
             'failed' => __('The analysis hit a snag — an engineer is taking a look'),
             'needs_followup', 'awaiting_access' => __('We need access to your repository — check your email'),
-            'awaiting_payment' => __('Your free audits are used up — check your email for options'),
+            'awaiting_payment' => __('Payment needed to continue — check your email for options'),
             'expert_review' => __('Your report is complete and is being reviewed by our expert auditor before delivery.'),
             default => __('Processing'),
         };

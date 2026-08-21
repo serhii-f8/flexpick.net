@@ -12,7 +12,9 @@ return [
     'reports_dir' => 'audit-reports',
     'github_account' => env('AUDIT_GITHUB_ACCOUNT', 'flexpick-audit'),
     'github_token' => env('AUDIT_GITHUB_TOKEN'),
-    'free_reports_limit' => 0,
+    // Zero by default: Diagnostic is a paid tier. The env override is the
+    // per-environment kill switch for handing out free runs again.
+    'free_reports_limit' => (int) env('AUDIT_FREE_REPORTS_LIMIT', 0),
     // USD per MILLION tokens, list rates, keyed by the exact model id sent to
     // the API (services.anthropic.model). A model missing from this table is
     // reported as unknown cost rather than free — see AuditAiCall::costUsd().

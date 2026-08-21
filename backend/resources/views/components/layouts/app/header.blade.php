@@ -24,7 +24,8 @@
                 <x-layouts.app.user-menu></x-layouts.app.user-menu>
             @else
                 <x-link class="hidden md:block font-mono text-xs tracking-[0.12em] uppercase text-cream-200/70 hover:text-cream-100" href="{{route('login')}}">{{ __('Login') }}</x-link>
-                <x-button-link.primary elementType="a" href="{{ route('pricing') }}">{{ __('Get started') }}</x-button-link.primary>
+                {{-- Pricing is behind the login wall, so a guest's next step is to register, not to bounce off /login. --}}
+                <x-button-link.primary elementType="a" href="{{ route('register') }}">{{ __('Get started') }}</x-button-link.primary>
             @endauth
         </div>
     </div>

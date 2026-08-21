@@ -22,7 +22,7 @@ class AuditQuotaExhausted extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __('Your free audits are used up — here\'s how to continue'),
+            subject: __('Your audit needs payment — here\'s how to continue'),
         );
     }
 

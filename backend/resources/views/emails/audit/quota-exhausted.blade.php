@@ -1,6 +1,6 @@
 <x-layouts.email>
     <x-slot name="preview">
-        {{ __('Your free audits are used up — here\'s how to continue') }}
+        {{ __('Your audit needs payment — here\'s how to continue') }}
     </x-slot>
 
     <tr>
@@ -9,16 +9,21 @@
                 {{ __('Hi :name,', ['name' => $auditRequest->name]) }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
-                {{ __('You\'ve used all of your free codebase audits, so we couldn\'t start this one.') }}
+                {{ __('This audit needs to be paid for before we can start it.') }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
                 {{ __('Two ways to keep going:') }}
             </p>
+            {{-- The price comes from the catalog (config/pricing.php) so it can
+                 never drift from what checkout actually charges. --}}
+            @php($diagnosticPrice = number_format((\App\Constants\AuditTier::DIAGNOSTIC->priceCents() ?? 0) / 100))
             <p style="margin: 24px 0 0; line-height: 24px">
-                <a href="{{ $purchaseUrl }}" style="color: #2563eb; text-decoration: underline;">{{ __('Run this audit now for $5 — full report included') }}</a>
+                <a href="{{ $purchaseUrl }}" style="color: #2563eb; text-decoration: underline;">{{ __('Run this audit now for $:price — full report included', ['price' => $diagnosticPrice]) }}</a>
             </p>
+            {{-- /pricing requires authentication; this email's reader is not
+                 logged in, so register is the reachable next step. --}}
             <p style="margin: 12px 0 0; line-height: 24px">
-                <a href="{{ url('/pricing') }}" style="color: #2563eb; text-decoration: underline;">{{ __('Or subscribe from $10/month for 5 analyses') }}</a>
+                <a href="{{ route('register') }}" style="color: #2563eb; text-decoration: underline;">{{ __('Or subscribe from $10/month for 5 analyses') }}</a>
             </p>
         </td>
     </tr>

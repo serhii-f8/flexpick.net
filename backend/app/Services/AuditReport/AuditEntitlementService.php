@@ -183,14 +183,24 @@ class AuditEntitlementService
             return true;
         }
 
-        if ($tenant === null) {
-            return false;
-        }
-
         // Any metered tier with a nonzero allowance grants access -- a tenant
         // holding only Expert credits must not be locked out of the nav.
-        foreach (array_keys(self::QUOTA_KEYS) as $tierValue) {
-            if ($this->allowance($tenant, AuditTier::from($tierValue)) > 0) {
+        if ($tenant !== null) {
+            foreach (array_keys(self::QUOTA_KEYS) as $tierValue) {
+                if ($this->allowance($tenant, AuditTier::from($tierValue)) > 0) {
+                    return true;
+                }
+            }
+        }
+
+        // Finally, a tier the user can simply buy is itself access. With the
+        // free quota at its production default of zero, this is the arm that
+        // keeps a fresh direct signup out of a deadlock: no request, no free
+        // run and no subscription used to hide the entire dashboard audit UI,
+        // including the only in-app route to a checkout. quotaFor() handles a
+        // null tenant, so this holds with or without a workspace.
+        foreach (AuditTier::cases() as $tier) {
+            if ($this->quotaFor($user, $tenant, $tier)->purchasable()) {
                 return true;
             }
         }

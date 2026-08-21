@@ -94,9 +94,28 @@ class AuditEntitlementServiceTest extends FeatureTest
         $this->assertTrue($this->service->hasAuditAccess($user, null));
     }
 
-    public function test_no_audit_access_without_free_runs_subscription_or_requests(): void
+    /**
+     * The production default is zero free runs, so a user who registers
+     * directly clears none of the quota arms -- and used to be locked out of
+     * the whole dashboard audit UI, including the only in-app route to a
+     * checkout. Every tier has a catalog price, so being able to buy one is
+     * itself access. Deliberately does not pin audit.free_reports_limit: the
+     * production default is precisely what this test is about.
+     */
+    public function test_a_buyable_tier_alone_grants_audit_access_at_the_production_default(): void
     {
-        config(['audit.free_reports_limit' => 0]);
+        $user = User::factory()->create(['email' => 'direct-signup@example.com']);
+
+        $this->assertSame(0, (int) config('audit.free_reports_limit'));
+        $this->assertFalse($this->service->hasFreeRun($user->email));
+        $this->assertTrue($this->service->hasAuditAccess($user, null));
+    }
+
+    public function test_no_audit_access_without_free_runs_subscription_requests_or_a_buyable_tier(): void
+    {
+        // An empty catalog is the only way left to have nothing at all: with
+        // one, any authenticated user can always reach a purchase.
+        config(['audit.free_reports_limit' => 0, 'pricing.tiers' => []]);
         $user = User::factory()->create(['email' => 'no-quota@example.com']);
 
         $this->assertFalse($this->service->hasFreeRun($user->email));
@@ -248,7 +267,9 @@ class AuditEntitlementServiceTest extends FeatureTest
      */
     public function test_expert_only_credits_grant_audit_access(): void
     {
-        config(['audit.free_reports_limit' => 0]);
+        // The catalog is emptied so the purchasable-tier arm cannot answer
+        // for this one -- the allowance loop has to.
+        config(['audit.free_reports_limit' => 0, 'pricing.tiers' => []]);
         [$user, $tenant] = $this->subscribedTenant(['audit_expert_credits' => 1]);
 
         $this->assertFalse($this->service->hasFreeRun($user->email));

@@ -184,9 +184,31 @@ class AuditRequestResourceTest extends FeatureTest
         $this->assertTrue(AuditRequestResource::shouldRegisterNavigation());
     }
 
-    public function test_navigation_hidden_without_audits_allowance_or_free_runs(): void
+    /**
+     * The production default is zero free runs, so a directly registered user
+     * has no request, no free run and no subscription. The audit nav must
+     * still register: every tier is priced, and hiding it left them with no
+     * in-app route to a purchase at all.
+     */
+    public function test_navigation_visible_for_a_fresh_signup_at_the_production_default(): void
     {
-        config(['audit.free_reports_limit' => 0]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+
+        $this->assertSame(0, (int) config('audit.free_reports_limit'));
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->assertTrue(AuditRequestResource::shouldRegisterNavigation());
+    }
+
+    public function test_navigation_hidden_without_audits_allowance_free_runs_or_a_buyable_tier(): void
+    {
+        // An empty catalog is what makes this a real negative now: with one,
+        // any authenticated user can always reach a purchase.
+        config(['audit.free_reports_limit' => 0, 'pricing.tiers' => []]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
 

@@ -42,10 +42,15 @@ class AuditRequestForUserScopeTest extends FeatureTest
         // With the free quota removed, the remaining arms govern on their own.
         config(['audit.free_reports_limit' => 0]);
 
-        // No audits, no free runs, no tenant → no access
+        // No audits, no free runs, no tenant → still access, because every
+        // tier is priced and a user who can buy a run can reach the UI.
+        $this->assertTrue($entitlements->hasAuditAccess($bare, null));
+
+        // Empty the catalog and there is genuinely nothing left to grant it.
+        config(['pricing.tiers' => []]);
         $this->assertFalse($entitlements->hasAuditAccess($bare, null));
 
-        // Tenant without allowance → no access
+        // Tenant without allowance and nothing to buy → no access
         $tenant = Tenant::factory()->create();
         $this->assertFalse($entitlements->hasAuditAccess($bare, $tenant));
 
