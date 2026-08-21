@@ -159,12 +159,15 @@ rm backend/storage/app/public/pickvy_agency_booklet_en.html backend/storage/app/
 cd frontend
 npm run build
 ls dist/pickvy-agency-booklet.html dist/pickvy-product-booklet.html
-grep -c '\$5' dist/pickvy-agency-booklet.html   # expect 3 (workflow line, tier card, closing line)
-grep -c '\$5' dist/pickvy-product-booklet.html  # expect 1 (closing line)
-grep -c 'flexpick.net' dist/pickvy-agency-booklet.html   # expect at least 1 (the new CTA)
-grep -c 'flexpick.net' dist/pickvy-product-booklet.html  # expect at least 1 (the new CTA)
-grep -ci 'free' dist/pickvy-agency-booklet.html   # expect 0
-grep -ci 'free' dist/pickvy-product-booklet.html  # expect 0
+# astro-compress minifies dist/ HTML to a single line, so `grep -c` (which
+# counts matching lines) cannot distinguish 1 occurrence from 3 — use
+# `grep -o ... | wc -l` to count actual occurrences instead.
+grep -o '\$5' dist/pickvy-agency-booklet.html | wc -l   # expect 3 (workflow line, tier card, closing line)
+grep -o '\$5' dist/pickvy-product-booklet.html | wc -l  # expect 1 (closing line)
+grep -o 'flexpick.net' dist/pickvy-agency-booklet.html | wc -l   # expect at least 1 (the new CTA)
+grep -o 'flexpick.net' dist/pickvy-product-booklet.html | wc -l  # expect at least 1 (the new CTA)
+grep -oi 'free' dist/pickvy-agency-booklet.html | wc -l   # expect 0
+grep -oi 'free' dist/pickvy-product-booklet.html | wc -l  # expect 0
 ```
 
 Expected: `dist/pickvy-agency-booklet.html` and `dist/pickvy-product-booklet.html` both exist; the `$5` counts match; both `flexpick.net` counts are ≥ 1; both `free` counts are 0 (case-insensitive, confirming no stale "free diagnostic" language survives anywhere in either file).
