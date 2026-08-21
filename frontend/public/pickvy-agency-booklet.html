@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pickvy for Digital Agencies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0c0f; --panel:#12141a; --panel-2:#181b22;
+    --text:#f3efe6; --muted:#a9acb5;
+    --gold:#d6ae67; --coral:#f07d65; --green:#75c79b;
+    --line:rgba(255,255,255,.11); --radius:22px; --max:1160px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;color:var(--text);
+    background:radial-gradient(circle at 85% 6%,rgba(214,174,103,.14),transparent 30rem),
+      radial-gradient(circle at 12% 34%,rgba(240,125,101,.08),transparent 34rem),var(--bg);
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .deck{scroll-snap-type:y proximity}
+  .slide{min-height:100vh;scroll-snap-align:start;display:flex;flex-direction:column;justify-content:center;padding:64px 0;position:relative;border-bottom:1px solid rgba(255,255,255,.05)}
+  .wrap{width:100%;max-width:var(--max);margin:0 auto;padding-left:24px;padding-right:24px}
+  .eyebrow{color:var(--gold);text-transform:uppercase;letter-spacing:.18em;font-size:12px;font-weight:800;margin:0 0 18px}
+  h1{font-size:clamp(36px,6vw,70px);line-height:1.02;letter-spacing:-.035em;margin:0;max-width:15ch}
+  h2{font-size:clamp(30px,4.4vw,52px);line-height:1.04;letter-spacing:-.03em;margin:0;max-width:22ch}
+  h3{font-size:20px;letter-spacing:-.01em;margin:0}
+  p{margin:0}
+  .lead{color:var(--muted);font-size:clamp(17px,1.5vw,21px);max-width:66ch;margin-top:22px}
+  .muted{color:var(--muted)} .gold{color:var(--gold)} .coral{color:var(--coral)} .green{color:var(--green)}
+  .footer{position:absolute;left:0;right:0;bottom:22px}
+  .footer .wrap{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);letter-spacing:.04em}
+  .brandmark{font-weight:900;letter-spacing:-.03em;color:var(--text)}
+  .grid{display:grid;gap:22px}
+  .cards-3{grid-template-columns:repeat(3,1fr)} .cards-2{grid-template-columns:repeat(2,1fr)}
+  .split{grid-template-columns:1.05fr .95fr;align-items:center;gap:44px}
+  .card{background:linear-gradient(150deg,rgba(255,255,255,.055),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+  .card.hi{border-color:rgba(214,174,103,.45);background:linear-gradient(150deg,rgba(214,174,103,.12),rgba(214,174,103,.03))}
+  .card .note{margin-top:10px;color:var(--muted);font-size:14.5px}
+  .pnum{font-size:12px;font-weight:800;color:var(--gold);letter-spacing:.14em;margin-bottom:8px}
+  .solve{margin-top:20px;border-left:2px solid var(--gold);padding-left:18px}
+  .solve .k{font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+  .solve p{margin-top:6px;font-size:16.5px}
+  ul.clean{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:13px;max-width:70ch}
+  ul.clean li{display:flex;gap:13px;align-items:flex-start;color:var(--muted);font-size:16px}
+  ul.clean li b{color:var(--text)}
+  .tick{flex:0 0 auto;margin-top:3px;width:18px;height:18px}
+  table{width:100%;border-collapse:collapse;margin-top:22px;font-size:15.5px}
+  th,td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{color:var(--gold);text-transform:uppercase;letter-spacing:.1em;font-size:11.5px;font-weight:800}
+  tbody tr:last-child td{border-bottom:none}
+  td .big{font-weight:800;color:var(--text)}
+  .tiers{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+  .tier{flex:1;min-width:150px;border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+  .tier .n{font-size:14px;font-weight:800} .tier .pr{color:var(--gold);font-weight:800;margin-top:4px}
+  .tier .d{color:var(--muted);font-size:12.5px;margin-top:8px}
+  .callout{margin-top:22px;border:1px solid rgba(214,174,103,.4);border-radius:var(--radius);background:linear-gradient(150deg,rgba(214,174,103,.1),rgba(214,174,103,.02));padding:20px 24px;display:flex;gap:16px;align-items:flex-start}
+  .callout .k{flex:0 0 auto;color:var(--gold);font-weight:900;font-size:15px}
+  .callout p{color:var(--text);font-size:16px}
+  .close{margin-top:28px;font-size:clamp(18px,1.8vw,23px);color:var(--text);max-width:62ch;border-left:2px solid var(--gold);padding-left:20px}
+  figure{margin:0} svg{display:block;width:100%;height:auto}
+  .diagram{background:linear-gradient(150deg,rgba(255,255,255,.04),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+  .cover-brand{display:flex;align-items:center;gap:16px;margin-bottom:34px}
+  .cover-brand svg{width:52px;height:52px;flex:0 0 auto}
+  .cover-brand .nm{font-weight:900;font-size:clamp(22px,3vw,30px);letter-spacing:-.03em}
+  .navhint{position:fixed;right:20px;bottom:18px;font-size:11px;color:rgba(169,172,181,.55);letter-spacing:.08em;z-index:30}
+  @media(max-width:900px){.cards-3,.cards-2,.split{grid-template-columns:1fr}.slide{min-height:auto;padding:56px 0}.navhint{display:none}}
+  @media print{
+    @page{size:1280px 940px;margin:0}
+    html,body{margin:0;background:#0b0c0f}
+    .navhint{display:none}
+    .slide{width:1280px;height:940px;min-height:0;padding:30px 0;border:none;page-break-after:always;break-after:page;overflow:hidden}
+    .slide:last-child{page-break-after:auto}
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="pk-g" x1="18" y1="42" x2="48" y2="18" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#d6ae67"/><stop offset="1" stop-color="#f07d65"/></linearGradient>
+  <linearGradient id="pk-t" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1b1e26"/><stop offset="1" stop-color="#0f1116"/></linearGradient>
+  <symbol id="pk-mark" viewBox="0 0 64 64">
+    <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#pk-t)" stroke="#d6ae67" stroke-opacity=".35"/>
+    <path d="M20 33 L28 41 L46 19" fill="none" stroke="url(#pk-g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="46" cy="19" r="3.4" fill="#f3efe6"/>
+  </symbol>
+</defs></svg>
+
+<div class="deck">
+
+  <!-- 1 COVER -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="cover-brand"><svg width="52" height="52" viewBox="0 0 64 64"><use href="#pk-mark" width="64" height="64"/></svg><span class="nm">Pickvy</span></div>
+      <p class="eyebrow">For digital agencies</p>
+      <h1>You're accountable for code you didn't write. Now you can verify it.</h1>
+      <p class="lead">Pickvy gives your agency an objective, instant read on any codebase &mdash; built by an outsourced team, an outstaffed developer, or AI &mdash; so you screen quality, take over projects, and sign off on work with <span class="gold">evidence, not hope</span>.</p>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>Quality control for outsourced delivery</span></div></div>
+  </section>
+
+  <!-- 2 THE REALITY -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="eyebrow">The reality</p>
+      <h2>Your delivery runs on code you didn't write.</h2>
+      <div class="grid split" style="margin-top:36px">
+        <div>
+          <p class="lead" style="margin-top:0">A modern agency orchestrates several outsource and outstaff teams &mdash; and, increasingly, AI-generated code. Speed goes up; <span class="coral">visibility goes down</span>. You hand the result to an enterprise client under your brand, but you have no fast, objective way to know what's really inside.</p>
+          <p class="note" style="margin-top:18px;color:var(--muted);font-size:16px">78% of developers already worry that AI-written output is wrong &mdash; and most of that code now flows through agencies exactly like yours.</p>
+        </div>
+        <figure class="diagram">
+          <svg viewBox="0 0 560 250" role="img" aria-label="Multiple vendor sources flow through your agency to the client, with quality unknown">
+            <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L8 4.5 L0 9 z" fill="var(--muted)"/></marker></defs>
+            <g font-size="12.5" font-weight="700">
+              <rect x="20" y="26" width="150" height="46" rx="10" fill="var(--panel-2)" stroke="var(--line)"/><text x="36" y="54" fill="var(--text)">Outsource team</text>
+              <rect x="20" y="100" width="150" height="46" rx="10" fill="var(--panel-2)" stroke="var(--line)"/><text x="36" y="128" fill="var(--text)">Outstaff dev</text>
+              <rect x="20" y="174" width="150" height="46" rx="10" fill="var(--panel-2)" stroke="var(--line)"/><text x="36" y="202" fill="var(--text)">AI-generated code</text>
+            </g>
+            <path d="M170 49 C 210 49, 210 118, 258 123" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ar)"/>
+            <path d="M170 123 H 258" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ar)"/>
+            <path d="M170 197 C 210 197, 210 128, 258 123" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ar)"/>
+            <circle cx="214" cy="70" r="15" fill="rgba(240,125,101,.18)" stroke="var(--coral)"/><text x="214" y="76" text-anchor="middle" fill="var(--coral)" font-size="17" font-weight="900">?</text>
+            <rect x="262" y="96" width="140" height="54" rx="12" fill="rgba(214,174,103,.1)" stroke="var(--gold)"/><text x="332" y="122" text-anchor="middle" fill="var(--text)" font-size="14" font-weight="800">Your agency</text><text x="332" y="140" text-anchor="middle" fill="var(--muted)" font-size="11.5">name on the release</text>
+            <path d="M402 123 H 452" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ar)"/>
+            <rect x="454" y="98" width="96" height="50" rx="12" fill="var(--panel-2)" stroke="var(--line)"/><text x="502" y="120" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="800">Enterprise</text><text x="502" y="137" text-anchor="middle" fill="var(--muted)" font-size="11.5">client</text>
+          </svg>
+        </figure>
+      </div>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>02</span></div></div>
+  </section>
+
+  <!-- 3 CORE PROBLEM: 4 GATES -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="eyebrow">The core problem</p>
+      <h2>Four moments where you're flying blind.</h2>
+      <p class="lead">At each gate you need objective proof of what the code is worth. Today you rely on the vendor's word &mdash; or an expensive, slow manual review.</p>
+      <figure class="diagram" style="margin-top:30px">
+        <svg viewBox="0 0 620 150" role="img" aria-label="Four gates: progress screening, project takeover, acceptance and payment, launch readiness">
+          <line x1="55" y1="60" x2="565" y2="60" stroke="var(--line)" stroke-width="2"/>
+          <g font-size="13" font-weight="800" text-anchor="middle">
+            <g><circle cx="95" cy="60" r="17" fill="rgba(240,125,101,.14)" stroke="var(--coral)" stroke-width="2"/><text x="95" y="66" fill="var(--coral)" font-size="16" font-weight="900">?</text><text x="95" y="98" fill="var(--text)">Progress</text><text x="95" y="116" fill="var(--muted)" font-size="11.5" font-weight="600">on track?</text></g>
+            <g><circle cx="240" cy="60" r="17" fill="rgba(240,125,101,.14)" stroke="var(--coral)" stroke-width="2"/><text x="240" y="66" fill="var(--coral)" font-size="16" font-weight="900">?</text><text x="240" y="98" fill="var(--text)">Takeover</text><text x="240" y="116" fill="var(--muted)" font-size="11.5" font-weight="600">what did we inherit?</text></g>
+            <g><circle cx="385" cy="60" r="17" fill="rgba(240,125,101,.14)" stroke="var(--coral)" stroke-width="2"/><text x="385" y="66" fill="var(--coral)" font-size="16" font-weight="900">?</text><text x="385" y="98" fill="var(--text)">Acceptance</text><text x="385" y="116" fill="var(--muted)" font-size="11.5" font-weight="600">is it really done?</text></g>
+            <g><circle cx="530" cy="60" r="17" fill="rgba(240,125,101,.14)" stroke="var(--coral)" stroke-width="2"/><text x="530" y="66" fill="var(--coral)" font-size="16" font-weight="900">?</text><text x="530" y="98" fill="var(--text)">Launch</text><text x="530" y="116" fill="var(--muted)" font-size="11.5" font-weight="600">safe to ship?</text></g>
+          </g>
+        </svg>
+      </figure>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>03</span></div></div>
+  </section>
+
+  <!-- 4 PROBLEM 01 -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="pnum">PROBLEM 01</p>
+      <h2>Unclear code quality across multiple teams.</h2>
+      <p class="lead">With several outsource teams, every codebase looks different and &ldquo;done&rdquo; means something different to each. For an enterprise client you have to screen progress and prove launch-readiness &mdash; with no common yardstick and no time to read every line.</p>
+      <div class="solve">
+        <span class="k">With Pickvy</span>
+        <p>One objective <b>Health Score</b> on the same rubric for every team and every project &mdash; <span class="green">healthy</span> / <span class="gold">needs stabilization</span> / <span class="coral">dangerous</span> &mdash; with the issues that would break a launch ranked first. Schedule audits and watch the score move between releases, so you screen any team's real progress in hours, not weeks.</p>
+      </div>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>04</span></div></div>
+  </section>
+
+  <!-- 5 PROBLEM 02 -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="pnum">PROBLEM 02</p>
+      <h2>Taking over a project shouldn't cost a fortune in discovery.</h2>
+      <p class="lead">When you inherit a codebase from another team, the incoming contractor bills a large sum for business analysis and initial testing &mdash; just to understand what's there, before any real work begins. That eats your margin and stalls the deal.</p>
+      <div class="solve">
+        <span class="k">With Pickvy</span>
+        <p>An instant audit maps the inherited codebase &mdash; architecture risks, the riskiest files, vulnerable dependencies, security issues, and tech debt &mdash; with a <b>scoped backlog and effort sizing</b>. Your team starts already oriented, and a <b>$49&ndash;$199 audit replaces most of a multi-thousand-dollar BA-and-testing ramp</b>.</p>
+      </div>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>05</span></div></div>
+  </section>
+
+  <!-- 6 PROBLEM 03 -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="pnum">PROBLEM 03</p>
+      <h2>Sign off on the work before you release payment.</h2>
+      <p class="lead">Paying a contractor on their say-so is a gamble. Milestones get marked &ldquo;done&rdquo; that aren't, and every dispute turns into he-said/she-said.</p>
+      <div class="solve">
+        <span class="k">With Pickvy</span>
+        <p>An objective <b>acceptance report</b> at each milestone: does the delivered code clear the bar? Pay against a passing score, not a promise. If it fails, you hold third-party evidence and a precise list of what's missing &mdash; no arguments, no surprise rework after go-live.</p>
+      </div>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>06</span></div></div>
+  </section>
+
+  <!-- 7 AND MORE -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="eyebrow">And more</p>
+      <h2>The rest of the outsourcing headaches.</h2>
+      <div class="grid cards-3" style="margin-top:34px">
+        <div class="card"><h3>Vendor disputes</h3><p class="note">Objective third-party evidence ends the blame game and makes SLAs enforceable.</p></div>
+        <div class="card"><h3>Slow onboarding</h3><p class="note">An instant map of risky files and structure cuts a new team's ramp-up time on unfamiliar code.</p></div>
+        <div class="card"><h3>Your reputation</h3><p class="note">Pre-delivery QA so you never ship a subcontractor's landmine to your client under your name.</p></div>
+        <div class="card"><h3>Fixed-bid risk</h3><p class="note">A scoped backlog with effort sizing means quotes you won't lose money on.</p></div>
+        <div class="card"><h3>AI-code blind spots</h3><p class="note">Pickvy specializes in exactly this new, opaque category &mdash; the code most teams can't vouch for.</p></div>
+        <div class="card"><h3>Security exposure</h3><p class="note">Dependency, secret, and vulnerability scanning (OSV, Semgrep) surfaced in plain language.</p></div>
+      </div>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>07</span></div></div>
+  </section>
+
+  <!-- 8 THE PRODUCT -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="eyebrow">The product</p>
+      <h2>One clear verdict, not 4,000 warnings.</h2>
+      <div class="grid split" style="margin-top:32px">
+        <div>
+          <p class="lead" style="margin-top:0">Pickvy audits any codebase &mdash; AI-generated or not &mdash; and answers the question a client and a PM both understand: is it <span class="green">healthy</span>, does it need <span class="gold">stabilization</span>, or is it already <span class="coral">dangerous</span>? Every finding carries a measurable score, a priority, and a fix plan with a cost.</p>
+          <ul class="clean">
+            <li><svg class="tick" viewBox="0 0 18 18"><path d="M3 9 l4 4 l8 -9" fill="none" stroke="var(--gold)" stroke-width="2.4"/></svg><span><b>Not another linter.</b> SonarQube and Semgrep find signals; Pickvy makes the business decision on top of them.</span></li>
+            <li><svg class="tick" viewBox="0 0 18 18"><path d="M3 9 l4 4 l8 -9" fill="none" stroke="var(--gold)" stroke-width="2.4"/></svg><span>Built on <b>SonarQube, Semgrep, OSV</b> + risk scoring, AI context, and project history.</span></li>
+            <li><svg class="tick" viewBox="0 0 18 18"><path d="M3 9 l4 4 l8 -9" fill="none" stroke="var(--gold)" stroke-width="2.4"/></svg><span>A <b>deterministic Health Score</b>, a hosted report and PDF you can forward to a client.</span></li>
+          </ul>
+        </div>
+        <figure class="diagram">
+          <svg viewBox="0 0 400 260" role="img" aria-label="Verdict gauge: healthy, needs stabilization, dangerous">
+            <path d="M50 210 A150 150 0 0 1 124.9 80.1" fill="none" stroke="var(--green)" stroke-width="18" stroke-linecap="round"/>
+            <path d="M133 74 A150 150 0 0 1 267 74" fill="none" stroke="var(--gold)" stroke-width="18" stroke-linecap="round"/>
+            <path d="M275.1 80.1 A150 150 0 0 1 350 210" fill="none" stroke="var(--coral)" stroke-width="18" stroke-linecap="round"/>
+            <line x1="200" y1="210" x2="200" y2="86" stroke="var(--text)" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="200" cy="210" r="9" fill="var(--text)"/>
+            <text x="86" y="238" text-anchor="middle" fill="var(--green)" font-size="14" font-weight="800">Healthy</text>
+            <text x="200" y="252" text-anchor="middle" fill="var(--gold)" font-size="14" font-weight="800">Stabilize</text>
+            <text x="316" y="238" text-anchor="middle" fill="var(--coral)" font-size="14" font-weight="800">Dangerous</text>
+          </svg>
+        </figure>
+      </div>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>08</span></div></div>
+  </section>
+
+  <!-- 9 IN YOUR WORKFLOW -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="eyebrow">In your workflow</p>
+      <h2>A verification layer at every gate.</h2>
+      <p class="lead">Plug Pickvy into the moments that used to be guesswork. Start with a $5 diagnostic; reach for a deeper tier when you need signed-off evidence.</p>
+      <figure class="diagram" style="margin-top:30px">
+        <svg viewBox="0 0 620 150" role="img" aria-label="Pickvy verifies at each gate: progress, takeover, acceptance, launch">
+          <line x1="55" y1="60" x2="565" y2="60" stroke="var(--gold)" stroke-opacity=".5" stroke-width="2"/>
+          <g text-anchor="middle">
+            <g><circle cx="95" cy="60" r="17" fill="rgba(214,174,103,.16)" stroke="var(--gold)" stroke-width="2"/><path d="M88 60 l5 5 l9 -10" fill="none" stroke="var(--gold)" stroke-width="2.6"/><text x="95" y="98" fill="var(--text)" font-size="13" font-weight="800">Progress</text><text x="95" y="116" fill="var(--muted)" font-size="11.5">screen quality</text></g>
+            <g><circle cx="240" cy="60" r="17" fill="rgba(214,174,103,.16)" stroke="var(--gold)" stroke-width="2"/><path d="M233 60 l5 5 l9 -10" fill="none" stroke="var(--gold)" stroke-width="2.6"/><text x="240" y="98" fill="var(--text)" font-size="13" font-weight="800">Takeover</text><text x="240" y="116" fill="var(--muted)" font-size="11.5">map + scope</text></g>
+            <g><circle cx="385" cy="60" r="17" fill="rgba(214,174,103,.16)" stroke="var(--gold)" stroke-width="2"/><path d="M378 60 l5 5 l9 -10" fill="none" stroke="var(--gold)" stroke-width="2.6"/><text x="385" y="98" fill="var(--text)" font-size="13" font-weight="800">Acceptance</text><text x="385" y="116" fill="var(--muted)" font-size="11.5">pay on a pass</text></g>
+            <g><circle cx="530" cy="60" r="17" fill="rgba(214,174,103,.16)" stroke="var(--gold)" stroke-width="2"/><path d="M523 60 l5 5 l9 -10" fill="none" stroke="var(--gold)" stroke-width="2.6"/><text x="530" y="98" fill="var(--text)" font-size="13" font-weight="800">Launch</text><text x="530" y="116" fill="var(--muted)" font-size="11.5">readiness verdict</text></g>
+          </g>
+        </svg>
+      </figure>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>09</span></div></div>
+  </section>
+
+  <!-- 10 WHAT YOU GET -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="eyebrow">What you get</p>
+      <h2>Evidence at the speed of your pipeline.</h2>
+      <table>
+        <thead><tr><th>When</th><th>What Pickvy gives you</th></tr></thead>
+        <tbody>
+          <tr><td class="big">Screening a vendor's progress</td><td class="muted">An objective Health Score on the same rubric across every team</td></tr>
+          <tr><td class="big">Taking over a project</td><td class="muted">A scoped map + backlog &mdash; skip most of the paid discovery</td></tr>
+          <tr><td class="big">Before paying a milestone</td><td class="muted">A pass/fail acceptance report with third-party evidence</td></tr>
+          <tr><td class="big">Before an enterprise launch</td><td class="muted">A readiness verdict with launch-blockers ranked</td></tr>
+        </tbody>
+      </table>
+      <div class="tiers">
+        <div class="tier"><div class="n">Diagnostic Report</div><div class="pr">$5</div><div class="d">Quick read to qualify a codebase</div></div>
+        <div class="tier"><div class="n">Automated Report</div><div class="pr">$49</div><div class="d">Health Score + prioritized plan</div></div>
+        <div class="tier"><div class="n">Deep AI Review</div><div class="pr">$199</div><div class="d">Riskiest files, deeper analysis</div></div>
+        <div class="tier"><div class="n">Expert Audit</div><div class="pr">from $999</div><div class="d">Human-verified + remediation plan</div></div>
+      </div>
+      <div class="callout">
+        <span class="k">For agencies</span>
+        <p>The <b>Agency plan ($499/mo)</b> adds scheduled audits, score history, and explainable score changes between releases across all your projects &mdash; standing quality control over every vendor at once.</p>
+      </div>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>10</span></div></div>
+  </section>
+
+  <!-- 11 WHY PICKVY -->
+  <section class="slide">
+    <div class="wrap">
+      <p class="eyebrow">Why Pickvy</p>
+      <h2>Fast, cheap, and objective &mdash; the three things a manual review isn't.</h2>
+      <div class="grid cards-3" style="margin-top:34px">
+        <div class="card"><h3>Objective &amp; third-party</h3><p class="note">Not your vendor grading their own homework. An independent verdict you can put in front of a client.</p></div>
+        <div class="card"><h3>Hours and dollars</h3><p class="note">Not weeks and thousands. Pickvy replaces slow manual discovery and BA with an instant, priced audit.</p></div>
+        <div class="card"><h3>Business-readable</h3><p class="note">A verdict and a cost your PM and your client both understand &mdash; not a raw linter dump.</p></div>
+      </div>
+      <p class="close">Your agency's name ships on every release. Pickvy makes sure you know exactly what you're shipping &mdash; start with a $5 diagnostic on a live project.</p>
+      <p style="margin-top:24px">
+        <a href="https://flexpick.net" style="display:inline-block;border:1px solid var(--gold);border-radius:14px;padding:12px 22px;color:var(--gold);text-decoration:none;font-weight:800;font-size:15px">Start at flexpick.net &rarr;</a>
+      </p>
+    </div>
+    <div class="footer"><div class="wrap"><span class="brandmark">Pickvy</span><span>11</span></div></div>
+  </section>
+
+</div>
+<div class="navhint">&uarr; &darr; to navigate</div>
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  addEventListener('keydown',e=>{
+    if(!['ArrowDown','ArrowUp','PageDown','PageUp'].includes(e.key))return;e.preventDefault();
+    const y=scrollY+innerHeight/2;let i=slides.findIndex(s=>s.offsetTop<=y&&s.offsetTop+s.offsetHeight>y);if(i<0)i=0;
+    const dir=(e.key==='ArrowDown'||e.key==='PageDown')?1:-1;const t=slides[Math.max(0,Math.min(slides.length-1,i+dir))];if(t)t.scrollIntoView({behavior:'smooth'});
+  });
+</script>
+</body>
+</html>
