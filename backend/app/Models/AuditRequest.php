@@ -30,7 +30,7 @@ class AuditRequest extends Model
     protected $fillable = [
         'name', 'email', 'repo_url', 'message', 'status', 'failure_reason', 'meta', 'metrics',
         'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'funding', 'source', 'tier', 'user_id', 'prepaid',
-        'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
+        'manually_paid', 'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
         'risk_files', 'deep_review_input_tokens', 'deep_review_output_tokens', 'deep_review_ms',
     ];
@@ -43,6 +43,7 @@ class AuditRequest extends Model
         'consented_at' => 'datetime',
         'free_run' => 'boolean',
         'prepaid' => 'boolean',
+        'manually_paid' => 'boolean',
         'pipeline_log' => 'array',
         'scanner_runs' => 'array',
         'analysis_started_at' => 'datetime',

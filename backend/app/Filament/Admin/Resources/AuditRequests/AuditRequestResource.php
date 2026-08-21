@@ -22,6 +22,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
@@ -30,6 +31,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -84,6 +86,9 @@ class AuditRequestResource extends Resource
                     )
                     ->helperText(__('Changing this and re-running the pipeline re-analyses at the new tier.'))
                     ->required(),
+                Toggle::make('manually_paid')
+                    ->label(__('Paid'))
+                    ->helperText(__('Client billing is handled manually outside the system -- this only records whether that happened.')),
                 TextInput::make('repo_url')->url()->maxLength(2048),
                 TextInput::make('name')->required()->maxLength(255),
                 TextInput::make('email')->email()->required()->maxLength(255),
@@ -109,6 +114,11 @@ class AuditRequestResource extends Resource
                     ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))
                     ->formatStateUsing(fn (string $state, AuditRequestStatusMapper $mapper): string => $mapper->mapForDisplay($state)),
                 TextEntry::make('tier'),
+                TextEntry::make('manually_paid')
+                    ->label(__('Paid'))
+                    ->badge()
+                    ->color(fn (AuditRequest $record): string => $record->manually_paid ? 'success' : 'gray')
+                    ->formatStateUsing(fn (AuditRequest $record): string => $record->manually_paid ? __('Paid') : __('Not paid')),
                 TextEntry::make('source'),
                 TextEntry::make('marketing_consent'),
                 TextEntry::make('email_verified_at')->dateTime(config('app.datetime_format'))->placeholder('—'),
@@ -194,6 +204,7 @@ class AuditRequestResource extends Resource
                 TextColumn::make('email_verified_at')->dateTime(config('app.datetime_format'))->label(__('Verified'))->placeholder(__('No')),
                 IconColumn::make('marketing_consent')->boolean()->label(__('Consent')),
                 IconColumn::make('free_run')->boolean()->label(__('Free run')),
+                ToggleColumn::make('manually_paid')->label(__('Paid')),
                 TextColumn::make('source'),
                 TextColumn::make('age')
                     ->label(__('Age'))
