@@ -45,11 +45,6 @@ class SubscriptionResource extends Resource
         return __('Revenue');
     }
 
-    public static function shouldRegisterNavigation(): bool
-    {
-        return false;
-    }
-
     public static function form(Schema $schema): Schema
     {
         /** @var CurrencyService $currencyService */
