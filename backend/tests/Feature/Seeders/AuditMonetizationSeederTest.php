@@ -73,9 +73,10 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->assertSame(0, (int) $plan->prices()->first()->price);
 
         $metadata = $plan->product->metadata;
-        $this->assertSame(999999, (int) $metadata['audit_analyses_per_month']);
-        $this->assertSame(999999, (int) $metadata['audit_deep_ai_credits']);
-        $this->assertSame(999999, (int) $metadata['audit_expert_credits']);
+        $this->assertSame(999, (int) $metadata['audit_diagnostic_credits']);
+        $this->assertSame(999, (int) $metadata['audit_analyses_per_month']);
+        $this->assertSame(999, (int) $metadata['audit_deep_ai_credits']);
+        $this->assertSame(999, (int) $metadata['audit_expert_credits']);
     }
 
     public function test_subscription_products_carry_allowance_metadata(): void

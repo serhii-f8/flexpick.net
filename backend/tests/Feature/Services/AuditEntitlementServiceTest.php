@@ -242,6 +242,30 @@ class AuditEntitlementServiceTest extends FeatureTest
      * `limit:`/`used:` named arguments being transposed, or allowance() and
      * runsUsedThisMonth() being swapped.
      */
+    /**
+     * A tenant whose plan grants a Diagnostic allowance (Partner is
+     * currently the only one) switches Diagnostic to the same metered
+     * semantics every other tier already has, instead of the per-email
+     * lifetime free-run count.
+     */
+    public function test_diagnostic_quota_switches_to_a_subscription_allowance_when_the_plan_grants_one(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_diagnostic_credits' => 999]);
+
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+
+        $quota = $this->service->quotaFor($user, $tenant, AuditTier::DIAGNOSTIC);
+
+        $this->assertFalse($quota->isLifetime);
+        $this->assertSame(999, $quota->limit);
+        $this->assertSame(1, $quota->used);
+        $this->assertSame(998, $quota->remaining());
+    }
+
     public function test_quota_for_a_monthly_tier_reflects_a_real_allowance(): void
     {
         [$user, $tenant] = $this->subscribedTenant(['audit_analyses_per_month' => 5]);

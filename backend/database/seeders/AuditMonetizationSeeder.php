@@ -131,14 +131,16 @@ class AuditMonetizationSeeder extends Seeder
             'name' => 'Partner (Unlimited)',
             'description' => 'Unlimited audits for partner accounts. Assigned manually -- never sold, never shown publicly.',
             'features' => [
+                ['feature' => 'Unlimited diagnostic reports'],
                 ['feature' => 'Unlimited automated analyses'],
                 ['feature' => 'Unlimited Deep AI review credits'],
                 ['feature' => 'Unlimited expert audit credits'],
             ],
             'metadata' => [
-                'audit_analyses_per_month' => 999999,
-                'audit_deep_ai_credits' => 999999,
-                'audit_expert_credits' => 999999,
+                'audit_diagnostic_credits' => 999,
+                'audit_analyses_per_month' => 999,
+                'audit_deep_ai_credits' => 999,
+                'audit_expert_credits' => 999,
             ],
             'is_default' => false,
         ]);

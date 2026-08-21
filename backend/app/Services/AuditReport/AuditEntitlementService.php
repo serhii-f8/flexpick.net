@@ -77,6 +77,7 @@ class AuditEntitlementService
      * it is funded by the lifetime free quota, not a monthly allowance.
      */
     private const QUOTA_KEYS = [
+        AuditTier::DIAGNOSTIC->value => 'audit_diagnostic_credits',
         AuditTier::AUTOMATED->value => 'audit_analyses_per_month',
         AuditTier::DEEP_AI->value => 'audit_deep_ai_credits',
         AuditTier::EXPERT->value => 'audit_expert_credits',
@@ -143,12 +144,19 @@ class AuditEntitlementService
 
     public function quotaFor(User $user, ?Tenant $tenant, AuditTier $tier): TierQuota
     {
-        $isLifetime = $tier === AuditTier::DIAGNOSTIC;
+        // Diagnostic defaults to the per-email lifetime free-run count, but a
+        // tenant whose plan grants a monthly Diagnostic allowance (Partner,
+        // currently the only one) uses that instead -- same metered
+        // semantics every other tier already has, so nothing downstream
+        // needs to know Diagnostic is special-cased at all once this is
+        // decided.
+        $subscriptionAllowance = $this->allowance($tenant, $tier);
+        $isLifetime = $tier === AuditTier::DIAGNOSTIC && $subscriptionAllowance === 0;
 
         return new TierQuota(
             tier: $tier,
             label: $tier->label(),
-            limit: $isLifetime ? $this->freeRunsLimit($user->email) : $this->allowance($tenant, $tier),
+            limit: $isLifetime ? $this->freeRunsLimit($user->email) : $subscriptionAllowance,
             used: $isLifetime ? $this->freeRunsUsed($user->email) : $this->runsUsedThisMonth($user, $tier),
             isLifetime: $isLifetime,
             priceCents: $this->tierPriceCents($tier),
