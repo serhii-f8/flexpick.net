@@ -19,17 +19,18 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 /**
- * One subscribed demo account for live walkthroughs: Growth (the mid-range,
- * "popular" plan) with a full month of unused allowance, plus a single
- * already-finished report so there's something to open immediately. The old
- * roster of edge-case accounts (trial/cancelled/expired/exhausted) was a QA
- * fixture, not something to hand to an investor.
+ * One subscribed demo account for live walkthroughs: Partner (Unlimited) --
+ * billed manually outside the system, so no tier shows a monthly cap or a
+ * per-run purchase prompt -- with a full month of unused allowance, plus a
+ * single already-finished report so there's something to open immediately.
+ * The old roster of edge-case accounts (trial/cancelled/expired/exhausted)
+ * was a QA fixture, not something to hand to an investor.
  */
 class AuditDemoSeeder extends Seeder
 {
     public const EMAIL = 'demo@flexpick.net';
 
-    private const PLAN_SLUG = 'audit-growth-monthly';
+    private const PLAN_SLUG = 'audit-partner-monthly';
 
     public function __construct(
         private TenantPermissionService $tenantPermissionService,
@@ -48,7 +49,7 @@ class AuditDemoSeeder extends Seeder
 
         $tenant = $this->tenantFor($user);
 
-        $this->subscribeToGrowthPlan($user, $tenant);
+        $this->subscribeToPartnerPlan($user, $tenant);
         $this->resetToOneFinishedReport($user);
     }
 
@@ -65,11 +66,21 @@ class AuditDemoSeeder extends Seeder
         return $tenant;
     }
 
-    private function subscribeToGrowthPlan(User $user, Tenant $tenant): void
+    private function subscribeToPartnerPlan(User $user, Tenant $tenant): void
     {
         $plan = Plan::where('slug', self::PLAN_SLUG)->firstOrFail();
         $price = $plan->prices()->firstOrFail();
         $stripe = PaymentProvider::where('slug', 'stripe')->firstOrFail();
+
+        // A prior seed run (before this account moved to Partner) may have
+        // left an active subscription on a different plan -- allowance()
+        // sums every active subscription for the tenant, so a stale one left
+        // active would double-count on top of Partner's allowance instead of
+        // being replaced by it.
+        $user->subscriptions()
+            ->where('plan_id', '!=', $plan->id)
+            ->where('status', SubscriptionStatus::ACTIVE->value)
+            ->update(['status' => SubscriptionStatus::CANCELED->value]);
 
         $subscription = $user->subscriptions()->where('plan_id', $plan->id)->first();
 

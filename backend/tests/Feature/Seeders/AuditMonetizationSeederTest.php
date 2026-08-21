@@ -55,6 +55,29 @@ class AuditMonetizationSeederTest extends FeatureTest
         }
     }
 
+    /**
+     * Deliberately outside config('pricing.subscriptions') -- never shown
+     * publicly, never exported to the marketing site -- but must exist for
+     * a super admin to assign it, and must grant a huge allowance on every
+     * metered tier including Expert, which no other plan grants any of.
+     */
+    public function test_seeds_a_hidden_free_partner_plan(): void
+    {
+        $this->seedCatalog();
+
+        $plan = Plan::where('slug', 'audit-partner-monthly')->first();
+
+        $this->assertNotNull($plan, 'Missing plan [audit-partner-monthly].');
+        $this->assertTrue((bool) $plan->is_active);
+        $this->assertFalse((bool) $plan->is_visible);
+        $this->assertSame(0, (int) $plan->prices()->first()->price);
+
+        $metadata = $plan->product->metadata;
+        $this->assertSame(999999, (int) $metadata['audit_analyses_per_month']);
+        $this->assertSame(999999, (int) $metadata['audit_deep_ai_credits']);
+        $this->assertSame(999999, (int) $metadata['audit_expert_credits']);
+    }
+
     public function test_subscription_products_carry_allowance_metadata(): void
     {
         $this->seedCatalog();

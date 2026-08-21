@@ -31,6 +31,7 @@ class AuditMonetizationSeeder extends Seeder
         $this->seedTierProducts($currency);
         $this->seedOneTimeProducts($currency);
         $this->seedSubscriptions($currency, $month);
+        $this->seedPartnerPlan($currency, $month);
         $this->retire();
     }
 
@@ -109,6 +110,51 @@ class AuditMonetizationSeeder extends Seeder
 
             $plan->prices()->updateOrCreate(['currency_id' => $currency->id], ['price' => $subscription['price']]);
         }
+    }
+
+    /**
+     * A free, unlimited plan for partners -- assigned manually by a super
+     * admin via the Subscriptions resource, never self-serve. Deliberately
+     * outside config('pricing.subscriptions'): it must never appear on the
+     * public pricing page or in the exported marketing pricing.json.
+     *
+     * "Unlimited" is a large numeric ceiling on the same audit_* metadata
+     * keys every other plan uses, not a new sentinel -- quota math, "X of Y
+     * left" displays, and every other consumer of plan metadata all work
+     * unmodified.
+     */
+    private function seedPartnerPlan(Currency $currency, Interval $month): void
+    {
+        $slug = 'audit-partner';
+
+        $product = Product::updateOrCreate(['slug' => $slug], [
+            'name' => 'Partner (Unlimited)',
+            'description' => 'Unlimited audits for partner accounts. Assigned manually -- never sold, never shown publicly.',
+            'features' => [
+                ['feature' => 'Unlimited automated analyses'],
+                ['feature' => 'Unlimited Deep AI review credits'],
+                ['feature' => 'Unlimited expert audit credits'],
+            ],
+            'metadata' => [
+                'audit_analyses_per_month' => 999999,
+                'audit_deep_ai_credits' => 999999,
+                'audit_expert_credits' => 999999,
+            ],
+            'is_default' => false,
+        ]);
+
+        $plan = Plan::updateOrCreate(['slug' => $slug.'-monthly'], [
+            'name' => 'Partner (Unlimited) Monthly',
+            'product_id' => $product->id,
+            'interval_id' => $month->id,
+            'interval_count' => 1,
+            'has_trial' => false,
+            'is_active' => true,
+            'is_visible' => false,
+            'type' => PlanType::FLAT_RATE->value,
+        ]);
+
+        $plan->prices()->updateOrCreate(['currency_id' => $currency->id], ['price' => 0]);
     }
 
     private function retire(): void
