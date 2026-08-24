@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Http\Controllers;
 
+use App\Constants\AuditTier;
 use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\User;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\AuditReport\ReportPayload;
 use Illuminate\Support\Facades\URL;
 use Tests\Feature\FeatureTest;
 
@@ -50,6 +52,56 @@ class AuditReportPageTest extends FeatureTest
             ->assertOk()
             ->assertSee(__('Sample report'))
             ->assertSee(__('What to fix first'));
+    }
+
+    /**
+     * The sample is the page a prospect reads before buying, so it has to
+     * carry every section a real report can produce -- including the two that
+     * only higher tiers add. A fixture edit that drops one would otherwise
+     * silently under-sell the product.
+     */
+    public function test_sample_report_shows_every_section_a_report_can_carry(): void
+    {
+        $response = $this->get('/reports/sample')->assertOk();
+
+        foreach ([
+            'Health scores',
+            'What we found',
+            'Repository facts',
+            'Risks, ranked by impact',
+            'Deep file review',
+            'Human expert review',
+            'What to fix first',
+        ] as $section) {
+            $response->assertSee(__($section));
+        }
+    }
+
+    /** Each section is labelled with the lowest tier that includes it. */
+    public function test_sample_report_labels_each_section_with_its_tier(): void
+    {
+        $response = $this->get('/reports/sample')->assertOk();
+
+        foreach (AuditTier::cases() as $tier) {
+            $response->assertSee($tier->labelWithPrice());
+        }
+    }
+
+    /**
+     * The fixture has to stay a payload the pipeline could actually have
+     * produced -- otherwise the sample advertises a shape the product cannot
+     * deliver.
+     */
+    public function test_the_sample_fixture_satisfies_the_current_payload_contract(): void
+    {
+        $fixture = json_decode((string) file_get_contents(resource_path('data/sample-audit-report.json')), true);
+
+        $validated = ReportPayload::validate($fixture['payload'], ReportPayload::VERSION);
+
+        $this->assertArrayHasKey('groups', $validated);
+        $this->assertArrayHasKey('file_findings', $validated);
+        $this->assertArrayHasKey('deep_review', $validated);
+        $this->assertArrayHasKey('expert_review', $validated);
     }
 
     public function test_unlock_route_stores_intent_and_redirects_to_checkout(): void

@@ -67,7 +67,15 @@ class AuditReportController extends Controller
             'isSample' => true,
             'percentile' => $fixture['percentile'],
             'unlockUrl' => null,
-            'deltas' => null,
+            // The sample exists to show every section a report can carry, and
+            // the re-audit trend is one of them. Stored as an offset so the
+            // "previous audit" date never goes stale.
+            'deltas' => isset($fixture['deltas'])
+                ? [
+                    'previous_at' => now()->subDays((int) ($fixture['previous_audit_days_ago'] ?? 30)),
+                    'deltas' => $fixture['deltas'],
+                ]
+                : null,
         ]);
     }
 

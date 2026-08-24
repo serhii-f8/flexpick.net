@@ -3,51 +3,320 @@
     "percentile": 38,
     "payload": {
         "summary": "A four-month-old AI-assisted codebase with working core flows but heavy duplication, no automated tests, and several dependency risks. Shippable today, fragile tomorrow: most incidents will come from the checkout and auth modules, where copies of the same logic have already drifted apart.",
-        "scores": {"structure": 58, "duplication": 34, "testing": 12, "dependencies": 61, "security_hygiene": 55, "overall": 44},
+        "scores": {
+            "structure": 58,
+            "duplication": 34,
+            "testing": 12,
+            "dependencies": 61,
+            "security_hygiene": 55,
+            "overall": 44
+        },
         "risks": [
-            {"title": "No automated tests on payment-critical flows", "impact": "high", "evidence": "0 test files across 214 source files; checkout, refund, and webhook handlers are fully untested.", "recommendation": "Add a smoke suite around checkout and webhooks first — 10-15 tests catch the regressions that actually cost money."},
-            {"title": "Checkout logic duplicated in 4 places with drift", "impact": "high", "evidence": "Price calculation appears in 4 files; two copies already disagree on coupon rounding.", "recommendation": "Extract a single PriceCalculator service and delete the copies; the drift is a live billing bug waiting to be reported."},
-            {"title": "Secrets committed to the repository", "impact": "high", "evidence": "2 API keys and 1 database password found in tracked config files.", "recommendation": "Rotate the exposed keys today, move them to environment variables, and add secret scanning to CI."},
-            {"title": "37 dependencies pinned to unmaintained versions", "impact": "medium", "evidence": "Lockfile references 9 packages with no release in 2+ years, including the session middleware.", "recommendation": "Upgrade the framework minor version and replace the two abandoned packages with maintained forks."},
-            {"title": "God-file controllers", "impact": "medium", "evidence": "3 controllers exceed 800 lines and mix validation, business logic, and rendering.", "recommendation": "Split by responsibility as you touch them — don't big-bang refactor; extract services per feature."},
-            {"title": "No error monitoring", "impact": "low", "evidence": "No error-tracking SDK found; production failures are invisible unless a user reports them.", "recommendation": "Wire an error tracker (Sentry or similar) — 30 minutes of work, immediate visibility."}
+            {
+                "title": "No automated tests on payment-critical flows",
+                "impact": "high",
+                "evidence": "0 test files across 214 source files; checkout, refund, and webhook handlers are fully untested.",
+                "recommendation": "Add a smoke suite around checkout and webhooks first — 10-15 tests catch the regressions that actually cost money."
+            },
+            {
+                "title": "Checkout logic duplicated in 4 places with drift",
+                "impact": "high",
+                "evidence": "Price calculation appears in 4 files; two copies already disagree on coupon rounding.",
+                "recommendation": "Extract a single PriceCalculator service and delete the copies; the drift is a live billing bug waiting to be reported."
+            },
+            {
+                "title": "Secrets committed to the repository",
+                "impact": "high",
+                "evidence": "2 API keys and 1 database password found in tracked config files.",
+                "recommendation": "Rotate the exposed keys today, move them to environment variables, and add secret scanning to CI."
+            },
+            {
+                "title": "37 dependencies pinned to unmaintained versions",
+                "impact": "medium",
+                "evidence": "Lockfile references 9 packages with no release in 2+ years, including the session middleware.",
+                "recommendation": "Upgrade the framework minor version and replace the two abandoned packages with maintained forks."
+            },
+            {
+                "title": "God-file controllers",
+                "impact": "medium",
+                "evidence": "3 controllers exceed 800 lines and mix validation, business logic, and rendering.",
+                "recommendation": "Split by responsibility as you touch them — don't big-bang refactor; extract services per feature."
+            },
+            {
+                "title": "No error monitoring",
+                "impact": "low",
+                "evidence": "No error-tracking SDK found; production failures are invisible unless a user reports them.",
+                "recommendation": "Wire an error tracker (Sentry or similar) — 30 minutes of work, immediate visibility."
+            }
         ],
         "fix_first_plan": [
-            {"step": "Rotate the committed secrets and move them to env vars", "why": "They are exposed to anyone with repo access, today", "effort": "S"},
-            {"step": "Add smoke tests around checkout and webhooks", "why": "Highest-cost regressions with zero safety net", "effort": "M"},
-            {"step": "Extract the duplicated price calculation into one service", "why": "Two copies already disagree — this is a live billing bug", "effort": "M"},
-            {"step": "Set up CI running the new tests plus secret scanning", "why": "Locks in the gains from the first three steps", "effort": "S"}
-        ]
+            {
+                "step": "Rotate the committed secrets and move them to env vars",
+                "why": "They are exposed to anyone with repo access, today",
+                "effort": "S"
+            },
+            {
+                "step": "Add smoke tests around checkout and webhooks",
+                "why": "Highest-cost regressions with zero safety net",
+                "effort": "M"
+            },
+            {
+                "step": "Extract the duplicated price calculation into one service",
+                "why": "Two copies already disagree — this is a live billing bug",
+                "effort": "M"
+            },
+            {
+                "step": "Set up CI running the new tests plus secret scanning",
+                "why": "Locks in the gains from the first three steps",
+                "effort": "S"
+            }
+        ],
+        "groups": [
+            {
+                "rule_family": "committed-secret",
+                "directory": "src",
+                "severity": "critical",
+                "count": 3,
+                "narrative": {
+                    "what": "Three live-looking API keys are committed to the repository, including one in .env.production.",
+                    "affects": "src/config.ts, .env.production",
+                    "benefit": "Rotating these and moving them to environment variables removes the single highest-impact risk in this codebase."
+                }
+            },
+            {
+                "rule_family": "duplicated-block",
+                "directory": "src/services",
+                "severity": "high",
+                "count": 18,
+                "narrative": {
+                    "what": "Eighteen blocks of 30+ lines are duplicated across the payment and checkout modules, and four copies have already drifted apart.",
+                    "affects": "src/services/PaymentService.ts, src/screens/Checkout.tsx and 6 other files",
+                    "benefit": "Extracting one shared price calculation means a pricing fix lands once instead of four times."
+                }
+            },
+            {
+                "rule_family": "vulnerable-dependency",
+                "directory": ".",
+                "severity": "high",
+                "count": 12,
+                "narrative": {
+                    "what": "Twelve dependencies have known advisories, four of them rated high or critical by OSV.",
+                    "affects": "package.json",
+                    "benefit": "Most resolve with a patch-level bump; upgrading closes known exploit paths without touching your own code."
+                }
+            },
+            {
+                "rule_family": "missing-authorization",
+                "directory": "src/api",
+                "severity": "medium",
+                "count": 7,
+                "narrative": {
+                    "what": "Seven API handlers read a tenant identifier straight from the request without checking it against the session.",
+                    "affects": "src/api/handlers.ts",
+                    "benefit": "A single shared guard closes the whole class of cross-tenant data access."
+                }
+            },
+            {
+                "rule_family": "oversized-file",
+                "directory": "src",
+                "severity": "medium",
+                "count": 5,
+                "narrative": {
+                    "what": "Five files exceed 900 lines, the largest at 2,412 — and they are also the most frequently changed.",
+                    "affects": "src/services/PaymentService.ts, src/screens/Checkout.tsx and 3 other files",
+                    "benefit": "Splitting the two hotspots first makes the riskiest area of the codebase reviewable again."
+                }
+            }
+        ],
+        "deep_review": {
+            "files_selected": 34,
+            "files_reviewed": 34,
+            "selection_version": 1,
+            "truncated": false,
+            "degraded": false
+        },
+        "file_findings": [
+            {
+                "path": "src/services/PaymentService.ts",
+                "line": 412,
+                "severity": "critical",
+                "category": "business_logic",
+                "effort": "M",
+                "title": "Discount is applied after tax, and only on one of the four code paths",
+                "evidence": "applyDiscount() runs after calculateTax() here, but before it in the three duplicated copies. The same order produces different totals depending on which path the request takes.",
+                "recommendation": "Extract one pricing function with an explicit order of operations, cover it with tests for the discount-plus-tax case, and delete the copies.",
+                "related_paths": [
+                    "src/screens/Checkout.tsx",
+                    "src/api/handlers.ts"
+                ]
+            },
+            {
+                "path": "src/services/PaymentService.ts",
+                "line": 688,
+                "severity": "high",
+                "category": "security",
+                "effort": "S",
+                "title": "Payment webhook is trusted without verifying its signature",
+                "evidence": "handleWebhook() parses the request body and updates order state without calling the provider's signature verification. Any caller who knows the URL can mark an order paid.",
+                "recommendation": "Verify the provider signature before parsing, and reject unsigned requests outright.",
+                "related_paths": []
+            },
+            {
+                "path": "src/api/handlers.ts",
+                "line": 96,
+                "severity": "high",
+                "category": "authorization",
+                "effort": "M",
+                "title": "Tenant id is read from the request body rather than the session",
+                "evidence": "getInvoices() filters on req.body.tenantId with no check that the caller belongs to that tenant, so changing one field returns another customer's invoices.",
+                "recommendation": "Resolve the tenant from the authenticated session and treat any client-supplied tenant id as untrusted.",
+                "related_paths": [
+                    "src/api/handlers.ts"
+                ]
+            },
+            {
+                "path": "src/screens/Checkout.tsx",
+                "line": 233,
+                "severity": "medium",
+                "category": "business_logic",
+                "effort": "S",
+                "title": "Submit button is not disabled while the charge is in flight",
+                "evidence": "onSubmit() awaits the charge without guarding re-entry; a double click issues two charges, and there is no idempotency key on the request.",
+                "recommendation": "Disable the control on submit and send an idempotency key so a retry cannot double-charge.",
+                "related_paths": []
+            },
+            {
+                "path": "src/state/store.ts",
+                "line": null,
+                "severity": "medium",
+                "category": "architecture",
+                "effort": "L",
+                "title": "One global store holds auth, cart, and UI state together",
+                "evidence": "Every module imports the same store object, so a change to cart shape forces re-renders across unrelated screens and makes any module impossible to test in isolation.",
+                "recommendation": "Split the store by domain. This is the structural reason the codebase is hard to change safely, but it should follow the correctness fixes above.",
+                "related_paths": [
+                    "src/screens/Checkout.tsx"
+                ]
+            },
+            {
+                "path": "src/utils/helpers.ts",
+                "line": 148,
+                "severity": "low",
+                "category": "business_logic",
+                "effort": "S",
+                "title": "Date helper assumes the server timezone",
+                "evidence": "formatDueDate() builds a Date from a bare string, so invoice due dates shift by a day for users west of UTC.",
+                "recommendation": "Parse and render dates in an explicit timezone rather than the host default.",
+                "related_paths": []
+            }
+        ],
+        "expert_review": {
+            "expert_summary": "I have read the automated findings against the code and agree with the ranking, with one change: the unverified payment webhook is the most urgent item here, ahead of the committed secrets. The secrets are real and must be rotated, but they are scoped to a staging project; the webhook lets an unauthenticated caller mark any order as paid in production. I removed two duplication findings that flagged generated API clients, which are meant to be identical, and downgraded the god-object finding to medium: it is a genuine constraint on future work but nothing breaks because of it today. Two weeks of focused work on the first four items would move this codebase out of the risk band it is in.",
+            "review_notes": "Removed 2 false positives (generated clients in src/api/generated). Re-ranked the webhook finding from high to critical. Confirmed the discount-ordering bug by hand against all four duplicated code paths — it is reproducible and customer-visible.",
+            "reviewed_by": "Serhii Fedorenko",
+            "reviewed_at": "2026-08-24T09:20:00+00:00"
+        }
     },
     "metrics": {
         "files_total": 412,
         "loc_total": 68450,
         "languages": {
-            "ts": {"files": 210, "loc": 41200},
-            "tsx": {"files": 88, "loc": 15300},
-            "js": {"files": 54, "loc": 6900},
-            "css": {"files": 25, "loc": 3050},
-            "json": {"files": 35, "loc": 2000}
+            "ts": {
+                "files": 210,
+                "loc": 41200
+            },
+            "tsx": {
+                "files": 88,
+                "loc": 15300
+            },
+            "js": {
+                "files": 54,
+                "loc": 6900
+            },
+            "css": {
+                "files": 25,
+                "loc": 3050
+            },
+            "json": {
+                "files": 35,
+                "loc": 2000
+            }
         },
         "largest_files": [
-            {"path": "src/services/PaymentService.ts", "loc": 2412},
-            {"path": "src/screens/Checkout.tsx", "loc": 1876},
-            {"path": "src/api/handlers.ts", "loc": 1544},
-            {"path": "src/state/store.ts", "loc": 1102},
-            {"path": "src/utils/helpers.ts", "loc": 987}
+            {
+                "path": "src/services/PaymentService.ts",
+                "loc": 2412
+            },
+            {
+                "path": "src/screens/Checkout.tsx",
+                "loc": 1876
+            },
+            {
+                "path": "src/api/handlers.ts",
+                "loc": 1544
+            },
+            {
+                "path": "src/state/store.ts",
+                "loc": 1102
+            },
+            {
+                "path": "src/utils/helpers.ts",
+                "loc": 987
+            }
         ],
         "duplication_pct": 26.4,
         "test_files": 9,
         "test_ratio_pct": 2.2,
         "has_ci": false,
         "has_readme": true,
-        "manifests": {"package.json": {"dependencies": 64, "dev_dependencies": 21, "lockfile": true}},
-        "secret_findings": {"generic_api_key": {"count": 3, "files": ["src/config.ts", ".env.production"]}},
-        "git": {"default_branch": "main", "last_commit_at": "2026-06-28T14:12:00+00:00", "commits_analyzed": 200, "contributors": 2, "top_contributor_pct": 94},
+        "manifests": {
+            "package.json": {
+                "dependencies": 64,
+                "dev_dependencies": 21,
+                "lockfile": true
+            }
+        },
+        "secret_findings": {
+            "generic_api_key": {
+                "count": 3,
+                "files": [
+                    "src/config.ts",
+                    ".env.production"
+                ]
+            }
+        },
+        "git": {
+            "default_branch": "main",
+            "last_commit_at": "2026-06-28T14:12:00+00:00",
+            "commits_analyzed": 200,
+            "contributors": 2,
+            "top_contributor_pct": 94
+        },
         "hotspots": [
-            {"path": "src/services/PaymentService.ts", "changes": 41, "loc": 2412},
-            {"path": "src/screens/Checkout.tsx", "changes": 28, "loc": 1876},
-            {"path": "src/api/handlers.ts", "changes": 19, "loc": 1544}
+            {
+                "path": "src/services/PaymentService.ts",
+                "changes": 41,
+                "loc": 2412
+            },
+            {
+                "path": "src/screens/Checkout.tsx",
+                "changes": 28,
+                "loc": 1876
+            },
+            {
+                "path": "src/api/handlers.ts",
+                "changes": 19,
+                "loc": 1544
+            }
         ]
+    },
+    "previous_audit_days_ago": 34,
+    "deltas": {
+        "structure": 4,
+        "duplication": -2,
+        "testing": 12,
+        "dependencies": 7,
+        "security_hygiene": -5,
+        "overall": 3
     }
 }

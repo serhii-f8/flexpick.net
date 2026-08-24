@@ -20,7 +20,15 @@
 <div class="mx-auto max-w-[860px] px-4 py-8">
     @php($payload = $report->payload)
     @if ($isSample)
-        <div class="mb-5 rounded-lg bg-primary-500 px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-stone-900">{{ __('Sample report') }} — {{ __('this is what every FlexPick audit looks like') }}</div>
+        <div class="mb-3 rounded-lg bg-primary-500 px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-stone-900">{{ __('Sample report') }} — {{ __('every section a FlexPick audit can produce') }}</div>
+        <div class="mb-5 rounded-xl border border-stone-200 bg-white px-5 py-4">
+            <p class="text-sm text-stone-700">{{ __('This page shows one repository reported at every level, so you can see exactly what each tier adds. Each section is tagged with the lowest tier that includes it — and every tier also includes everything below it.') }}</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+                @foreach ([\App\Constants\AuditTier::DIAGNOSTIC, \App\Constants\AuditTier::DEEP_AI, \App\Constants\AuditTier::EXPERT] as $legendTier)
+                    @include('reports.partials.web.sample-tier-badge', ['tier' => $legendTier->value])
+                @endforeach
+            </div>
+        </div>
     @endif
 
     <div class="mb-5 rounded-xl border border-stone-200 bg-white p-7">
@@ -44,6 +52,7 @@
 
     @php($notMeasured = $report->auditRequest->metrics['not_measured'] ?? [])
     <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+        @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
         <h2 class="text-base font-bold mb-3">{{ __('Health scores') }}</h2>
         <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3">
             @foreach ($payload['scores'] as $dimension => $score)
@@ -77,7 +86,8 @@
     ])
     @if ($groups !== [])
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
-            <h2 class="text-base font-bold mb-3">{{ __('What we found') }}</h2>
+            @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
+        <h2 class="text-base font-bold mb-3">{{ __('What we found') }}</h2>
             @foreach ($groups as $group)
                 <div class="border-t border-stone-200 py-3.5">
                     <div class="flex flex-wrap items-center gap-2.5">
@@ -111,7 +121,8 @@
     @php($metrics = $report->auditRequest->metrics)
     @if (is_array($metrics) && $metrics !== [])
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
-            <h2 class="text-base font-bold mb-3">{{ __('Repository facts') }}</h2>
+            @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
+        <h2 class="text-base font-bold mb-3">{{ __('Repository facts') }}</h2>
             <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3">
                 <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ number_format($metrics['files_total'] ?? 0) }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('source files') }}</div></div>
                 <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ number_format($metrics['loc_total'] ?? 0) }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('lines of code') }}</div></div>
@@ -181,6 +192,7 @@
         'low' => 'bg-lime-50 text-lime-800',
     ])
     <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+        @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
         <h2 class="text-base font-bold mb-3">{{ __('Risks, ranked by impact') }}</h2>
         @foreach (collect($payload['risks'])->sortBy(fn ($r) => array_search($r['impact'], ['high', 'medium', 'low'])) as $risk)
             <div class="border-t border-stone-200 py-3.5">
@@ -208,19 +220,22 @@
 
     @if (($payload['deep_review'] ?? null) !== null)
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+            @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'deep_ai'])
             @include('reports.partials.web.deep-findings', ['payload' => $payload, 'unlocked' => $unlocked])
         </div>
     @endif
 
     @if (($payload['expert_review'] ?? null) !== null)
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+            @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'expert'])
             @include('reports.partials.web.expert-review', ['payload' => $payload])
         </div>
     @endif
 
     @if ($unlocked)
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
-            <h2 class="text-base font-bold mb-3">{{ __('What to fix first') }}</h2>
+            @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
+        <h2 class="text-base font-bold mb-3">{{ __('What to fix first') }}</h2>
             <table class="w-full border-collapse">
                 <tr><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">#</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">{{ __('Step') }}</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">{{ __('Why') }}</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">{{ __('Effort') }}</th></tr>
                 @foreach ($payload['fix_first_plan'] as $i => $step)
