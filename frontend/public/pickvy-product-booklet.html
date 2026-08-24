@@ -29,6 +29,12 @@
       }
       html {
         scroll-behavior: smooth;
+        /* Snapping must be declared on the scroll container. It used to sit on
+           .deck, which is a plain block with overflow:visible and therefore
+           never a scrollport, so the browser ignored it outright and the deck
+           scrolled like an ordinary page -- landing mid-slide on every wheel
+           gesture. The viewport is what actually scrolls here. */
+        scroll-snap-type: y mandatory;
       }
       body {
         margin: 0;
@@ -45,9 +51,6 @@
           sans-serif;
         line-height: 1.55;
         -webkit-font-smoothing: antialiased;
-      }
-      .deck {
-        scroll-snap-type: y proximity;
       }
       .slide {
         min-height: 100vh;
@@ -243,6 +246,20 @@
         flex-wrap: wrap;
         margin-top: 24px;
       }
+      /* One slide stacks a table, the tier cards and a callout together. At the
+         authored deck size (1280x900 -> a 633px content box) that stack ran
+         ~50px past the fold, so its tail was unreachable: with snapping now
+         live the deck pages straight over it, and the print sheet clips it.
+         Tightened here rather than in the base rules so the other slides keep
+         their looser rhythm. */
+      .slide.dense table,
+      .slide.dense .tiers,
+      .slide.dense .callout {
+        margin-top: 14px;
+      }
+      .slide.dense .tier {
+        padding: 11px 18px;
+      }
       .tier {
         flex: 1;
         min-width: 150px;
@@ -340,6 +357,12 @@
         .slide {
           min-height: auto;
           padding: 56px 0;
+        }
+        /* Slides are content-height here, not viewport-height, so snapping to
+           their tops fights the reader instead of paging them. Deck mode is
+           desktop-only -- the same breakpoint hides the nav hint. */
+        html {
+          scroll-snap-type: none;
         }
         .navhint {
           display: none;
