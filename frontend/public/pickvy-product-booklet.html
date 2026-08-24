@@ -339,6 +339,22 @@
         font-size: clamp(22px, 3vw, 30px);
         letter-spacing: -0.03em;
       }
+      .deckprogress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.06);
+        z-index: 40;
+      }
+      .deckprogress span {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: var(--gold);
+        transition: width 0.25s ease;
+      }
       .navhint {
         position: fixed;
         right: 20px;
@@ -364,7 +380,8 @@
         html {
           scroll-snap-type: none;
         }
-        .navhint {
+        .navhint,
+        .deckprogress {
           display: none;
         }
       }
@@ -378,7 +395,8 @@
           margin: 0;
           background: #0b0c0f;
         }
-        .navhint {
+        .navhint,
+        .deckprogress {
           display: none;
         }
         .slide {
@@ -909,19 +927,100 @@
         </div>
       </section>
     </div>
-    <div class="navhint">&uarr; &darr; to navigate</div>
+    <div class="deckprogress" aria-hidden="true"><span></span></div>
+    <div class="navhint">&larr; &rarr; space to navigate &middot; F for fullscreen</div>
     <script>
       const slides = [...document.querySelectorAll('.slide')];
-      addEventListener('keydown', (e) => {
-        if (!['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp'].includes(e.key)) return;
-        e.preventDefault();
+      const bar = document.querySelector('.deckprogress span');
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+      // Deck mode is desktop-only, matching the breakpoint that drops snapping
+      // and hides the nav hint.
+      const paged = () => matchMedia('(min-width: 901px)').matches;
+
+      const nearest = () => {
         const y = scrollY + innerHeight / 2;
-        let i = slides.findIndex((s) => s.offsetTop <= y && s.offsetTop + s.offsetHeight > y);
-        if (i < 0) i = 0;
-        const dir = e.key === 'ArrowDown' || e.key === 'PageDown' ? 1 : -1;
-        const t = slides[Math.max(0, Math.min(slides.length - 1, i + dir))];
-        if (t) t.scrollIntoView({ behavior: 'smooth' });
+        const i = slides.findIndex((s) => s.offsetTop <= y && s.offsetTop + s.offsetHeight > y);
+        return i < 0 ? 0 : i;
+      };
+
+      let current = nearest();
+
+      const render = () => {
+        if (bar) bar.style.width = ((current + 1) / slides.length) * 100 + '%';
+        // Shareable as "slide 7". replaceState so paging doesn't fill history;
+        // guarded because file:// origins reject it in some browsers.
+        try {
+          history.replaceState(null, '', current === 0 ? location.pathname + location.search : '#' + (current + 1));
+        } catch (err) {
+          /* deep links are a nicety, never a hard dependency */
+        }
+      };
+
+      /**
+       * `current` is authoritative rather than derived from live scrollY.
+       * The old handler recomputed the index on every press, so a press that
+       * landed mid-animation resolved to the slide being left and advanced
+       * from there -- five quick presses moved three slides. Tracking the
+       * index means presses queue exactly, and smooth scroll just retargets.
+       */
+      const go = (i, instant) => {
+        current = Math.max(0, Math.min(slides.length - 1, i));
+        // 'instant', never 'auto': 'auto' defers to CSS, and html carries
+        // scroll-behavior: smooth, so 'auto' still animates.
+        slides[current].scrollIntoView({ behavior: instant || reduce.matches ? 'instant' : 'smooth' });
+        render();
+      };
+
+      // Resync once scrolling settles, so wheel, trackpad and scrollbar all
+      // leave `current` correct before the next key press.
+      let settle;
+      addEventListener(
+        'scroll',
+        () => {
+          clearTimeout(settle);
+          settle = setTimeout(() => {
+            current = nearest();
+            render();
+          }, 120);
+        },
+        { passive: true }
+      );
+
+      const NEXT = ['ArrowDown', 'ArrowRight', 'PageDown', ' ', 'Spacebar'];
+      const PREV = ['ArrowUp', 'ArrowLeft', 'PageUp', 'Backspace'];
+
+      addEventListener('keydown', (e) => {
+        // Leave browser shortcuts alone.
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const k = e.key;
+
+        if (k === 'f' || k === 'F') {
+          e.preventDefault();
+          if (document.fullscreenElement) document.exitFullscreen();
+          else document.documentElement.requestFullscreen?.();
+          return;
+        }
+        // Instant, not smooth: animating across ten slides is a long, queasy
+        // ride, and every deck tool jumps for first/last.
+        if (k === 'Home') return (e.preventDefault(), go(0, true));
+        if (k === 'End') return (e.preventDefault(), go(slides.length - 1, true));
+        // Shift+Space is "back" on every presenter remote.
+        if (NEXT.includes(k)) return (e.preventDefault(), go(current + (e.shiftKey ? -1 : 1)));
+        if (PREV.includes(k)) return (e.preventDefault(), go(current - 1));
       });
+
+      // Click advances, the way a deck does -- but never swallow a real
+      // interaction or a click that ends a text selection.
+      addEventListener('click', (e) => {
+        if (!paged() || e.button !== 0) return;
+        if (e.target.closest('a, button, input, select, textarea, [role=button]')) return;
+        if ((getSelection()?.toString() ?? '') !== '') return;
+        go(current + 1);
+      });
+
+      const fromHash = parseInt(location.hash.slice(1), 10);
+      if (Number.isInteger(fromHash) && fromHash >= 1 && fromHash <= slides.length) go(fromHash - 1, true);
+      else render();
     </script>
   </body>
 </html>
