@@ -85,7 +85,7 @@ trait RunsAuditPipelineWithFakes
     private function runPipelineWithFakes(
         array $groups = [],
         array $failingScanners = [],
-        AuditTier $tier = AuditTier::AUTOMATED,
+        AuditTier $tier = AuditTier::DIAGNOSTIC,
         int $inputTokens = 10,
         int $outputTokens = 5,
         ?DeepReviewer $deepReviewer = null,

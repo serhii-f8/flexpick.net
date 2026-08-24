@@ -63,7 +63,7 @@ class CollectorsTest extends FeatureTest
     {
         $context = new RepoContext(
             path: $this->repo,
-            tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
         );
 
         $context->withInventory(new SccInventory(
@@ -120,8 +120,8 @@ class CollectorsTest extends FeatureTest
 
     public function test_excerpt_collector_respects_the_tier_budget(): void
     {
-        config()->set('audit.tiers.automated.excerpt_files', 1);
-        config()->set('audit.tiers.automated.excerpt_bytes', 20);
+        config()->set('audit.tiers.diagnostic.excerpt_files', 1);
+        config()->set('audit.tiers.diagnostic.excerpt_bytes', 20);
 
         $excerpts = app(ExcerptCollector::class)->collect($this->context())['excerpts'];
 

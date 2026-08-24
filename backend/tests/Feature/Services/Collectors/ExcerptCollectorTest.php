@@ -38,7 +38,7 @@ class ExcerptCollectorTest extends FeatureTest
     {
         $context = new RepoContext(
             $this->repo,
-            app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+            app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
             new SccInventory(
                 files: [
                     ['path' => '.env', 'loc' => 40, 'complexity' => 0],
@@ -99,7 +99,7 @@ class ExcerptCollectorTest extends FeatureTest
 
         $context = new RepoContext(
             $this->repo,
-            app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+            app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
             $inventory,
         );
 
@@ -121,7 +121,7 @@ class ExcerptCollectorTest extends FeatureTest
      */
     public function test_excluded_files_slot_is_backfilled_not_dropped(): void
     {
-        config()->set('audit.tiers.automated.excerpt_files', 2);
+        config()->set('audit.tiers.diagnostic.excerpt_files', 2);
 
         $paths = $this->paths($this->context());
 

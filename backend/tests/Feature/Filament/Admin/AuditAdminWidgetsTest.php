@@ -31,7 +31,7 @@ class AuditAdminWidgetsTest extends FeatureTest
 
         $product = Product::factory()->create([
             'name' => 'Audit Growth',
-            'metadata' => ['audit_analyses_per_month' => 20],
+            'metadata' => ['audit_diagnostic_credits' => 20],
         ]);
         $plan = Plan::factory()->create(['product_id' => $product->id, 'name' => $planName]);
 

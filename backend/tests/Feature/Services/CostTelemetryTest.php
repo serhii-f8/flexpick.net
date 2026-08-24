@@ -43,13 +43,13 @@ class CostTelemetryTest extends FeatureTest
     public function test_cost_per_tier_is_aggregable_in_one_query(): void
     {
         // This suite has no per-test DB reset, and other tests in this class
-        // create their own AUTOMATED-tier rows via runPipelineWithFakes();
+        // create their own deep-review rows via runPipelineWithFakes();
         // without this, their token counts pollute the average below.
         AuditRequest::query()->delete();
 
         // This is the shape Q5 needs on the first 20-30 paid runs.
         AuditRequest::factory()->count(3)->create([
-            'tier' => AuditTier::AUTOMATED->value,
+            'tier' => AuditTier::DEEP_AI->value,
             'ai_input_tokens' => 10_000, 'ai_output_tokens' => 2_000,
             'scanner_ms' => 5_000, 'repo_size_kb' => 40_000,
         ]);
@@ -65,7 +65,7 @@ class CostTelemetryTest extends FeatureTest
             ->selectRaw('tier, avg(ai_input_tokens) as avg_in, avg(ai_output_tokens) as avg_out, avg(scanner_ms) as avg_ms')
             ->pluck('avg_in', 'tier');
 
-        $this->assertEquals(10_000, (int) $byTier[AuditTier::AUTOMATED->value]);
+        $this->assertEquals(10_000, (int) $byTier[AuditTier::DEEP_AI->value]);
         $this->assertEquals(2_000, (int) $byTier[AuditTier::DIAGNOSTIC->value]);
     }
 

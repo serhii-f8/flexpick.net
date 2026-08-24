@@ -167,7 +167,7 @@ class SmokeCommand extends Command
      */
     private function auditScannersProvisioned(): bool
     {
-        $profile = app(TierProfileResolver::class)->for(AuditTier::AUTOMATED);
+        $profile = app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC);
 
         foreach ($profile->scanners as $name) {
             $scanner = app('audit.scanner.'.$name);

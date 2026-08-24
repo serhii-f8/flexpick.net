@@ -73,12 +73,13 @@ class AuditEntitlementService
     }
 
     /**
-     * Plan-metadata key per metered tier. DIAGNOSTIC is absent deliberately:
-     * it is funded by the lifetime free quota, not a monthly allowance.
+     * Plan-metadata key per metered tier -- one key per tier, no aliases.
+     * DIAGNOSTIC is listed like any other: a tenant with no plan still falls
+     * back to the lifetime free quota in quotaFor(), so being metered here
+     * costs a plan-less user nothing.
      */
     private const QUOTA_KEYS = [
         AuditTier::DIAGNOSTIC->value => 'audit_diagnostic_credits',
-        AuditTier::AUTOMATED->value => 'audit_analyses_per_month',
         AuditTier::DEEP_AI->value => 'audit_deep_ai_credits',
         AuditTier::EXPERT->value => 'audit_expert_credits',
     ];
@@ -145,8 +146,8 @@ class AuditEntitlementService
     public function quotaFor(User $user, ?Tenant $tenant, AuditTier $tier): TierQuota
     {
         // Diagnostic defaults to the per-email lifetime free-run count, but a
-        // tenant whose plan grants a monthly Diagnostic allowance (Partner,
-        // currently the only one) uses that instead -- same metered
+        // tenant whose plan grants a monthly Diagnostic allowance (every
+        // paid plan does) uses that instead -- same metered
         // semantics every other tier already has, so nothing downstream
         // needs to know Diagnostic is special-cased at all once this is
         // decided.

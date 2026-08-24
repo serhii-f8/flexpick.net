@@ -28,7 +28,7 @@ class AuditReportServiceTest extends FeatureTest
     public function test_every_other_tier_sends_as_before(): void
     {
         Mail::fake();
-        $request = AuditRequest::factory()->create(['tier' => AuditTier::AUTOMATED->value]);
+        $request = AuditRequest::factory()->create(['tier' => AuditTier::DIAGNOSTIC->value]);
 
         app(AuditReportService::class)->createAndDeliver($request, $this->payload(), 1);
 

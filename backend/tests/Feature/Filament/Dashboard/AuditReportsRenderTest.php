@@ -16,20 +16,19 @@ class AuditReportsRenderTest extends FeatureTest
 
     public function test_the_page_lists_every_tier(): void
     {
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 1);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 1);
         $this->actAsTenantUser($user, $tenant);
 
         Livewire::test(AuditReports::class)
             ->assertOk()
             ->assertSee('Diagnostic Report')
-            ->assertSee('Automated Health Report')
             ->assertSee('Deep AI Code Review')
             ->assertSee('Expert Audit');
     }
 
     public function test_a_report_held_for_expert_review_is_visible(): void
     {
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
         $this->actAsTenantUser($user, $tenant);
 
         // Let the factory build its own request, then bend that request into
@@ -50,7 +49,7 @@ class AuditReportsRenderTest extends FeatureTest
 
     public function test_each_listed_report_shows_the_tier_it_ran_at(): void
     {
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 1);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 1);
         $this->actAsTenantUser($user, $tenant);
 
         $report = AuditReport::factory()->create(['user_id' => $user->id]);

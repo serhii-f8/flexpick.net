@@ -35,10 +35,10 @@ class HandleAuditTierOrderTest extends FeatureTest
             'status' => AuditRequestStatus::SENT->value,
         ]);
 
-        $this->completeOrderFor($user, 'audit-automated');
+        $this->completeOrderFor($user, 'audit-deep-ai');
 
         $upgraded = AuditRequest::where('user_id', $user->id)
-            ->where('tier', AuditTier::AUTOMATED->value)
+            ->where('tier', AuditTier::DEEP_AI->value)
             ->first();
 
         $this->assertNotNull($upgraded, 'A tier purchase must produce a run at the purchased tier.');
@@ -59,7 +59,7 @@ class HandleAuditTierOrderTest extends FeatureTest
             'repo_url' => 'https://github.com/acme/app',
         ]);
 
-        $this->completeOrderFor($user, 'audit-automated');
+        $this->completeOrderFor($user, 'audit-deep-ai');
 
         $this->assertSame(AuditTier::DIAGNOSTIC, $diagnostic->fresh()->tier);
     }
@@ -94,10 +94,10 @@ class HandleAuditTierOrderTest extends FeatureTest
             'tier' => AuditTier::DIAGNOSTIC->value,
         ]);
 
-        $this->completeOrderFor($user, 'audit-automated');
+        $this->completeOrderFor($user, 'audit-deep-ai');
 
         $upgraded = AuditRequest::where('user_id', $user->id)
-            ->where('tier', AuditTier::AUTOMATED->value)
+            ->where('tier', AuditTier::DEEP_AI->value)
             ->firstOrFail();
 
         $this->assertFalse((bool) $upgraded->free_run);

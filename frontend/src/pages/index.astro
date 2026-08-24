@@ -5,7 +5,7 @@ import { PRODUCT_APP } from 'flexpick:config';
 import pricing from '~/data/pricing.json';
 
 const diagnosticTier = pricing.tiers['audit-diagnostic'];
-const automatedTier = pricing.tiers['audit-automated'];
+const deepAiTier = pricing.tiers['audit-deep-ai'];
 const starterPlan = pricing.subscriptions['audit-starter'];
 const enterprisePlan = pricing.subscriptions['audit-enterprise'];
 
@@ -830,19 +830,21 @@ const hotspots = [
             <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">01</span> · diagnostic/</p>
             <h3 class="fp-card-title">{diagnosticTier.name} — {diagnosticTier.price_display}</h3>
             <p class="fp-card-body">
-              Submit a repo, confirm your email, and get a real report: overall health score, five sub-scores, measured
-              repository facts, and every risk we found.
+              The full analysis pipeline on your repo — five static analyzers across security, duplication, and
+              dependencies — with AI interpretation of every result, an overall health score, and a prioritized
+              fix-first plan.
             </p>
           </div>
           <div
             class="fp-card"
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015);"
           >
-            <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">02</span> · automated/</p>
-            <h3 class="fp-card-title">{automatedTier.name} — {automatedTier.price_display}</h3>
+            <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">02</span> · deep-ai/</p>
+            <h3 class="fp-card-title">{deepAiTier.name} — {deepAiTier.price_display}</h3>
             <p class="fp-card-body">
-              Five static analyzers across security, duplication, and dependencies, with problems grouped and explained
-              — plus a prioritized fix-first plan and a PDF you can share. One click from your report page.
+              Everything in the Diagnostic Report, plus an AI code review of your key files and core flows — findings
+              bound to real files, with evidence and effort sizing, and a PDF you can share. One click from your report
+              page.
             </p>
           </div>
           <div
@@ -853,7 +855,7 @@ const hotspots = [
             <h3 class="fp-card-title">Track it — from {starterPlan.price_display}/mo</h3>
             <p class="fp-card-body">
               Re-audit on a schedule, watch your health score trend as you ship, and catch new risks before they
-              compound. Plans include {starterPlan.analyses_per_month} to {enterprisePlan.analyses_per_month} audits a month.
+              compound. Plans include {starterPlan.diagnostic_credits} to {enterprisePlan.diagnostic_credits} audits a month.
             </p>
           </div>
         </div>

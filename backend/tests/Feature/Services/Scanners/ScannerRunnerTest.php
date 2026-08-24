@@ -21,7 +21,7 @@ class ScannerRunnerTest extends FeatureTest
     {
         return new RepoContext(
             path: '/tmp/does-not-matter',
-            tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
         );
     }
 

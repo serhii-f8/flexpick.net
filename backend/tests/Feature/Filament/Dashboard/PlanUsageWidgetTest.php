@@ -22,7 +22,7 @@ class PlanUsageWidgetTest extends FeatureTest
     {
         $user = User::factory()->create();
         $tenant = $this->tenantFor($user);
-        $product = Product::factory()->create(['metadata' => ['audit_analyses_per_month' => 5]]);
+        $product = Product::factory()->create(['metadata' => ['audit_diagnostic_credits' => 5]]);
         $plan = Plan::factory()->create(['product_id' => $product->id, 'name' => 'Studio']);
         Subscription::factory()->create([
             'tenant_id' => $tenant->id,
@@ -38,7 +38,7 @@ class PlanUsageWidgetTest extends FeatureTest
 
         Livewire::test(PlanUsageWidget::class)
             ->assertSee('Studio')
-            ->assertSee(__('Automated Health Report'));
+            ->assertSee(__('Diagnostic Report'));
     }
 
     public function test_shows_free_runs_for_user_without_subscription(): void
@@ -56,7 +56,7 @@ class PlanUsageWidgetTest extends FeatureTest
 
         Livewire::test(PlanUsageWidget::class)
             ->assertSee(__('Free audits'))
-            ->assertDontSee(__('Automated Health Report'));
+            ->assertDontSee(__('Diagnostic Report'));
     }
 
     /**
@@ -112,22 +112,22 @@ class PlanUsageWidgetTest extends FeatureTest
 
     public function test_a_bar_is_shown_for_every_tier_with_an_allowance(): void
     {
-        [$user, $tenant] = $this->userWithAllowance(analyses: 20, deepAi: 1, expert: 1);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 20, deepAi: 1, expert: 1);
         $this->actAsTenantUser($user, $tenant);
 
         Livewire::test(PlanUsageWidget::class)
-            ->assertSee('Automated Health Report')
+            ->assertSee('Diagnostic Report')
             ->assertSee('Deep AI Code Review')
             ->assertSee('Expert Audit');
     }
 
     public function test_a_tier_with_no_allowance_is_not_advertised(): void
     {
-        [$user, $tenant] = $this->userWithAllowance(analyses: 20, deepAi: 0, expert: 0);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 20, deepAi: 0, expert: 0);
         $this->actAsTenantUser($user, $tenant);
 
         Livewire::test(PlanUsageWidget::class)
-            ->assertSee('Automated Health Report')
+            ->assertSee('Diagnostic Report')
             ->assertDontSee('Deep AI Code Review')
             ->assertDontSee('Expert Audit');
     }
@@ -151,7 +151,7 @@ class PlanUsageWidgetTest extends FeatureTest
 
     public function test_subscribed_user_with_allowance_remaining_does_not_see_upgrade(): void
     {
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
         $this->actAsTenantUser($user, $tenant);
 
         Livewire::test(PlanUsageWidget::class)

@@ -20,7 +20,7 @@ class ExpertReviewResourceTest extends FeatureTest
     {
         $reviewer = $this->createAdminUser();
         AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
-        AuditRequest::factory()->create(['tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::SENT->value]); // not in queue
+        AuditRequest::factory()->create(['tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::SENT->value]); // not in queue
 
         $response = $this->actingAs($reviewer)->get(ExpertReviewResource::getUrl('index', [], true, 'admin'));
 
@@ -31,7 +31,7 @@ class ExpertReviewResourceTest extends FeatureTest
     {
         $inQueue = AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
         $alreadyPublished = AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::SENT->value]); // already published
-        $automated = AuditRequest::factory()->create(['tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::REPORT_READY->value]);
+        $diagnostic = AuditRequest::factory()->create(['tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::REPORT_READY->value]);
 
         $ids = ExpertReviewResource::getEloquentQuery()->pluck('id')->all();
 
@@ -40,7 +40,7 @@ class ExpertReviewResourceTest extends FeatureTest
         // tests in this suite run may still be present in the table.
         $this->assertContains($inQueue->id, $ids);
         $this->assertNotContains($alreadyPublished->id, $ids);
-        $this->assertNotContains($automated->id, $ids);
+        $this->assertNotContains($diagnostic->id, $ids);
     }
 
     public function test_navigation_badge_matches_queue_count(): void
@@ -49,7 +49,7 @@ class ExpertReviewResourceTest extends FeatureTest
 
         AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
         AuditRequest::factory()->create(['tier' => AuditTier::EXPERT->value, 'status' => AuditRequestStatus::EXPERT_REVIEW->value]);
-        AuditRequest::factory()->create(['tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::SENT->value]); // not in queue
+        AuditRequest::factory()->create(['tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::SENT->value]); // not in queue
 
         $this->assertSame((string) ($before + 2), ExpertReviewResource::getNavigationBadge());
     }

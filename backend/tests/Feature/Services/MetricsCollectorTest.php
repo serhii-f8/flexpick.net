@@ -43,7 +43,7 @@ class MetricsCollectorTest extends FeatureTest
     {
         $context = new RepoContext(
             path: $this->repo,
-            tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
         );
 
         $context->withInventory(new SccInventory(

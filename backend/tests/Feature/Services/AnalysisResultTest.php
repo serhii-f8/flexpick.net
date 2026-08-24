@@ -49,7 +49,7 @@ class AnalysisResultTest extends FeatureTest
             }
         };
 
-        $result = $fake->analyze([], [], [], app(TierProfileResolver::class)->for(AuditTier::AUTOMATED));
+        $result = $fake->analyze([], [], [], app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC));
 
         $this->assertSame('faked', $result->payload['summary']);
     }

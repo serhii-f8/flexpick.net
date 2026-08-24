@@ -127,7 +127,7 @@ class AuditDemoSeeder extends Seeder
             'email_verified_at' => now(),
             'free_run' => false,
             'funding' => AuditFunding::ALLOWANCE->value,
-            'tier' => AuditTier::AUTOMATED->value,
+            'tier' => AuditTier::DIAGNOSTIC->value,
             'source' => 'dashboard',
             'user_id' => $user->id,
         ]);

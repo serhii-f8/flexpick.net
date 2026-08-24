@@ -114,13 +114,13 @@ class AuditRequestScopesTest extends FeatureTest
 
     public function test_breaching_expert_review_sla_ignores_non_expert_tiers(): void
     {
-        $automated = AuditRequest::factory()->create([
-            'tier' => AuditTier::AUTOMATED->value,
+        $diagnostic = AuditRequest::factory()->create([
+            'tier' => AuditTier::DIAGNOSTIC->value,
             'status' => AuditRequestStatus::EXPERT_REVIEW->value,
             'analysis_completed_at' => now()->subHours(48),
         ]);
 
-        $this->assertFalse(AuditRequest::query()->breachingExpertReviewSla()->pluck('id')->contains($automated->id));
+        $this->assertFalse(AuditRequest::query()->breachingExpertReviewSla()->pluck('id')->contains($diagnostic->id));
     }
 
     public function test_email_logs_relation_returns_this_requests_messages(): void

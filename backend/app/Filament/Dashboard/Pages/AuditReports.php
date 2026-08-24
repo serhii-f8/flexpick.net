@@ -47,7 +47,7 @@ class AuditReports extends Page
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
 
-        foreach ([AuditTier::AUTOMATED, AuditTier::DEEP_AI, AuditTier::EXPERT, AuditTier::DIAGNOSTIC] as $tier) {
+        foreach ([AuditTier::DEEP_AI, AuditTier::EXPERT, AuditTier::DIAGNOSTIC] as $tier) {
             if ($entitlements->remainingRuns($user, $tenant, $tier) > 0) {
                 return $tier;
             }
@@ -196,7 +196,7 @@ class AuditReports extends Page
         $user = auth()->user();
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
-        $selected = AuditTier::tryFrom($tier ?? AuditTier::AUTOMATED->value) ?? AuditTier::AUTOMATED;
+        $selected = AuditTier::tryFrom($tier ?? AuditTier::DIAGNOSTIC->value) ?? AuditTier::DIAGNOSTIC;
 
         if ($tenant === null || ! in_array($frequency, ['off', 'weekly', 'monthly'], true)) {
             return;

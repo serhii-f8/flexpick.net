@@ -13,14 +13,14 @@ use Filament\Facades\Filament;
 trait CreatesAuditSubscriptions
 {
     /** @return array{0: User, 1: Tenant} */
-    protected function userWithAllowance(int $analyses, int $deepAi = 0, int $expert = 0): array
+    protected function userWithAllowance(int $diagnostic, int $deepAi = 0, int $expert = 0): array
     {
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create();
         $tenant->users()->attach($user);
 
         $product = Product::factory()->create(['metadata' => [
-            'audit_analyses_per_month' => $analyses,
+            'audit_diagnostic_credits' => $diagnostic,
             'audit_deep_ai_credits' => $deepAi,
             'audit_expert_credits' => $expert,
         ]]);

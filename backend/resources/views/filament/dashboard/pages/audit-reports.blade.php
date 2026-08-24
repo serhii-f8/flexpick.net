@@ -94,15 +94,15 @@
             @endif
 
             @php
-                $automated = collect($quotas)->firstWhere(fn ($q) => $q->tier === \App\Constants\AuditTier::AUTOMATED);
+                $diagnostic = collect($quotas)->firstWhere(fn ($q) => $q->tier === \App\Constants\AuditTier::DIAGNOSTIC);
                 $originTier = $group['reports']->first()->auditRequest->tier->value;
             @endphp
 
-            @if ($automated && $automated->limit > 0)
+            @if ($diagnostic && $diagnostic->limit > 0)
                 @php
                     $schedule = $schedules[rtrim($repoUrl, '/')] ?? null;
                     $scheduleFrequency = $schedule->frequency ?? 'off';
-                    $scheduleTier = $schedule?->tier->value ?? \App\Constants\AuditTier::AUTOMATED->value;
+                    $scheduleTier = $schedule?->tier->value ?? \App\Constants\AuditTier::DIAGNOSTIC->value;
                 @endphp
 
                 <div class="mt-3 flex flex-wrap items-center gap-2">

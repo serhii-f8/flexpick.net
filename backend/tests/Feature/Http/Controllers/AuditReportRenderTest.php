@@ -10,7 +10,7 @@ use Tests\Feature\FeatureTest;
 
 class AuditReportRenderTest extends FeatureTest
 {
-    private function reportWith(array $payload, array $metrics = [], AuditTier $tier = AuditTier::AUTOMATED): AuditReport
+    private function reportWith(array $payload, array $metrics = [], AuditTier $tier = AuditTier::DIAGNOSTIC): AuditReport
     {
         $request = AuditRequest::factory()->create(['tier' => $tier->value, 'metrics' => $metrics]);
 

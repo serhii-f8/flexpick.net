@@ -17,7 +17,7 @@ class ExportPricingCommandTest extends FeatureTest
 
         $exported = json_decode((string) file_get_contents($this->target()), true);
 
-        $this->assertArrayHasKey('audit-automated', $exported['tiers']);
+        $this->assertArrayHasKey('audit-deep-ai', $exported['tiers']);
         $this->assertArrayHasKey('audit-enterprise', $exported['subscriptions']);
     }
 
@@ -29,8 +29,8 @@ class ExportPricingCommandTest extends FeatureTest
 
         // Both, so the marketing site never formats money itself and never
         // drifts from the figure the backend charges.
-        $this->assertSame(11900, $exported['tiers']['audit-automated']['price_cents']);
-        $this->assertSame('$119', $exported['tiers']['audit-automated']['price_display']);
+        $this->assertSame(11900, $exported['tiers']['audit-deep-ai']['price_cents']);
+        $this->assertSame('$119', $exported['tiers']['audit-deep-ai']['price_display']);
         $this->assertSame('$1,500', $exported['subscriptions']['audit-enterprise']['price_display']);
     }
 
@@ -45,7 +45,7 @@ class ExportPricingCommandTest extends FeatureTest
     {
         $this->artisan('app:export-pricing')->assertSuccessful();
 
-        config()->set('pricing.tiers.audit-automated.price', 5900);
+        config()->set('pricing.tiers.audit-deep-ai.price', 5900);
 
         $this->artisan('app:export-pricing', ['--check' => true])->assertFailed();
     }

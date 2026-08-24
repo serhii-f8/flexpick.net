@@ -18,10 +18,10 @@ use Illuminate\Support\Facades\Log;
  * A completed order for a tier product runs the customer's repository at the
  * purchased tier.
  *
- * It creates a NEW request rather than upgrading the diagnostic in place:
- * the diagnostic ran a reduced scanner set, so its stored metrics, groups, and
- * scores are not the paid tier's — and the customer keeps the original report
- * they were shown (spec §4.2).
+ * It creates a NEW request rather than upgrading the earlier run in place:
+ * a higher tier adds a deep per-file review, so its stored metrics, groups,
+ * and scores are not the earlier run's — and the customer keeps the original
+ * report they were shown (spec §4.2).
  */
 class HandleAuditTierOrder
 {

@@ -93,10 +93,10 @@ class AuditCostWidgetTest extends FeatureTest
 
     public function test_an_unpriced_model_is_never_counted_as_free(): void
     {
-        $request = AuditRequest::factory()->create(['tier' => AuditTier::AUTOMATED->value]);
+        $request = AuditRequest::factory()->create(['tier' => AuditTier::DIAGNOSTIC->value]);
         AuditAiCall::factory()->for($request)->create(['model' => 'nobody-priced-this']);
 
-        $spend = app(AuditCostReporter::class)->byTier()[AuditTier::AUTOMATED->value];
+        $spend = app(AuditCostReporter::class)->byTier()[AuditTier::DIAGNOSTIC->value];
 
         $this->assertSame(0.0, $spend->spendUsd);
         $this->assertSame(1, $spend->unsizedCalls);

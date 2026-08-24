@@ -30,7 +30,7 @@ class SccScannerTest extends FeatureTest
         // for every later stage (F5.12.2).
         $context = new RepoContext(
             path: base_path('tests/Feature/Services/Fixtures/Scanners'),
-            tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
         );
 
         $this->assertSame([], app(SccScanner::class)->normalize([]));

@@ -8,40 +8,38 @@ use Tests\Feature\FeatureTest;
 
 class TierProfileResolverTest extends FeatureTest
 {
-    public function test_diagnostic_runs_only_the_cheap_scanner_subset(): void
+    /**
+     * Diagnostic is the base tier and is sold as "the full analysis pipeline
+     * plus AI interpretation" -- so it runs every scanner, in the committed
+     * order. It carried a three-scanner subset while the Automated Health
+     * Report sat above it; retiring that tier moved the full set down here.
+     */
+    public function test_diagnostic_runs_the_full_scanner_set_in_the_committed_order(): void
     {
         $profile = app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC);
 
-        $this->assertSame(['scc', 'gitleaks', 'osv'], $profile->scanners);
-        $this->assertFalse($profile->runsScanner('semgrep'));
-        $this->assertFalse($profile->runsScanner('jscpd'));
-    }
-
-    public function test_automated_runs_the_full_set_in_the_committed_order(): void
-    {
-        $profile = app(TierProfileResolver::class)->for(AuditTier::AUTOMATED);
-
         $this->assertSame(['scc', 'gitleaks', 'osv', 'jscpd', 'semgrep'], $profile->scanners);
+        $this->assertTrue($profile->runsScanner('semgrep'));
+        $this->assertTrue($profile->runsScanner('jscpd'));
     }
 
-    public function test_paid_tiers_have_larger_budgets_than_diagnostic(): void
+    /**
+     * Deep review, not scanner count or token budget, is what separates the
+     * tiers now. Asserting the budgets are equal is the guard against a
+     * future edit quietly thinning Diagnostic back out.
+     */
+    public function test_every_tier_shares_the_diagnostic_scanner_and_token_budget(): void
     {
         $resolver = app(TierProfileResolver::class);
-        $free = $resolver->for(AuditTier::DIAGNOSTIC);
-        $paid = $resolver->for(AuditTier::AUTOMATED);
-
-        $this->assertGreaterThan($free->excerptFiles, $paid->excerptFiles);
-        $this->assertGreaterThan($free->aiMaxTokens, $paid->aiMaxTokens);
-        $this->assertGreaterThan($free->narratedGroups, $paid->narratedGroups);
-    }
-
-    public function test_deep_ai_and_expert_share_the_automated_scanner_budget(): void
-    {
-        $resolver = app(TierProfileResolver::class);
-        $automated = $resolver->for(AuditTier::AUTOMATED);
+        $base = $resolver->for(AuditTier::DIAGNOSTIC);
 
         foreach ([AuditTier::DEEP_AI, AuditTier::EXPERT] as $tier) {
-            $this->assertSame($automated->scanners, $resolver->for($tier)->scanners);
+            $profile = $resolver->for($tier);
+
+            $this->assertSame($base->scanners, $profile->scanners);
+            $this->assertSame($base->excerptFiles, $profile->excerptFiles);
+            $this->assertSame($base->aiMaxTokens, $profile->aiMaxTokens);
+            $this->assertSame($base->narratedGroups, $profile->narratedGroups);
         }
     }
 
@@ -54,12 +52,11 @@ class TierProfileResolverTest extends FeatureTest
         }
     }
 
-    public function test_diagnostic_and_automated_have_no_deep_review_profile(): void
+    public function test_diagnostic_has_no_deep_review_profile(): void
     {
         $resolver = app(TierProfileResolver::class);
 
         $this->assertNull($resolver->for(AuditTier::DIAGNOSTIC)->deepReview);
-        $this->assertNull($resolver->for(AuditTier::AUTOMATED)->deepReview);
     }
 
     public function test_deep_ai_and_expert_carry_a_deep_review_profile(): void

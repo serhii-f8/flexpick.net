@@ -24,7 +24,7 @@ class AuditReportsPurchaseTest extends FeatureTest
     {
         Queue::fake();
         $this->seed(AuditMonetizationSeeder::class);
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 0);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 0);
         $this->actAsTenantUser($user, $tenant);
 
         Livewire::test(AuditReports::class)
@@ -55,7 +55,7 @@ class AuditReportsPurchaseTest extends FeatureTest
     {
         Queue::fake();
         $this->seed(AuditMonetizationSeeder::class);
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 1);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 1);
         $this->actAsTenantUser($user, $tenant);
 
         // Spend the single Deep AI credit, then try again.

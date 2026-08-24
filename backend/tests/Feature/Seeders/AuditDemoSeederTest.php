@@ -26,24 +26,23 @@ class AuditDemoSeederTest extends FeatureTest
 
         $entitlements = app(AuditEntitlementService::class);
 
-        // Partner (Unlimited) is billed manually, outside the system -- every
-        // metered tier gets the same large ceiling, including Diagnostic
-        // (normally the per-email lifetime free-run count, not a monthly
-        // allowance) and Expert, which no other plan grants any allowance for.
-        $this->assertSame(99, $entitlements->allowance($tenant, AuditTier::DIAGNOSTIC));
-        $this->assertSame(99, $entitlements->allowance($tenant, AuditTier::AUTOMATED));
-        $this->assertSame(99, $entitlements->allowance($tenant, AuditTier::DEEP_AI));
-        $this->assertSame(99, $entitlements->allowance($tenant, AuditTier::EXPERT));
+        // Partner is billed manually, outside the system -- every metered
+        // tier gets its own monthly allowance, including Diagnostic (normally
+        // the per-email lifetime free-run count, not a monthly allowance) and
+        // Expert, which no other plan grants any allowance for.
+        $this->assertSame(100, $entitlements->allowance($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(50, $entitlements->allowance($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(10, $entitlements->allowance($tenant, AuditTier::EXPERT));
 
         $diagnosticQuota = $entitlements->quotaFor($user, $tenant, AuditTier::DIAGNOSTIC);
         $this->assertFalse($diagnosticQuota->isLifetime);
-        $this->assertSame(99, $diagnosticQuota->limit);
+        $this->assertSame(100, $diagnosticQuota->limit);
         $this->assertSame(1, $user->subscriptions()->count());
         $this->assertSame(1, Subscription::whereHas('user', fn ($q) => $q->where('email', AuditDemoSeeder::EMAIL))->count());
 
         // "Reset the limits": the one seeded report is dated last month, so
         // this month's allowance starts fully unused.
-        $this->assertSame(0, $entitlements->runsUsedThisMonth($user, AuditTier::AUTOMATED));
+        $this->assertSame(0, $entitlements->runsUsedThisMonth($user, AuditTier::DIAGNOSTIC));
 
         // Idempotency: no duplicate users or requests.
         $this->assertSame(1, User::where('email', AuditDemoSeeder::EMAIL)->count());
@@ -87,7 +86,7 @@ class AuditDemoSeederTest extends FeatureTest
         $this->seed(AuditDemoSeeder::class); // re-seed: must clean up the stray subscription
 
         $entitlements = app(AuditEntitlementService::class);
-        $this->assertSame(99, $entitlements->allowance($tenant->fresh(), AuditTier::AUTOMATED));
+        $this->assertSame(100, $entitlements->allowance($tenant->fresh(), AuditTier::DIAGNOSTIC));
         $this->assertSame(
             SubscriptionStatus::CANCELED->value,
             $user->subscriptions()->where('plan_id', $growthPlan->id)->firstOrFail()->status,

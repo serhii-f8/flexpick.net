@@ -4,47 +4,36 @@
     "tiers": {
         "audit-diagnostic": {
             "name": "Diagnostic Report",
-            "description": "A fast scan of one repository \u2014 dependency, security, and structure signals with a plain-language summary.",
+            "description": "The full analysis pipeline on one repository, with AI interpretation of every result.",
             "price_cents": 4900,
             "price_display": "$49",
             "features": [
-                "Three static analyzers across security and dependencies",
-                "Plain-language summary of what needs attention",
-                "A starting point before a deeper paid tier"
-            ]
-        },
-        "audit-automated": {
-            "name": "Automated Health Report",
-            "description": "A scanner-backed health report on one repository, with a prioritized fix-first plan.",
-            "price_cents": 11900,
-            "price_display": "$119",
-            "features": [
                 "Five static analyzers across security, duplication, and dependencies",
-                "Problems grouped and explained, not a raw lint dump",
+                "AI interpretation of the results, not a raw lint dump",
                 "Prioritized fix-first plan",
                 "PDF export"
             ]
         },
         "audit-deep-ai": {
             "name": "Deep AI Code Review",
-            "description": "Everything in the Automated Health Report, plus AI review of your riskiest files.",
-            "price_cents": 24900,
-            "price_display": "$249",
+            "description": "Everything in the Diagnostic Report, plus an AI code review of your key files and core flows.",
+            "price_cents": 11900,
+            "price_display": "$119",
             "features": [
-                "Everything in the Automated Health Report",
-                "AI review of the 20-40 riskiest files",
+                "Everything in the Diagnostic Report",
+                "AI code review of the key files and core flows",
                 "Findings bound to files, with evidence and effort sizing",
                 "PDF export"
             ]
         },
         "audit-expert": {
             "name": "Expert Audit",
-            "description": "Everything in the Deep AI Code Review, reviewed and signed off by a human auditor.",
+            "description": "Everything in the Diagnostic Report and the Deep AI Code Review, plus a manual review by one of our developers.",
             "price_cents": 99900,
             "price_display": "$999",
             "features": [
-                "Everything in the Deep AI Code Review",
-                "Human expert review and sign-off",
+                "Everything in the Diagnostic Report and Deep AI Code Review",
+                "Manual review by one of our developers",
                 "False positives removed, priorities adjusted",
                 "Remediation roadmap"
             ]
@@ -55,7 +44,7 @@
             "name": "Starter",
             "price_cents": 5900,
             "price_display": "$59",
-            "analyses_per_month": 5,
+            "diagnostic_credits": 5,
             "deep_ai_credits": 0,
             "expert_credits": 0,
             "is_popular": false
@@ -64,7 +53,7 @@
             "name": "Growth",
             "price_cents": 14900,
             "price_display": "$149",
-            "analyses_per_month": 20,
+            "diagnostic_credits": 20,
             "deep_ai_credits": 1,
             "expert_credits": 0,
             "is_popular": true
@@ -73,7 +62,7 @@
             "name": "Agency",
             "price_cents": 49900,
             "price_display": "$499",
-            "analyses_per_month": 75,
+            "diagnostic_credits": 75,
             "deep_ai_credits": 4,
             "expert_credits": 0,
             "is_popular": false
@@ -82,7 +71,7 @@
             "name": "Enterprise",
             "price_cents": 150000,
             "price_display": "$1,500",
-            "analyses_per_month": 250,
+            "diagnostic_credits": 250,
             "deep_ai_credits": 15,
             "expert_credits": 0,
             "is_popular": false

@@ -59,14 +59,14 @@ class DeepReviewPipelineTest extends FeatureTest
         $this->assertSame(1, $request->risk_files['selection_version']);
     }
 
-    public function test_an_automated_run_never_calls_the_deep_reviewer(): void
+    public function test_a_diagnostic_run_never_calls_the_deep_reviewer(): void
     {
         // A silent regression here would bill tier-2 costs against tier-1
         // revenue, so the gate itself is asserted.
         $reviewer = new FakeDeepReviewer(findings: [$this->finding()]);
 
         $request = $this->runPipelineWithFakes(
-            tier: AuditTier::AUTOMATED,
+            tier: AuditTier::DIAGNOSTIC,
             deepReviewer: $reviewer,
         );
 

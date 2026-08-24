@@ -148,7 +148,7 @@ class AuditAiCallLedgerTest extends FeatureTest
     {
         // No deep reviewer is invoked when selection yields nothing, so the
         // ledger must not invent spend for the stage.
-        $request = $this->runPipelineWithFakes(tier: AuditTier::AUTOMATED);
+        $request = $this->runPipelineWithFakes(tier: AuditTier::DIAGNOSTIC);
 
         $this->assertCount(0, $request->aiCalls()->where('stage', AuditAiStage::DEEP_REVIEW->value)->get());
     }

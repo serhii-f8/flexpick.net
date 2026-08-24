@@ -27,7 +27,7 @@
             @php($cheapestPlan = collect(config('pricing.subscriptions'))->sortBy('price')->first())
             @php($subscribePrice = number_format(($cheapestPlan['price'] ?? 0) / 100))
             <p style="margin: 12px 0 0; line-height: 24px">
-                <a href="{{ route('register') }}" style="color: #2563eb; text-decoration: underline;">{{ __('Or subscribe from $:price/month for :count analyses', ['price' => $subscribePrice, 'count' => $cheapestPlan['audit_analyses_per_month'] ?? 0]) }}</a>
+                <a href="{{ route('register') }}" style="color: #2563eb; text-decoration: underline;">{{ __('Or subscribe from $:price/month for :count analyses', ['price' => $subscribePrice, 'count' => $cheapestPlan['audit_diagnostic_credits'] ?? 0]) }}</a>
             </p>
         </td>
     </tr>

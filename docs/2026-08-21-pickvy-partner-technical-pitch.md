@@ -56,8 +56,8 @@ all invoked directly (not just cited as marketing language):
 | **scc** | File inventory, size, complexity | All tiers |
 | **gitleaks** | Committed secrets | All tiers |
 | **OSV** (osv.dev API) | Known-vulnerable dependencies | All tiers |
-| **jscpd** | Code duplication | Automated tier and above |
-| **Semgrep** | Static application security testing (in-house rule set) | Automated tier and above |
+| **jscpd** | Code duplication | All tiers |
+| **Semgrep** | Static application security testing (in-house rule set) | All tiers |
 
 If you've seen SonarQube named anywhere in Pickvy's own marketing materials —
 it isn't actually part of the stack. Worth knowing before you repeat it to a
@@ -66,7 +66,7 @@ client who might ask a follow-up technical question.
 ## The Health Score, precisely
 
 Five weighted dimensions, each tied to a specific scanner so a dimension is
-only scored when it can actually be measured (a tier that skips Semgrep
+only scored when it can actually be measured (a run where Semgrep fails
 doesn't get a fabricated security score — that dimension is excluded and the
 others are renormalized):
 
@@ -81,14 +81,17 @@ Every dimension and the overall score clamp to a 0–100 scale. This is the
 number a client can watch move between releases, and it's cheap to defend in
 a conversation because it's arithmetic, not a model's opinion.
 
-## The four tiers — what technically changes
+## The three tiers — what technically changes
 
 | Tier | Price | Scanners | AI involvement |
 |---|---|---|---|
-| **Diagnostic Report** | $49 | scc, gitleaks, OSV (3) | Narration only, small token budget |
-| **Automated Health Report** | $119 | + jscpd, Semgrep (5) | Narration, larger token budget, PDF export |
-| **Deep AI Code Review** | $249 | Same 5 | + individual AI review of the 20–40 riskiest files |
-| **Expert Audit** | $999 | Same 5 | Same deep review, **plus a human reviewer signs off before delivery** |
+| **Diagnostic Report** | $49 | All 5 | AI interpretation of every result, prioritized fix-first plan, PDF export |
+| **Deep AI Code Review** | $119 | Same 5 | Everything above, **plus individual AI review of the 20–40 riskiest files** |
+| **Expert Audit** | $999 | Same 5 | Same deep review, **plus a manual review by one of our developers before delivery** |
+
+Every tier runs the same scanner set and the same narration budget. What you
+pay more for is depth of review, not breadth of scanning: Deep AI adds a
+per-file pass, Expert adds a person.
 
 The Expert tier's "human review" is a real gate, not a label: the request is
 held at an `expert_review` status, an internal reviewer edits the AI-drafted
@@ -103,12 +106,12 @@ not a permanent public URL) plus a downloadable PDF. Locked/free-tier reports
 show a teaser; unlocking (via purchase, subscription allowance, or your
 Partner allowance) reveals the full report and generates the PDF.
 
-## Your Partner (Unlimited) account, mechanically
+## Your Partner account, mechanically
 
 This was built specifically for this conversation. Your tenant is on a hidden,
 non-self-serve plan (`audit-partner-monthly`, $0, never listed publicly) that
-grants **99 runs per month on every tier — Diagnostic, Automated, Deep AI,
-and Expert**. Billing for what you actually use is handled manually,
+grants, per month: **100 Diagnostic Reports, 50 Deep AI Code Reviews, and 10
+Expert Audits**. Billing for what you actually use is handled manually,
 directly between FlexPick and you, outside the app's own payment flow.
 
 Nothing about how the product works changes for you: you log into your own
@@ -132,12 +135,12 @@ later.
 
 The moments this is built for, mechanically mapped to what you'd actually do:
 
-- **Screening a vendor's progress** — run Diagnostic or Automated at intervals,
-  watch the Health Score trend, no manual code reading required.
+- **Screening a vendor's progress** — run Diagnostic at intervals, watch the
+  Health Score trend, no manual code reading required.
 - **Taking over a project** — run Deep AI on day one; the riskiest-files
   review and fix-first plan double as onboarding material for whoever
   inherits the code.
-- **Gating a milestone payment** — an Automated or Deep AI report is
+- **Gating a milestone payment** — a Diagnostic or Deep AI report is
   objective, timestamped evidence of what was actually delivered, independent
   of what the vendor claims.
 - **Pre-launch sign-off** — Expert tier, when you want a human, not just a
@@ -149,7 +152,8 @@ The moments this is built for, mechanically mapped to what you'd actually do:
   — safe to describe as "measured," not "AI opinion."
 - Every finding traces back to a specific tool and a specific file; nothing
   in the report is unfalsifiable.
-- The Expert tier genuinely has a human in the loop before delivery — that's
+- The Expert tier genuinely has one of our developers in the loop before
+  delivery — that's
   a real differentiator from "AI wrapper" competitors, not just copy.
 - What you shouldn't claim yet: white-labeled reports (the report itself is
   FlexPick-branded, not rebrandable to your agency today), or programmatic/CI

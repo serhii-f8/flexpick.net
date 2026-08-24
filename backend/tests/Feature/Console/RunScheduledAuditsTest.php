@@ -19,7 +19,7 @@ class RunScheduledAuditsTest extends FeatureTest
     public function test_a_schedule_runs_at_its_own_tier(): void
     {
         Queue::fake();
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 2);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
 
         AuditSchedule::create([
             'user_id' => $user->id,
@@ -41,7 +41,7 @@ class RunScheduledAuditsTest extends FeatureTest
     public function test_an_exhausted_tier_is_skipped_not_downgraded(): void
     {
         Queue::fake();
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 0);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 0);
 
         $schedule = AuditSchedule::create([
             'user_id' => $user->id,
@@ -68,7 +68,7 @@ class RunScheduledAuditsTest extends FeatureTest
     public function test_not_yet_due_schedule_is_skipped(): void
     {
         Queue::fake();
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 2);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
 
         AuditSchedule::create([
             'user_id' => $user->id,
@@ -92,12 +92,17 @@ class RunScheduledAuditsTest extends FeatureTest
      * regardless -- a legacy row, or a future caller that skips the dashboard
      * guard -- it must debit the lifetime free quota, not the monthly
      * allowance, exactly as launchAudit() would for the same tier.
+     *
+     * Diagnostic is only lifetime-backed when the plan grants it no monthly
+     * allowance, so this user holds Deep AI credits and no Diagnostic ones.
+     * A plan that grants Diagnostic credits makes it an ordinary metered
+     * tier, which is the case the schedule guard legitimately permits.
      */
     public function test_a_diagnostic_schedule_debits_the_free_quota_not_the_allowance(): void
     {
         config(['audit.free_reports_limit' => 3]);
         Queue::fake();
-        [$user, $tenant] = $this->userWithAllowance(analyses: 5, deepAi: 2);
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 0, deepAi: 2);
 
         AuditSchedule::create([
             'user_id' => $user->id,

@@ -16,7 +16,7 @@ class BackfillAuditAiCallsTest extends FeatureTest
         '019ffa6f-1bfa-709b-970a-ba8e1d57f53a' => AuditTier::DIAGNOSTIC,
         '019fffbb-76e1-717f-8912-dd38c6e358b4' => AuditTier::DIAGNOSTIC,
         self::DEEP_AI_UUID => AuditTier::DEEP_AI,
-        '01a00115-8ca8-70e6-b992-038ed1e033df' => AuditTier::AUTOMATED,
+        '01a00115-8ca8-70e6-b992-038ed1e033df' => AuditTier::DIAGNOSTIC,
         '01a00685-6376-73e8-897d-aa786eb07bbf' => AuditTier::EXPERT,
     ];
 

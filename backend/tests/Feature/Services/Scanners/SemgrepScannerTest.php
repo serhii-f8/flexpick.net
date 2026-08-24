@@ -115,7 +115,7 @@ class SemgrepScannerTest extends FeatureTest
 
         $context = new RepoContext(
             path: self::ROOT,
-            tier: app(TierProfileResolver::class)->for(AuditTier::AUTOMATED),
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
         );
 
         $findings = app(SemgrepScanner::class)->scan($context);

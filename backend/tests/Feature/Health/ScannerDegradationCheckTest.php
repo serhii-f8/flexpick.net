@@ -23,7 +23,7 @@ class ScannerDegradationCheckTest extends FeatureTest
     private function runWith(string $outcome, int $count = 1): void
     {
         AuditRequest::factory()->count($count)->create([
-            'tier' => 'automated',
+            'tier' => 'diagnostic',
             'analysis_started_at' => now()->subMinutes(10),
             'scanner_runs' => [
                 ['name' => 'scc', 'version' => '3.5.0', 'wall_ms' => 100, 'finding_count' => 0,
@@ -68,7 +68,7 @@ class ScannerDegradationCheckTest extends FeatureTest
         config()->set('health.flexpick.scanner_degradation.window_hours', 1);
 
         AuditRequest::factory()->create([
-            'tier' => 'automated',
+            'tier' => 'diagnostic',
             'analysis_started_at' => now()->subDays(3),
             'scanner_runs' => [['name' => 'semgrep', 'version' => '1', 'wall_ms' => 1,
                 'finding_count' => 0, 'outcome' => 'timeout', 'reason' => 'timeout']],

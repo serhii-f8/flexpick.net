@@ -45,22 +45,20 @@ return [
     'osv_endpoint' => 'https://api.osv.dev/v1/querybatch',
 
     'tiers' => [
+        // Diagnostic is the base tier and runs the whole scanner set: the
+        // catalog sells it as "the full analysis pipeline plus AI
+        // interpretation", so a reduced scanner list here would make that
+        // claim false. Every tier now shares these budgets; what separates
+        // them is the deep review below and, for expert, a human.
         'diagnostic' => [
-            'scanners' => ['scc', 'gitleaks', 'osv'],
-            'excerpt_files' => 15,
-            'excerpt_bytes' => 3000,
-            'ai_max_tokens' => 4000,
-            'narrated_groups' => 2,
-        ],
-        'automated' => [
             'scanners' => ['scc', 'gitleaks', 'osv', 'jscpd', 'semgrep'],
             'excerpt_files' => 50,
             'excerpt_bytes' => 6000,
             'ai_max_tokens' => 16000,
             'narrated_groups' => 12,
         ],
-        // Deep review is what separates these from `automated`; the tier-1
-        // budgets below are deliberately identical.
+        // Deep review is what separates this from `diagnostic`; the budgets
+        // above it are deliberately identical.
         'deep_ai' => [
             'scanners' => ['scc', 'gitleaks', 'osv', 'jscpd', 'semgrep'],
             'excerpt_files' => 50,
@@ -82,9 +80,9 @@ return [
             'excerpt_bytes' => 6000,
             'ai_max_tokens' => 16000,
             'narrated_groups' => 12,
-            // F5.12.4: tier 3 is everything in tiers 1-2 plus human review, so
-            // it runs the same deep review. Phase 13 adds only the delivery
-            // hold and the reviewer queue.
+            // F5.12.4: expert is everything in the tiers below it plus human
+            // review, so it runs the same deep review. Phase 13 adds only the
+            // delivery hold and the reviewer queue.
             'deep_review' => [
                 'min_files' => 20,
                 'max_files' => 40,

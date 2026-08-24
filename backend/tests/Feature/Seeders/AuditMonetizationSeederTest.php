@@ -15,14 +15,13 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->seed(AuditMonetizationSeeder::class);
     }
 
-    public function test_seeds_the_four_one_time_tier_products(): void
+    public function test_seeds_the_three_one_time_tier_products(): void
     {
         $this->seedCatalog();
 
         foreach ([
             'audit-diagnostic' => 4900,
-            'audit-automated' => 11900,
-            'audit-deep-ai' => 24900,
+            'audit-deep-ai' => 11900,
             'audit-expert' => 99900,
         ] as $slug => $cents) {
             $product = OneTimeProduct::where('slug', $slug)->first();
@@ -58,7 +57,7 @@ class AuditMonetizationSeederTest extends FeatureTest
     /**
      * Deliberately outside config('pricing.subscriptions') -- never shown
      * publicly, never exported to the marketing site -- but must exist for
-     * a super admin to assign it, and must grant a huge allowance on every
+     * a super admin to assign it, and must grant an allowance on every
      * metered tier including Expert, which no other plan grants any of.
      */
     public function test_seeds_a_hidden_free_partner_plan(): void
@@ -73,10 +72,34 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->assertSame(0, (int) $plan->prices()->first()->price);
 
         $metadata = $plan->product->metadata;
-        $this->assertSame(99, (int) $metadata['audit_diagnostic_credits']);
-        $this->assertSame(99, (int) $metadata['audit_analyses_per_month']);
-        $this->assertSame(99, (int) $metadata['audit_deep_ai_credits']);
-        $this->assertSame(99, (int) $metadata['audit_expert_credits']);
+        $this->assertSame(100, (int) $metadata['audit_diagnostic_credits']);
+        $this->assertSame(50, (int) $metadata['audit_deep_ai_credits']);
+        $this->assertSame(10, (int) $metadata['audit_expert_credits']);
+    }
+
+    /**
+     * The Automated Health Report tier is gone from the catalog, but the
+     * product row has to survive: orders and reports still reference it.
+     */
+    public function test_the_retired_automated_tier_product_is_deactivated_not_deleted(): void
+    {
+        foreach (config('pricing.retired.one_time') as $slug) {
+            OneTimeProduct::factory()->create([
+                'slug' => $slug,
+                'is_active' => true,
+                'is_visible' => true,
+            ]);
+        }
+
+        $this->seedCatalog();
+
+        foreach (config('pricing.retired.one_time') as $slug) {
+            $product = OneTimeProduct::where('slug', $slug)->first();
+
+            $this->assertNotNull($product, "The retired product [{$slug}] must survive to back existing orders.");
+            $this->assertFalse((bool) $product->is_active);
+            $this->assertFalse((bool) $product->is_visible);
+        }
     }
 
     public function test_subscription_products_carry_allowance_metadata(): void
@@ -86,9 +109,10 @@ class AuditMonetizationSeederTest extends FeatureTest
         $growth = Product::where('slug', 'audit-growth')->firstOrFail();
 
         $this->assertSame(
-            config('pricing.subscriptions.audit-growth.audit_analyses_per_month'),
-            (int) $growth->metadata['audit_analyses_per_month'],
+            config('pricing.subscriptions.audit-growth.audit_diagnostic_credits'),
+            (int) $growth->metadata['audit_diagnostic_credits'],
         );
+        $this->assertArrayNotHasKey('audit_analyses_per_month', $growth->metadata);
         $this->assertArrayHasKey('audit_deep_ai_credits', $growth->metadata);
     }
 

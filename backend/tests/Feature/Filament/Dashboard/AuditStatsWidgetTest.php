@@ -22,11 +22,11 @@ class AuditStatsWidgetTest extends FeatureTest
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
-        $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
 
         // statuses: 1 in progress, 1 completed, 1 failed
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::ANALYZING->value]);
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::AUTOMATED->value, 'status' => AuditRequestStatus::SENT->value]);
+        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::ANALYZING->value]);
+        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::SENT->value]);
         AuditRequest::factory()->create(['user_id' => $user->id, 'status' => AuditRequestStatus::FAILED->value, 'source' => 'web']);
 
         $this->actingAs($user);

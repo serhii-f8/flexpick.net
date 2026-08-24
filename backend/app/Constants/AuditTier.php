@@ -5,7 +5,6 @@ namespace App\Constants;
 enum AuditTier: string
 {
     case DIAGNOSTIC = 'diagnostic';
-    case AUTOMATED = 'automated';
     case DEEP_AI = 'deep_ai';
     case EXPERT = 'expert';
 
@@ -13,7 +12,6 @@ enum AuditTier: string
     {
         return match ($this) {
             self::DIAGNOSTIC => __('Diagnostic Report'),
-            self::AUTOMATED => __('Automated Health Report'),
             self::DEEP_AI => __('Deep AI Code Review'),
             self::EXPERT => __('Expert Audit'),
         };
@@ -63,7 +61,6 @@ enum AuditTier: string
     {
         return match ($this) {
             self::DIAGNOSTIC => 'gray',
-            self::AUTOMATED => 'info',
             self::DEEP_AI => 'primary',
             self::EXPERT => 'success',
         };

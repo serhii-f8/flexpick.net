@@ -2220,16 +2220,18 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 
 **[R]** Every value below must live in exactly one configuration entry and be read from there by backend logic, operator interfaces, and marketing copy alike. The figures shown are the specified defaults.
 
-**Pricing note (D2, revised 2026-08-04).** The §5.12 tier pricing **has landed** with the Phase 11 catalog rework; the rows below now describe the implemented catalog, not the pre-D2 one. Every figure lives in `backend/config/pricing.php` and nowhere else — `AuditMonetizationSeeder` seeds from it, `app:export-pricing` generates the marketing site's `pricing.json` from it, and the *Pricing drift* workflow fails a pull request where the two disagree. Prices remain **[Q]** subject to cost-per-audit validation on the first 20–30 paid runs (Q5). Q32 is resolved: the legacy $5 unlock is retired, its product row deactivated rather than deleted so existing unlocks keep rendering.
+**Pricing note (D2, revised 2026-08-24).** The §5.12 tier pricing **has landed** with the Phase 11 catalog rework; the rows below now describe the implemented catalog, not the pre-D2 one. The 2026-08-24 catalog revision retired the Automated Health Report tier outright — its name and positioning did not work, and its five-scanner profile is now what the base Diagnostic tier runs — leaving three tiers. §5.12 and Phases 10–13 below are the original design record and still describe four; the rows here are current. Every figure lives in `backend/config/pricing.php` and nowhere else — `AuditMonetizationSeeder` seeds from it, `app:export-pricing` generates the marketing site's `pricing.json` from it, and the *Pricing drift* workflow fails a pull request where the two disagree. Prices remain **[Q]** subject to cost-per-audit validation on the first 20–30 paid runs (Q5). Q32 is resolved: the legacy $5 unlock is retired, its product row deactivated rather than deleted so existing unlocks keep rendering.
 
 | Domain | Value |
 | --- | --- |
 | Free allowance | 3 runs per email address, lifetime, plus per-user bonus |
-| Automated Health Report | $49 one-time — tier `automated` |
-| Deep AI Code Review | $199 one-time — tier `deep_ai` |
+| Diagnostic Report | $49 one-time — tier `diagnostic` |
+| Deep AI Code Review | $119 one-time — tier `deep_ai` |
 | Expert Audit | $999 one-time, "from" pricing — tier `expert` |
-| Subscription grid | Starter $59 / 5 analyses / 0 Deep AI credits; Growth $149 / 20 / 1; Agency $499 / 75 / 4; Enterprise $1,500 / 250 / 15 — per month |
-| Subscription metering | Automated-tier dashboard runs consume `audit_analyses_per_month`; Deep AI runs consume `audit_deep_ai_credits`. Both read from plan product metadata |
+| Automated Health Report | **retired (2026-08-24)** — tier `automated` removed from the enum, product row deactivated, existing rows migrated to `diagnostic` |
+| Subscription grid | Starter $59 / 5 Diagnostic / 0 Deep AI credits; Growth $149 / 20 / 1; Agency $499 / 75 / 4; Enterprise $1,500 / 250 / 15 — per month |
+| Partner plan | `audit-partner-monthly`, $0, hidden and assigned manually — 100 Diagnostic / 50 Deep AI / 10 Expert per month |
+| Subscription metering | One metadata key per tier, no aliases: Diagnostic dashboard runs consume `audit_diagnostic_credits`, Deep AI `audit_deep_ai_credits`, Expert `audit_expert_credits`. All read from plan product metadata. Diagnostic falls back to the lifetime free-run quota only when the plan grants it no allowance |
 | One-time unlock | $5, unlocks one existing report only — **retired (Q32)**, row deactivated, existing unlocks grandfathered |
 | Prepaid single run | $5, same product — **retired (Q32)**, same grandfathering |
 | Retired subscription plan | `audit-scale-monthly` — the one plan the new grid orphans; deactivated, never deleted |
@@ -2241,11 +2243,11 @@ Enumerated in §11.9. **[R]** The four requiring active enforcement rather than 
 | Preflight timeout | 30 seconds |
 | Clone depth | 200 commits |
 | Maximum repository size | 500 MB |
-| Maximum excerpt files | Per tier (`audit.tiers.*.excerpt_files`) — diagnostic 15, automated / deep AI / expert 50 |
-| Maximum excerpt bytes | Per tier (`audit.tiers.*.excerpt_bytes`) — diagnostic 3,000, all paid tiers 6,000 per file |
-| Per-tier AI token budget | diagnostic 4,000; automated / deep AI / expert 16,000 |
-| Per-tier narrated groups | diagnostic 2; automated / deep AI / expert 12 |
-| Per-tier scanner set | diagnostic scc + Gitleaks + OSV; every paid tier adds jscpd + Semgrep. Deep AI and expert compose identically to automated until Phases 12–13 |
+| Maximum excerpt files | Per tier (`audit.tiers.*.excerpt_files`) — 50 on every tier |
+| Maximum excerpt bytes | Per tier (`audit.tiers.*.excerpt_bytes`) — 6,000 per file on every tier |
+| Per-tier AI token budget | 16,000 on every tier |
+| Per-tier narrated groups | 12 on every tier |
+| Per-tier scanner set | scc + Gitleaks + OSV + jscpd + Semgrep on every tier. Tiers differ by deep review (Deep AI, Expert) and human sign-off (Expert), not by scanner set or token budget |
 | Scanner timeouts | scc 60s, Gitleaks 120s, jscpd 180s, Semgrep 300s — per tool, and a tool that fails or times out contributes no findings and never fails the run |
 | Findings grouping | 20 groups maximum, 8 examples per group, directory depth 2 |
 | Benchmark minimum sample | 20 completed reports |

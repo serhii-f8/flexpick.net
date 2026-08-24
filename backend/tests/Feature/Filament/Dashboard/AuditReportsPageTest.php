@@ -28,7 +28,7 @@ class AuditReportsPageTest extends FeatureTest
         Queue::fake([GenerateAuditReport::class]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
-        $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
@@ -115,7 +115,7 @@ class AuditReportsPageTest extends FeatureTest
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
 
-        $this->createActiveSubscriptionFor($tenant, $user, ['audit_analyses_per_month' => 5]);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
 
         // Remove the free-run quota AND empty the tier catalog so the
         // subscription is the only remaining route to access -- otherwise
@@ -130,10 +130,17 @@ class AuditReportsPageTest extends FeatureTest
         $this->assertTrue(AuditReports::shouldRegisterNavigation());
     }
 
+    /**
+     * setSchedule() defaults to Diagnostic, and its guard refuses any tier
+     * backed by the lifetime free-run quota -- a schedule is a subscriber
+     * feature. So this user needs a plan that grants Diagnostic credits,
+     * which is also the only case where the blade renders the control.
+     */
     public function test_set_schedule_creates_and_removes_audit_schedules(): void
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));

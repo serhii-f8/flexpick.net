@@ -17,22 +17,11 @@ return [
         'audit-diagnostic' => [
             'tier' => 'diagnostic',
             'name' => 'Diagnostic Report',
-            'description' => 'A fast scan of one repository — dependency, security, and structure signals with a plain-language summary.',
+            'description' => 'The full analysis pipeline on one repository, with AI interpretation of every result.',
             'price' => 4900,
             'features' => [
-                'Three static analyzers across security and dependencies',
-                'Plain-language summary of what needs attention',
-                'A starting point before a deeper paid tier',
-            ],
-        ],
-        'audit-automated' => [
-            'tier' => 'automated',
-            'name' => 'Automated Health Report',
-            'description' => 'A scanner-backed health report on one repository, with a prioritized fix-first plan.',
-            'price' => 11900,
-            'features' => [
                 'Five static analyzers across security, duplication, and dependencies',
-                'Problems grouped and explained, not a raw lint dump',
+                'AI interpretation of the results, not a raw lint dump',
                 'Prioritized fix-first plan',
                 'PDF export',
             ],
@@ -40,11 +29,11 @@ return [
         'audit-deep-ai' => [
             'tier' => 'deep_ai',
             'name' => 'Deep AI Code Review',
-            'description' => 'Everything in the Automated Health Report, plus AI review of your riskiest files.',
-            'price' => 24900,
+            'description' => 'Everything in the Diagnostic Report, plus an AI code review of your key files and core flows.',
+            'price' => 11900,
             'features' => [
-                'Everything in the Automated Health Report',
-                'AI review of the 20-40 riskiest files',
+                'Everything in the Diagnostic Report',
+                'AI code review of the key files and core flows',
                 'Findings bound to files, with evidence and effort sizing',
                 'PDF export',
             ],
@@ -52,11 +41,11 @@ return [
         'audit-expert' => [
             'tier' => 'expert',
             'name' => 'Expert Audit',
-            'description' => 'Everything in the Deep AI Code Review, reviewed and signed off by a human auditor.',
+            'description' => 'Everything in the Diagnostic Report and the Deep AI Code Review, plus a manual review by one of our developers.',
             'price' => 99900,
             'features' => [
-                'Everything in the Deep AI Code Review',
-                'Human expert review and sign-off',
+                'Everything in the Diagnostic Report and Deep AI Code Review',
+                'Manual review by one of our developers',
                 'False positives removed, priorities adjusted',
                 'Remediation roadmap',
             ],
@@ -71,7 +60,7 @@ return [
         'audit-starter' => [
             'name' => 'Starter',
             'price' => 5900,
-            'audit_analyses_per_month' => 5,
+            'audit_diagnostic_credits' => 5,
             'audit_deep_ai_credits' => 0,
             'audit_expert_credits' => 0,
             'is_popular' => false,
@@ -79,7 +68,7 @@ return [
         'audit-growth' => [
             'name' => 'Growth',
             'price' => 14900,
-            'audit_analyses_per_month' => 20,
+            'audit_diagnostic_credits' => 20,
             'audit_deep_ai_credits' => 1,
             'audit_expert_credits' => 0,
             'is_popular' => true,
@@ -87,7 +76,7 @@ return [
         'audit-agency' => [
             'name' => 'Agency',
             'price' => 49900,
-            'audit_analyses_per_month' => 75,
+            'audit_diagnostic_credits' => 75,
             'audit_deep_ai_credits' => 4,
             'audit_expert_credits' => 0,
             'is_popular' => false,
@@ -95,7 +84,7 @@ return [
         'audit-enterprise' => [
             'name' => 'Enterprise',
             'price' => 150000,
-            'audit_analyses_per_month' => 250,
+            'audit_diagnostic_credits' => 250,
             'audit_deep_ai_credits' => 15,
             'audit_expert_credits' => 0,
             'is_popular' => false,
@@ -125,7 +114,11 @@ return [
     ],
 
     'retired' => [
-        'one_time' => [],
+        // audit-automated was the Automated Health Report tier. Its name and
+        // positioning never worked, and everything it did is now the base
+        // Diagnostic tier -- so the product is deactivated rather than
+        // deleted, because orders referencing it still exist.
+        'one_time' => ['audit-automated'],
         // Starter and Growth reuse their old slugs at new prices; Scale has
         // no successor and is the only plan genuinely orphaned by this catalog.
         'plans' => ['audit-scale-monthly'],

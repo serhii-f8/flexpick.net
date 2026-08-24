@@ -128,23 +128,23 @@ class AuditEntitlementServiceTest extends FeatureTest
 
         AuditRequest::factory()->count(2)->create([
             'user_id' => $user->id,
-            'tier' => AuditTier::AUTOMATED->value,
+            'tier' => AuditTier::DIAGNOSTIC->value,
             'funding' => AuditFunding::ALLOWANCE->value,
         ]);
 
         // A purchased run and a free run must not spend plan quota.
         AuditRequest::factory()->create([
             'user_id' => $user->id,
-            'tier' => AuditTier::AUTOMATED->value,
+            'tier' => AuditTier::DIAGNOSTIC->value,
             'funding' => AuditFunding::PURCHASE->value,
         ]);
         AuditRequest::factory()->create([
             'user_id' => $user->id,
-            'tier' => AuditTier::AUTOMATED->value,
+            'tier' => AuditTier::DIAGNOSTIC->value,
             'funding' => AuditFunding::FREE->value,
         ]);
 
-        $this->assertSame(2, $this->service->runsUsedThisMonth($user, AuditTier::AUTOMATED));
+        $this->assertSame(2, $this->service->runsUsedThisMonth($user, AuditTier::DIAGNOSTIC));
     }
 
     public function test_each_tier_meters_independently(): void
@@ -153,7 +153,7 @@ class AuditEntitlementServiceTest extends FeatureTest
 
         AuditRequest::factory()->create([
             'user_id' => $user->id,
-            'tier' => AuditTier::AUTOMATED->value,
+            'tier' => AuditTier::DIAGNOSTIC->value,
             'funding' => AuditFunding::ALLOWANCE->value,
         ]);
         AuditRequest::factory()->count(3)->create([
@@ -162,7 +162,7 @@ class AuditEntitlementServiceTest extends FeatureTest
             'funding' => AuditFunding::ALLOWANCE->value,
         ]);
 
-        $this->assertSame(1, $this->service->runsUsedThisMonth($user, AuditTier::AUTOMATED));
+        $this->assertSame(1, $this->service->runsUsedThisMonth($user, AuditTier::DIAGNOSTIC));
         $this->assertSame(3, $this->service->runsUsedThisMonth($user, AuditTier::DEEP_AI));
         $this->assertSame(0, $this->service->runsUsedThisMonth($user, AuditTier::EXPERT));
     }
@@ -173,12 +173,12 @@ class AuditEntitlementServiceTest extends FeatureTest
 
         AuditRequest::factory()->create([
             'user_id' => $user->id,
-            'tier' => AuditTier::AUTOMATED->value,
+            'tier' => AuditTier::DIAGNOSTIC->value,
             'funding' => AuditFunding::ALLOWANCE->value,
             'created_at' => now()->startOfMonth()->subDay(),
         ]);
 
-        $this->assertSame(0, $this->service->runsUsedThisMonth($user, AuditTier::AUTOMATED));
+        $this->assertSame(0, $this->service->runsUsedThisMonth($user, AuditTier::DIAGNOSTIC));
     }
 
     public function test_diagnostic_quota_is_the_lifetime_free_quota(): void
@@ -202,8 +202,7 @@ class AuditEntitlementServiceTest extends FeatureTest
         $user = $this->createUser();
 
         $this->assertSame(4900, $this->service->quotaFor($user, null, AuditTier::DIAGNOSTIC)->priceCents);
-        $this->assertSame(11900, $this->service->quotaFor($user, null, AuditTier::AUTOMATED)->priceCents);
-        $this->assertSame(24900, $this->service->quotaFor($user, null, AuditTier::DEEP_AI)->priceCents);
+        $this->assertSame(11900, $this->service->quotaFor($user, null, AuditTier::DEEP_AI)->priceCents);
         $this->assertSame(99900, $this->service->quotaFor($user, null, AuditTier::EXPERT)->priceCents);
     }
 
@@ -220,8 +219,8 @@ class AuditEntitlementServiceTest extends FeatureTest
     {
         $user = $this->createUser();
 
-        $this->assertSame(0, $this->service->allowance(null, AuditTier::AUTOMATED));
-        $this->assertSame(0, $this->service->remainingRuns($user, null, AuditTier::AUTOMATED));
+        $this->assertSame(0, $this->service->allowance(null, AuditTier::DEEP_AI));
+        $this->assertSame(0, $this->service->remainingRuns($user, null, AuditTier::DEEP_AI));
     }
 
     public function test_consuming_a_free_run_marks_the_funding(): void
@@ -243,10 +242,9 @@ class AuditEntitlementServiceTest extends FeatureTest
      * runsUsedThisMonth() being swapped.
      */
     /**
-     * A tenant whose plan grants a Diagnostic allowance (Partner is
-     * currently the only one) switches Diagnostic to the same metered
-     * semantics every other tier already has, instead of the per-email
-     * lifetime free-run count.
+     * A tenant whose plan grants a Diagnostic allowance (every paid plan
+     * does) switches Diagnostic to the same metered semantics every other
+     * tier already has, instead of the per-email lifetime free-run count.
      */
     public function test_diagnostic_quota_switches_to_a_subscription_allowance_when_the_plan_grants_one(): void
     {
@@ -268,15 +266,15 @@ class AuditEntitlementServiceTest extends FeatureTest
 
     public function test_quota_for_a_monthly_tier_reflects_a_real_allowance(): void
     {
-        [$user, $tenant] = $this->subscribedTenant(['audit_analyses_per_month' => 5]);
+        [$user, $tenant] = $this->subscribedTenant(['audit_deep_ai_credits' => 5]);
 
         AuditRequest::factory()->count(2)->create([
             'user_id' => $user->id,
-            'tier' => AuditTier::AUTOMATED->value,
+            'tier' => AuditTier::DEEP_AI->value,
             'funding' => AuditFunding::ALLOWANCE->value,
         ]);
 
-        $quota = $this->service->quotaFor($user, $tenant, AuditTier::AUTOMATED);
+        $quota = $this->service->quotaFor($user, $tenant, AuditTier::DEEP_AI);
 
         $this->assertFalse($quota->isLifetime);
         $this->assertSame(5, $quota->limit);
@@ -286,7 +284,7 @@ class AuditEntitlementServiceTest extends FeatureTest
 
     /**
      * The any-tier loop in hasAuditAccess() exists solely so a tenant holding
-     * only Expert credits (no automated allowance) isn't locked out of the
+     * only Expert credits (no diagnostic allowance) isn't locked out of the
      * dashboard nav. Nothing else exercises that branch.
      */
     public function test_expert_only_credits_grant_audit_access(): void

@@ -80,17 +80,17 @@ class AuditMonetizationSeeder extends Seeder
         foreach (config('pricing.subscriptions') as $slug => $subscription) {
             $product = Product::updateOrCreate(['slug' => $slug], [
                 'name' => $subscription['name'],
-                'description' => $subscription['audit_analyses_per_month']
-                    .' automated analyses per month, with full reports and PDF export.',
+                'description' => $subscription['audit_diagnostic_credits']
+                    .' Diagnostic Reports per month, with full reports and PDF export.',
                 'features' => [
-                    ['feature' => $subscription['audit_analyses_per_month'].' automated analyses / month'],
-                    ['feature' => $subscription['audit_deep_ai_credits'].' Deep AI review credits / month'],
+                    ['feature' => $subscription['audit_diagnostic_credits'].' Diagnostic Reports / month'],
+                    ['feature' => $subscription['audit_deep_ai_credits'].' Deep AI Code Review credits / month'],
                     ['feature' => 'Full detailed reports'],
                     ['feature' => 'Re-audit trends'],
                 ],
                 'is_popular' => $subscription['is_popular'],
                 'metadata' => [
-                    'audit_analyses_per_month' => $subscription['audit_analyses_per_month'],
+                    'audit_diagnostic_credits' => $subscription['audit_diagnostic_credits'],
                     'audit_deep_ai_credits' => $subscription['audit_deep_ai_credits'],
                     'audit_expert_credits' => $subscription['audit_expert_credits'],
                 ],
@@ -113,40 +113,41 @@ class AuditMonetizationSeeder extends Seeder
     }
 
     /**
-     * A free, unlimited plan for partners -- assigned manually by a super
-     * admin via the Subscriptions resource, never self-serve. Deliberately
-     * outside config('pricing.subscriptions'): it must never appear on the
-     * public pricing page or in the exported marketing pricing.json.
+     * A free, high-allowance plan for partners -- assigned manually by a
+     * super admin via the Subscriptions resource, never self-serve.
+     * Deliberately outside config('pricing.subscriptions'): it must never
+     * appear on the public pricing page or in the exported marketing
+     * pricing.json.
      *
-     * "Unlimited" is a large numeric ceiling on the same audit_* metadata
-     * keys every other plan uses, not a new sentinel -- quota math, "X of Y
-     * left" displays, and every other consumer of plan metadata all work
-     * unmodified.
+     * The allowances are ordinary numbers on the same audit_* metadata keys
+     * every other plan uses, not a sentinel -- quota math, "X of Y left"
+     * displays, and every other consumer of plan metadata all work
+     * unmodified. They were a flat 99 per tier while the plan was billed as
+     * "unlimited"; they are now the per-tier figures below, which is why the
+     * plan no longer carries that word in its name.
      */
     private function seedPartnerPlan(Currency $currency, Interval $month): void
     {
         $slug = 'audit-partner';
 
         $product = Product::updateOrCreate(['slug' => $slug], [
-            'name' => 'Partner (Unlimited)',
-            'description' => 'Unlimited audits for partner accounts. Assigned manually -- never sold, never shown publicly.',
+            'name' => 'Partner',
+            'description' => 'High-allowance audits for partner accounts. Assigned manually -- never sold, never shown publicly.',
             'features' => [
-                ['feature' => 'Unlimited diagnostic reports'],
-                ['feature' => 'Unlimited automated analyses'],
-                ['feature' => 'Unlimited Deep AI review credits'],
-                ['feature' => 'Unlimited expert audit credits'],
+                ['feature' => '100 Diagnostic Reports / month'],
+                ['feature' => '50 Deep AI Code Review credits / month'],
+                ['feature' => '10 Expert Audit credits / month'],
             ],
             'metadata' => [
-                'audit_diagnostic_credits' => 99,
-                'audit_analyses_per_month' => 99,
-                'audit_deep_ai_credits' => 99,
-                'audit_expert_credits' => 99,
+                'audit_diagnostic_credits' => 100,
+                'audit_deep_ai_credits' => 50,
+                'audit_expert_credits' => 10,
             ],
             'is_default' => false,
         ]);
 
         $plan = Plan::updateOrCreate(['slug' => $slug.'-monthly'], [
-            'name' => 'Partner (Unlimited) Monthly',
+            'name' => 'Partner Monthly',
             'product_id' => $product->id,
             'interval_id' => $month->id,
             'interval_count' => 1,
