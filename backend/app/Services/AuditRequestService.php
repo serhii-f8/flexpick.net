@@ -17,6 +17,7 @@ use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\RepositoryCloner;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
@@ -118,6 +119,29 @@ class AuditRequestService
         $this->funnel->record(AuditFunnelRecorder::STAGE_QUEUED, $auditRequest);
         $this->auditMailer->send(new AuditRequestReceived($auditRequest, $this->statusUrl($auditRequest)), $auditRequest->email, $auditRequest);
         $this->notifyAdmin($auditRequest);
+    }
+
+    /**
+     * Delete an audit and everything it owns.
+     *
+     * The child rows take care of themselves: audit_reports,
+     * audit_finding_groups and audit_ai_calls cascade, while audit_email_logs
+     * and audit_funnel_events null out so the delivery and funnel history
+     * survives the record it described.
+     *
+     * The PDF does not. A DB-level cascade never fires Eloquent events, so no
+     * hook on AuditReport can ever see this coming — the file has to be
+     * removed here, before the row that names it disappears.
+     */
+    public function delete(AuditRequest $auditRequest): void
+    {
+        $pdfPath = $auditRequest->report?->pdf_path;
+
+        if ($pdfPath !== null) {
+            Storage::disk('local')->delete($pdfPath);
+        }
+
+        $auditRequest->delete();
     }
 
     public function markNeedsFollowup(AuditRequest $auditRequest, string $reason): void

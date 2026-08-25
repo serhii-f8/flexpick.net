@@ -8,8 +8,12 @@ use App\Filament\Admin\Resources\AuditRequests\AuditRequestResource;
 use App\Filament\Admin\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditEmailLog;
+use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Services\AuditRequestService;
+use Filament\Actions\DeleteAction;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 
@@ -252,5 +256,76 @@ class AuditRequestResourceTest extends FeatureTest
             ->assertSuccessful()
             ->assertSee(__('Emails'))
             ->assertSee('infolist-target@example.com');
+    }
+
+    public function test_the_view_page_links_to_the_report_preview_and_pdf(): void
+    {
+        $admin = $this->createAdminUser();
+        $request = AuditRequest::factory()->create(['status' => AuditRequestStatus::SENT->value]);
+        $report = AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'pdf_path' => 'audit-reports/'.$request->uuid.'.pdf',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(AuditRequestResource::getUrl('view', ['record' => $request], true, 'admin'))
+            ->assertSuccessful()
+            ->assertSee(route('reports.download', $report), escape: false)
+            ->assertSee('/reports/'.$report->uuid, escape: false);
+    }
+
+    /**
+     * The PDF is written after the payload, so a report can legitimately exist
+     * with no file behind it. reports.download 404s in that case, and an
+     * operator chasing a broken run does not need a dead link on top of it.
+     */
+    public function test_the_view_page_hides_the_pdf_link_when_no_pdf_was_written(): void
+    {
+        $admin = $this->createAdminUser();
+        $request = AuditRequest::factory()->create(['status' => AuditRequestStatus::SENT->value]);
+        $report = AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'pdf_path' => null,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(AuditRequestResource::getUrl('view', ['record' => $request], true, 'admin'))
+            ->assertSuccessful()
+            ->assertDontSee(route('reports.download', $report), escape: false)
+            ->assertSee('/reports/'.$report->uuid, escape: false);
+    }
+
+    public function test_an_admin_can_delete_an_audit_request(): void
+    {
+        $request = AuditRequest::factory()->create();
+        AuditReport::factory()->create(['audit_request_id' => $request->id]);
+
+        Livewire::actingAs($this->createAdminUser())
+            ->test(ListAuditRequests::class)
+            ->callTableAction(DeleteAction::class, $request);
+
+        $this->assertDatabaseMissing('audit_requests', ['id' => $request->id]);
+        $this->assertDatabaseMissing('audit_reports', ['audit_request_id' => $request->id]);
+    }
+
+    /**
+     * audit_reports cascades at the DB level, and a DB cascade never fires
+     * Eloquent events -- so nothing on the model can clean the PDF up. Delete
+     * the row without deleting the file and the bytes stay on disk forever
+     * with nothing left pointing at them.
+     */
+    public function test_deleting_an_audit_request_removes_its_pdf_from_disk(): void
+    {
+        Storage::disk('local')->put('audit-reports/doomed.pdf', '%PDF-1.4');
+        $request = AuditRequest::factory()->create();
+        AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'pdf_path' => 'audit-reports/doomed.pdf',
+        ]);
+
+        app(AuditRequestService::class)->delete($request);
+
+        Storage::disk('local')->assertMissing('audit-reports/doomed.pdf');
+        $this->assertDatabaseMissing('audit_requests', ['id' => $request->id]);
     }
 }

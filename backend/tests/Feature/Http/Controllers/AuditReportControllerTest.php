@@ -115,6 +115,24 @@ class AuditReportControllerTest extends FeatureTest
         $this->actingAs($owner)->get(route('reports.download', $report))->assertStatus(200);
     }
 
+    /**
+     * Operators triage failed and disputed runs from the admin panel, where
+     * every record belongs to somebody else. Ownership alone would 403 an
+     * admin on every report but their own, which is the one report they never
+     * need to open.
+     */
+    public function test_an_admin_can_download_a_report_they_do_not_own(): void
+    {
+        $this->withExceptionHandling();
+        Storage::disk('local')->put('audit-reports/other.pdf', '%PDF-1.4');
+        $owner = $this->createUser();
+        $admin = $this->createUser();
+        $admin->update(['is_admin' => true]);
+        $report = AuditReport::factory()->create(['user_id' => $owner->id, 'pdf_path' => 'audit-reports/other.pdf']);
+
+        $this->actingAs($admin)->get(route('reports.download', $report))->assertStatus(200);
+    }
+
     public function test_download_is_blocked_while_held_for_expert_review(): void
     {
         $this->withExceptionHandling();

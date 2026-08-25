@@ -15,7 +15,9 @@ use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditReportService;
 use App\Services\AuditReport\PromptComposer;
+use App\Services\AuditRequestService;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
@@ -246,6 +248,10 @@ class AuditRequestResource extends Resource
             ->recordActions([
                 EditAction::make(),
                 ViewAction::make(),
+                DeleteAction::make()
+                    // Routed through the service so the report PDF goes with
+                    // the row; a bare $record->delete() leaks the file.
+                    ->using(fn (AuditRequest $record) => app(AuditRequestService::class)->delete($record)),
                 Action::make('retry')
                     ->label(__('Retry pipeline'))
                     ->requiresConfirmation()

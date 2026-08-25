@@ -81,7 +81,14 @@ class AuditReportController extends Controller
 
     public function download(AuditReport $auditReport)
     {
-        abort_unless($auditReport->user_id === auth()->id(), 403);
+        // Operators triage other people's runs from the admin panel, so
+        // ownership cannot be the only key here -- it would 403 an admin on
+        // every report except the one they never need to open. The
+        // expert-review gate below still applies to everyone.
+        abort_unless(
+            $auditReport->user_id === auth()->id() || auth()->user()?->isAdmin(),
+            403,
+        );
         abort_if($auditReport->auditRequest->isHeldForExpertReview(), 403);
         abort_if($auditReport->pdf_path === null, 404);
 
