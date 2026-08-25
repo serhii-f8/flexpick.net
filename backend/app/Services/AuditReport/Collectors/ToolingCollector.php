@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport\Collectors;
 
 use App\Services\AuditReport\Scanners\RepoContext;
+use App\Support\Utf8;
 
 class ToolingCollector implements Collector
 {
@@ -20,7 +21,7 @@ class ToolingCollector implements Collector
             if (! file_exists($repoPath.'/'.$manifest)) {
                 continue;
             }
-            $data = json_decode((string) file_get_contents($repoPath.'/'.$manifest), true) ?? [];
+            $data = json_decode(Utf8::scrub((string) file_get_contents($repoPath.'/'.$manifest)), true) ?? [];
             $deps = array_merge(
                 $deps,
                 array_keys($data['require'] ?? []),

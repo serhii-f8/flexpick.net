@@ -2,6 +2,8 @@
 
 namespace App\Services\AuditReport;
 
+use App\Support\Utf8;
+
 /**
  * Reads a slice of a file from a cloned repo as text that is safe to put in a
  * prompt.
@@ -32,6 +34,6 @@ class RepoFileReader
         // dropping them, which keeps byte offsets roughly stable for the
         // deep-review token budget and leaves the damage visible in the
         // excerpt instead of silently closing the gap.
-        return mb_scrub((string) file_get_contents($absolutePath, length: $bytes), 'UTF-8');
+        return Utf8::scrub((string) file_get_contents($absolutePath, length: $bytes));
     }
 }

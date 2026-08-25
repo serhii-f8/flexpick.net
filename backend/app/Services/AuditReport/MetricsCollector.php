@@ -4,6 +4,7 @@ namespace App\Services\AuditReport;
 
 use App\Services\AuditReport\Collectors\Collector;
 use App\Services\AuditReport\Scanners\RepoContext;
+use App\Support\Utf8;
 
 class MetricsCollector
 {
@@ -39,6 +40,12 @@ class MetricsCollector
             array_slice($inventory?->files ?? [], 0, 20),
         );
 
-        return ['metrics' => $metrics, 'excerpts' => $excerpts];
+        // Every collector above reads bytes we did not write -- git branch
+        // names and author strings, file names out of `git log --name-only`,
+        // manifest contents, scanner inventories. $metrics is persisted
+        // through an Eloquent array cast on the very next line of the
+        // pipeline, and that cast throws on invalid UTF-8, so scrubbing here
+        // covers every collector at once instead of trusting each to remember.
+        return ['metrics' => Utf8::scrubDeep($metrics), 'excerpts' => $excerpts];
     }
 }

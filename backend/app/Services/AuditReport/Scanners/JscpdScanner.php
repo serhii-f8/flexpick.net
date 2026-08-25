@@ -4,6 +4,7 @@ namespace App\Services\AuditReport\Scanners;
 
 use App\Services\AuditReport\Findings\Finding;
 use App\Services\AuditReport\Findings\Severity;
+use App\Support\Utf8;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -51,7 +52,7 @@ class JscpdScanner implements Scanner
                 return [];
             }
 
-            $decoded = json_decode((string) file_get_contents($report), true, flags: JSON_THROW_ON_ERROR);
+            $decoded = json_decode(Utf8::scrub((string) file_get_contents($report)), true, flags: JSON_THROW_ON_ERROR);
             $decoded = is_array($decoded) ? $decoded : [];
 
             // Recorded on the per-run context, never on $this — the scanner

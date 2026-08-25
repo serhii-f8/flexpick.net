@@ -5,6 +5,7 @@ namespace App\Services\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\ConfigService;
+use App\Support\Utf8;
 
 class PromptComposer
 {
@@ -59,7 +60,12 @@ TEMPLATE;
      */
     public function compose(array $metrics, array $groups, array $excerpts, ?string $adminContext = null): string
     {
-        return $this->withAdminContext(
+        // The SDK encodes this string with JSON_THROW_ON_ERROR, so whatever
+        // slipped past the collectors -- a group built from raw scanner
+        // output, an excerpt from a reader that forgot, admin context pasted
+        // out of a terminal -- ends the run here. Scrubbing the composed
+        // prompt makes that impossible regardless of which input was at fault.
+        return Utf8::scrub($this->withAdminContext(
             str_replace(
                 ['{metrics}', '{groups}', '{excerpts}'],
                 [
@@ -70,7 +76,7 @@ TEMPLATE;
                 $this->template(),
             ),
             $adminContext,
-        );
+        ));
     }
 
     /**

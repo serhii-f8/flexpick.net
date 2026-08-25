@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport\Scanners;
 
+use App\Support\Utf8;
 use Illuminate\Support\Facades\Process;
 use Symfony\Component\Finder\Finder;
 
@@ -42,7 +43,7 @@ class SccScanner implements Scanner
                 $context->path,
             ]);
 
-        $decoded = json_decode($result->output(), true, flags: JSON_THROW_ON_ERROR);
+        $decoded = json_decode(Utf8::scrub($result->output()), true, flags: JSON_THROW_ON_ERROR);
 
         $context->withInventory($this->toInventory(is_array($decoded) ? $decoded : [], $context->path));
 

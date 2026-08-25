@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport;
 
+use App\Support\Utf8;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -62,7 +63,7 @@ class DependencyAuditor
             return [];
         }
 
-        $data = json_decode((string) file_get_contents($lock), true) ?? [];
+        $data = json_decode(Utf8::scrub((string) file_get_contents($lock)), true) ?? [];
         $packages = [];
 
         foreach (array_merge($data['packages'] ?? [], $data['packages-dev'] ?? []) as $package) {
@@ -85,7 +86,7 @@ class DependencyAuditor
             return [];
         }
 
-        $data = json_decode((string) file_get_contents($lock), true) ?? [];
+        $data = json_decode(Utf8::scrub((string) file_get_contents($lock)), true) ?? [];
         $packages = [];
 
         if (isset($data['packages'])) {

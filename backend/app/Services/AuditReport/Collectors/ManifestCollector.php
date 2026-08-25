@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport\Collectors;
 
 use App\Services\AuditReport\Scanners\RepoContext;
+use App\Support\Utf8;
 use Illuminate\Support\Facades\Log;
 
 class ManifestCollector implements Collector
@@ -22,7 +23,7 @@ class ManifestCollector implements Collector
                 continue;
             }
 
-            $raw = (string) file_get_contents($repoPath.'/'.$manifest);
+            $raw = Utf8::scrub((string) file_get_contents($repoPath.'/'.$manifest));
             $data = json_decode($raw, true);
             $parseError = ! is_array($data);
 

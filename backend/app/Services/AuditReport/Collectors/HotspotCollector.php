@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport\Collectors;
 
 use App\Services\AuditReport\Scanners\RepoContext;
+use App\Support\Utf8;
 use Illuminate\Support\Facades\Process;
 
 class HotspotCollector implements Collector
@@ -15,7 +16,7 @@ class HotspotCollector implements Collector
     public function collect(RepoContext $context): array
     {
         $log = Process::path($context->path)->run(['git', 'log', '--name-only', '--format=']);
-        $changes = array_count_values(array_filter(explode("\n", trim($log->output()))));
+        $changes = array_count_values(array_filter(explode("\n", trim(Utf8::scrub($log->output())))));
 
         $context->withChurn(array_map('intval', $changes));
 

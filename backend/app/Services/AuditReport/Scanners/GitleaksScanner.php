@@ -5,6 +5,7 @@ namespace App\Services\AuditReport\Scanners;
 use App\Services\AuditReport\Findings\Finding;
 use App\Services\AuditReport\Findings\Normalizers\SarifNormalizer;
 use App\Services\AuditReport\Findings\Severity;
+use App\Support\Utf8;
 use Illuminate\Support\Facades\Process;
 use JsonException;
 use RuntimeException;
@@ -74,7 +75,7 @@ class GitleaksScanner implements Scanner
 
     private function decode(string $path): array
     {
-        $decoded = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+        $decoded = json_decode(Utf8::scrub((string) file_get_contents($path)), true, flags: JSON_THROW_ON_ERROR);
 
         if (! is_array($decoded)) {
             throw new JsonException('gitleaks report is not an object');
