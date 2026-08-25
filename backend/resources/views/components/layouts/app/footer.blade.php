@@ -20,7 +20,7 @@
             </div>
             <div>
                 <p class="font-mono text-[10px] tracking-[0.16em] text-cream-200/50 mb-4">{{ __('CONTACT') }}</p>
-                <a href="mailto:hello@flexpick.net" class="text-cream-200/70 hover:text-cream-100 text-sm">hello@flexpick.net</a>
+                <a href="mailto:info@flexpick.net" class="text-cream-200/70 hover:text-cream-100 text-sm">info@flexpick.net</a>
             </div>
         </div>
         <hr class="my-8 border-white/5" />

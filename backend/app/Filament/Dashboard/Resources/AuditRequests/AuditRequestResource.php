@@ -199,7 +199,7 @@ class AuditRequestResource extends Resource
             AuditRequestStatus::REPORT_READY->value, AuditRequestStatus::SENT->value => __('Your report is ready.'),
             AuditRequestStatus::FAILED->value => __('This audit failed — see the reason below.'),
             AuditRequestStatus::NEEDS_FOLLOWUP->value => __('We need more information — please check your email.'),
-            AuditRequestStatus::AWAITING_ACCESS->value => __('Invite flexpick-audit as a read-only collaborator on your GitHub repository. We launch the audit as soon as the invite lands.'),
+            AuditRequestStatus::AWAITING_ACCESS->value => __('Invite :account as a read-only collaborator on your GitHub repository. We launch the audit as soon as the invite lands.', ['account' => config('audit.github_account')]),
             AuditRequestStatus::AWAITING_PAYMENT->value => __('This audit is waiting for an available analysis. Upgrade your plan or buy a run to start it.'),
             AuditRequestStatus::EXPERT_REVIEW->value => __('Your report is complete and is being reviewed by our expert auditor before delivery.'),
             default => '',

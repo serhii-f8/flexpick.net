@@ -102,7 +102,7 @@ class AuditRequestResourceTest extends FeatureTest
 
         $this->get(AuditRequestResource::getUrl('view', ['record' => $audit->uuid], true, 'dashboard', tenant: $tenant))
             ->assertSuccessful()
-            ->assertSee('flexpick-audit');
+            ->assertSee(config('audit.github_account'));
     }
 
     public function test_view_shows_scores_and_report_links_for_completed_audit(): void
