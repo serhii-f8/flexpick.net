@@ -7,7 +7,7 @@ site:
   googleSiteVerificationId: false
 
 productApp:
-  url: 'https://app.flexpick.net'
+  url: 'https://audit.flexpick.net'
 
 # Default SEO metadata
 metadata:

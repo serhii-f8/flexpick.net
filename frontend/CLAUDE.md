@@ -71,7 +71,7 @@ Custom remark/rehype plugins in `src/utils/frontmatter.ts`: reading time estimat
 ## Deployment
 
 Static output to `dist/`. Deployed to Ploi as a site on the same server as the
-Laravel app (`app.flexpick.net`), built by Ploi's static-site deploy script:
+Laravel app (`audit.flexpick.net`), built by Ploi's static-site deploy script:
 pull, `npm ci`, `npm run build`, publish `dist/`. Astro assets under `/_astro/`
 get 1-year immutable cache headers, configured in the site's nginx block.
 Rollback is a redeploy of the previous commit. CI runs build and lint checks on
