@@ -5,8 +5,11 @@
                 <div class="grow">
                     <label class="text-sm font-medium" for="audit-repo-url">{{ __('Repository URL') }}</label>
                     <x-filament::input.wrapper>
-                        <x-filament::input id="audit-repo-url" type="url" wire:model="repoUrl" placeholder="https://github.com/you/repo" />
+                        <x-filament::input id="audit-repo-url" type="url" wire:model="repoUrl" placeholder="https://github.com/you/repo" aria-describedby="audit-private-repo" />
                     </x-filament::input.wrapper>
+                    <p id="audit-private-repo" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        {{ __('Private repository? Invite :account on GitHub as a read-only collaborator (Settings → Collaborators → Add people), then paste the URL here. We start the audit as soon as the invite lands.', ['account' => config('audit.github_account')]) }}
+                    </p>
                 </div>
             </div>
 

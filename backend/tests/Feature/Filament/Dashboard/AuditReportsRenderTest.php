@@ -72,4 +72,23 @@ class AuditReportsRenderTest extends FeatureTest
         $this->assertStringContainsString(AuditTier::DEEP_AI->label(), $listMarkup);
         $this->assertStringNotContainsString(AuditTier::EXPERT->label(), $listMarkup);
     }
+
+    /**
+     * The sentinel account name matters: asserting the shipped default would
+     * pass just as well against a hardcoded string, and the whole point of
+     * this note is that it tracks config('audit.github_account') — the same
+     * source the access-needed email and the awaiting_access status use.
+     */
+    public function test_the_launch_form_explains_private_repo_access(): void
+    {
+        config()->set('audit.github_account', 'sentinel-review-account');
+
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 1);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(AuditReports::class)
+            ->assertOk()
+            ->assertSee('read-only collaborator')
+            ->assertSee('sentinel-review-account');
+    }
 }
