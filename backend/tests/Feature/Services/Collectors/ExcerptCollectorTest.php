@@ -13,6 +13,9 @@ use Tests\Feature\FeatureTest;
 
 class ExcerptCollectorTest extends FeatureTest
 {
+    /** The exact flags Anthropic\\Core\\Util::JSON_ENCODE_FLAGS uses for the request body. */
+    private const SDK_FLAGS = JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+
     private string $repo;
 
     protected function setUp(): void
@@ -54,6 +57,17 @@ class ExcerptCollectorTest extends FeatureTest
         $context->withSecretPaths($secretPaths);
 
         return $context;
+    }
+
+    private function contentFor(string $path): string
+    {
+        foreach (app(ExcerptCollector::class)->collect($this->context())['excerpts'] as $excerpt) {
+            if ($excerpt['path'] === $path) {
+                return $excerpt['content'];
+            }
+        }
+
+        $this->fail("No excerpt collected for {$path}");
     }
 
     private function paths(RepoContext $context): array
@@ -127,5 +141,43 @@ class ExcerptCollectorTest extends FeatureTest
 
         $this->assertCount(2, $paths);
         $this->assertSame(['app/Legacy.php', 'app/User.php'], $paths);
+    }
+
+    /**
+     * The SDK encodes the whole request body with JSON_THROW_ON_ERROR, so a
+     * single excerpt byte that isn't valid UTF-8 kills the analysis call
+     * with "Malformed UTF-8 characters, possibly incorrectly encoded" — a
+     * failure that reads like an AI outage but is really a file we read.
+     * Audited repos are arbitrary: a Latin-1 source file is normal, not
+     * exotic.
+     */
+    public function test_excerpts_from_a_non_utf8_file_can_still_be_encoded(): void
+    {
+        File::put($this->repo.'/app/Legacy.php', "<?php\n// r\xE9sum\xE9 parser\n");
+
+        $content = $this->contentFor('app/Legacy.php');
+
+        $this->assertTrue(mb_check_encoding($content, 'UTF-8'));
+        $this->assertIsString(json_encode(['content' => $content], self::SDK_FLAGS));
+    }
+
+    /**
+     * The subtler half: excerptBytes caps the read in BYTES, so a perfectly
+     * valid UTF-8 file gets sliced mid-codepoint whenever a multi-byte
+     * character straddles the cap. No unusual encoding needed — one emoji or
+     * curly quote at the wrong offset is enough.
+     */
+    public function test_excerpts_truncated_mid_codepoint_can_still_be_encoded(): void
+    {
+        $raw = "<?php\n// caf\u{e9} \u{2615}\n";
+        File::put($this->repo.'/app/Legacy.php', $raw);
+
+        // One byte into the three-byte emoji.
+        config()->set('audit.tiers.diagnostic.excerpt_bytes', strpos($raw, "\u{2615}") + 1);
+
+        $content = $this->contentFor('app/Legacy.php');
+
+        $this->assertTrue(mb_check_encoding($content, 'UTF-8'));
+        $this->assertIsString(json_encode(['content' => $content], self::SDK_FLAGS));
     }
 }

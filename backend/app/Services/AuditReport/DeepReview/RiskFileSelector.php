@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport\DeepReview;
 
 use App\Services\AuditReport\Findings\DedupedFinding;
+use App\Services\AuditReport\RepoFileReader;
 use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\SecretFileFilter;
 
@@ -21,6 +22,7 @@ class RiskFileSelector
     public function __construct(
         private SecretFileFilter $secretFiles,
         private SensitivePathMatcher $sensitivePaths,
+        private RepoFileReader $files,
     ) {}
 
     /** @param list<DedupedFinding> $dedupedFindings */
@@ -275,7 +277,7 @@ class RiskFileSelector
 
     private function read(RepoContext $context, string $path, int $bytes): string
     {
-        return (string) file_get_contents($context->path.'/'.$path, length: $bytes);
+        return $this->files->read($context->path.'/'.$path, $bytes);
     }
 
     public function estimateTokens(int $bytes): int

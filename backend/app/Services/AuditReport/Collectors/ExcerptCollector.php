@@ -2,12 +2,16 @@
 
 namespace App\Services\AuditReport\Collectors;
 
+use App\Services\AuditReport\RepoFileReader;
 use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\SecretFileFilter;
 
 class ExcerptCollector implements Collector
 {
-    public function __construct(private SecretFileFilter $secretFiles) {}
+    public function __construct(
+        private SecretFileFilter $secretFiles,
+        private RepoFileReader $files,
+    ) {}
 
     public function name(): string
     {
@@ -37,7 +41,7 @@ class ExcerptCollector implements Collector
 
             $excerpts[] = [
                 'path' => $file['path'],
-                'content' => (string) file_get_contents($absolute, length: $context->tier->excerptBytes),
+                'content' => $this->files->read($absolute, $context->tier->excerptBytes),
             ];
         }
 
