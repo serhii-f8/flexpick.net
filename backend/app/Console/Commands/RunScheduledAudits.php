@@ -7,7 +7,9 @@ use App\Constants\AuditRequestStatus;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
+use App\Models\AuditScheduleRun;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\ScheduledAuditChangeChecker;
 use Illuminate\Console\Command;
 
 class RunScheduledAudits extends Command
@@ -16,11 +18,9 @@ class RunScheduledAudits extends Command
 
     protected $description = 'Dispatch dashboard audits for schedules that are due';
 
-    public function handle(AuditEntitlementService $entitlements): int
+    public function handle(AuditEntitlementService $entitlements, ScheduledAuditChangeChecker $changeChecker): int
     {
-        $due = AuditSchedule::query()->with(['user', 'tenant'])->get()
-            ->filter(fn (AuditSchedule $schedule) => $schedule->last_run_at === null
-                || $schedule->last_run_at <= ($schedule->frequency === 'weekly' ? now()->subWeek() : now()->subMonth()));
+        $due = AuditSchedule::query()->with(['user', 'tenant'])->get()->filter($this->isDue(...));
 
         $started = 0;
 
@@ -34,6 +34,16 @@ class RunScheduledAudits extends Command
                 // schedule time. Logged, because a schedule that quietly
                 // stops firing is otherwise invisible.
                 $this->warn("Skipping {$schedule->repo_url}: no {$tier->value} runs left for {$schedule->user->email}");
+                $this->recordRun($schedule, 'skipped', 'no_quota');
+
+                continue;
+            }
+
+            $check = $changeChecker->check($schedule);
+
+            if (! $check->shouldRun) {
+                $this->info("Skipping {$schedule->repo_url}: no changes since the last audit");
+                $this->recordRun($schedule, 'skipped', 'no_changes', commitSha: $check->sha);
 
                 continue;
             }
@@ -42,6 +52,7 @@ class RunScheduledAudits extends Command
                 'name' => $schedule->user->name,
                 'email' => $schedule->user->email,
                 'repo_url' => $schedule->repo_url,
+                'branch' => $schedule->branch,
                 'status' => AuditRequestStatus::QUEUED->value,
                 'email_verified_at' => now(),
                 'source' => 'dashboard',
@@ -62,12 +73,49 @@ class RunScheduledAudits extends Command
             }
 
             GenerateAuditReport::dispatch($auditRequest);
-            $schedule->update(['last_run_at' => now()]);
+            $schedule->update(['last_run_at' => now(), 'last_commit_sha' => $check->sha]);
+            $this->recordRun($schedule, 'completed', auditRequestId: $auditRequest->id, commitSha: $check->sha);
             $started++;
         }
 
         $this->info("Started {$started} scheduled audits.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Weekly schedules with a chosen day_of_week are due only on that
+     * weekday. A weekly schedule created before day_of_week existed (still
+     * null) falls back to the original last_run_at + 1 week check, so no
+     * pre-existing row silently stops firing.
+     */
+    private function isDue(AuditSchedule $schedule): bool
+    {
+        if ($schedule->last_run_at === null) {
+            return true;
+        }
+
+        if ($schedule->frequency === 'weekly' && $schedule->day_of_week !== null) {
+            return now()->dayOfWeek === $schedule->day_of_week && $schedule->last_run_at->isBefore(now()->startOfDay());
+        }
+
+        return $schedule->last_run_at <= ($schedule->frequency === 'weekly' ? now()->subWeek() : now()->subMonth());
+    }
+
+    private function recordRun(
+        AuditSchedule $schedule,
+        string $status,
+        ?string $reason = null,
+        ?int $auditRequestId = null,
+        ?string $commitSha = null,
+    ): void {
+        AuditScheduleRun::create([
+            'audit_schedule_id' => $schedule->id,
+            'scheduled_for' => now()->toDateString(),
+            'status' => $status,
+            'reason' => $reason,
+            'audit_request_id' => $auditRequestId,
+            'commit_sha' => $commitSha,
+        ]);
     }
 }
