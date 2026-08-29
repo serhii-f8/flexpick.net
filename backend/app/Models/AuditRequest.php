@@ -28,7 +28,7 @@ class AuditRequest extends Model
     public const TRIAGE_TERMINAL = 'terminal';
 
     protected $fillable = [
-        'name', 'email', 'repo_url', 'message', 'status', 'failure_reason', 'meta', 'metrics',
+        'name', 'email', 'repo_url', 'branch', 'message', 'status', 'failure_reason', 'meta', 'metrics',
         'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'funding', 'source', 'tier', 'user_id', 'prepaid',
         'manually_paid', 'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
