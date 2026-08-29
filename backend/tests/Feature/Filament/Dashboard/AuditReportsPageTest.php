@@ -372,11 +372,17 @@ class AuditReportsPageTest extends FeatureTest
         $this->assertNull($schedule->refresh()->branch);
     }
 
+    /**
+     * The lookup is entitled by the user's own audit history: this repo has an
+     * AuditRequest of theirs, which is exactly the state that renders the
+     * per-repo branch <select> whose x-init calls this method.
+     */
     public function test_load_branches_populates_branches_by_repo_from_the_github_client(): void
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+        AuditRequest::factory()->create(['user_id' => $user->id, 'repo_url' => 'https://github.com/acme/app']);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
@@ -390,6 +396,66 @@ class AuditReportsPageTest extends FeatureTest
             ->test(AuditReports::class)
             ->call('loadBranches', 'https://github.com/acme/app')
             ->assertSet('branchesByRepo', ['https://github.com/acme/app' => ['main', 'develop']]);
+    }
+
+    /**
+     * loadBranches() is a public Livewire method backed by the shared
+     * AUDIT_GITHUB_TOKEN PAT, which is a read-only collaborator on every
+     * customer's private repos. Unrestricted, it is a free, instant,
+     * repeatable, unlogged oracle for "does this repo exist and can the PAT
+     * see it" against any owner/repo on GitHub -- strictly worse than probing
+     * via launchAudit(), which at least costs a credit and leaves a row.
+     */
+    public function test_load_branches_refuses_a_repo_the_user_has_no_claim_to(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        // Someone else's repo: not in this user's repoUrl input, and not on
+        // any AuditRequest or AuditSchedule of theirs.
+        $stranger = User::factory()->create();
+        AuditRequest::factory()->create([
+            'user_id' => $stranger->id,
+            'repo_url' => 'https://github.com/victim/secret',
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->mock(GitHubApiClient::class, function ($mock) {
+            $mock->shouldReceive('listBranches')->never();
+        });
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('loadBranches', 'https://github.com/victim/secret')
+            ->assertSet('branchesByRepo', []);
+    }
+
+    public function test_load_branches_allows_a_repo_the_user_has_scheduled(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+        AuditSchedule::create([
+            'user_id' => $user->id, 'tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/scheduled',
+            'frequency' => 'weekly', 'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->mock(GitHubApiClient::class, function ($mock) {
+            $mock->shouldReceive('listBranches')->once()->andReturn(['main']);
+        });
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('loadBranches', 'https://github.com/acme/scheduled')
+            ->assertSet('branchesByRepo', ['https://github.com/acme/scheduled' => ['main']]);
     }
 
     private function createTenantFor(User $user): Tenant

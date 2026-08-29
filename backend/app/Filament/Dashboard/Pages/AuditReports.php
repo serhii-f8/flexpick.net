@@ -65,7 +65,40 @@ class AuditReports extends Page
             return;
         }
 
+        if (! $this->userMayLookUpBranchesFor($key)) {
+            return;
+        }
+
         $this->branchesByRepo[$key] = app(GitHubApiClient::class)->listBranches($repoUrl);
+    }
+
+    /**
+     * The branch lookup runs on the shared AUDIT_GITHUB_TOKEN PAT, which is a
+     * read-only collaborator on every customer's private repos. Left open,
+     * this public Livewire method is a free, instant, repeatable and unlogged
+     * oracle for "does owner/repo exist and can the PAT see it" -- branches
+     * back means yes, an empty array means no. That is strictly worse than
+     * probing through launchAudit(), which at least costs a credit and leaves
+     * an auditable AuditRequest row.
+     *
+     * So a user may only look up a repo they already have a claim to: the one
+     * they are about to submit in their own launch form, or one carried by
+     * their own audit history or schedules. A refusal leaves the key unset, so
+     * the blade renders its "not yet fetched" branch exactly as before any
+     * lookup ran.
+     */
+    private function userMayLookUpBranchesFor(string $repoUrl): bool
+    {
+        if ($this->repoUrl !== null && rtrim($this->repoUrl, '/') === $repoUrl) {
+            return true;
+        }
+
+        $userId = auth()->id();
+        // Schedules are stored trimmed; requests keep whatever was submitted.
+        $variants = [$repoUrl, $repoUrl.'/'];
+
+        return AuditRequest::query()->where('user_id', $userId)->whereIn('repo_url', $variants)->exists()
+            || AuditSchedule::query()->where('user_id', $userId)->whereIn('repo_url', $variants)->exists();
     }
 
     public function prevCalendarMonth(): void
