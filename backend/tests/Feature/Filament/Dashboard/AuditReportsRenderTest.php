@@ -183,6 +183,56 @@ class AuditReportsRenderTest extends FeatureTest
         }
     }
 
+    /**
+     * @js(...) does not compile inside a Blade component tag's attribute
+     * value (only inside plain HTML tags) -- it silently leaks through as
+     * literal, uncompiled text, producing invalid JS in the browser. The
+     * escaping test above only checks handlers that already contain the
+     * repo URL, so a directive that failed to compile at all (and so never
+     * received the URL) slipped past it undetected. This asserts directly
+     * that no rendered wire:-family or x- attribute still contains an
+     * uncompiled @js( call, which is what actually broke the Re-run button
+     * (wire:click="launchAudit(@js($repoUrl), ...)" inside
+     * <x-filament::button>) before the fix.
+     */
+    public function test_no_wire_or_alpine_attribute_leaks_an_uncompiled_js_directive(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        $request = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/re-run-target',
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+        AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'user_id' => $user->id,
+        ]);
+
+        $html = Livewire::test(AuditReports::class)->assertOk()->html();
+
+        preg_match_all(
+            '/(?:wire:(?:click|change|input|submit|keydown)[\w.:-]*|x-init|x-on:[\w.:-]+)="([^"]*)"/i',
+            $html,
+            $matches,
+        );
+
+        foreach ($matches[1] as $expression) {
+            $this->assertStringNotContainsString(
+                '@js(',
+                html_entity_decode($expression, ENT_QUOTES | ENT_HTML5),
+                "Uncompiled @js(...) directive leaked into a JS-context attribute: {$expression}",
+            );
+        }
+
+        $this->assertStringContainsString(
+            "wire:click=\"launchAudit('https:\\/\\/github.com\\/acme\\/re-run-target',",
+            $html,
+            'The Re-run button did not receive the repo URL at all.',
+        );
+    }
+
     public function test_the_calendar_shows_a_completed_and_a_skipped_day_for_a_scheduled_repo(): void
     {
         // Fixtures are created BEFORE freezing time: a User row created

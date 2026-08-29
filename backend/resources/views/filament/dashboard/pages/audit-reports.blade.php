@@ -193,8 +193,15 @@
                         </select>
                     </div>
 
-                    {{-- Re-run uses this repo's own configured schedule branch, never the launch form's current selection. --}}
-                    <x-filament::button size="sm" color="gray" wire:click="launchAudit(@js($repoUrl), @js($originTier), @js($schedule?->branch))">
+                    {{--
+                        Re-run uses this repo's own configured schedule branch, never the launch
+                        form's current selection. @js(...) does not compile inside a Blade
+                        component tag's attribute value (only inside plain HTML tags) -- it
+                        leaks through as literal, uncompiled text, producing invalid JS in the
+                        browser. {!! Js::from(...) !!} is the directive-free equivalent and does
+                        compile correctly here.
+                    --}}
+                    <x-filament::button size="sm" color="gray" wire:click="launchAudit({!! \Illuminate\Support\Js::from($repoUrl) !!}, {!! \Illuminate\Support\Js::from($originTier) !!}, {!! \Illuminate\Support\Js::from($schedule?->branch) !!})">
                         {{ __('Re-run') }}
                     </x-filament::button>
                 </div>
