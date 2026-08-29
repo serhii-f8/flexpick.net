@@ -52,6 +52,42 @@ class GitHubApiClientTest extends FeatureTest
         $this->assertSame([], app(GitHubApiClient::class)->listBranches('https://github.com/acme/app'));
     }
 
+    /**
+     * Every scheduled repo row on the audit reports page fires an x-init
+     * branch lookup, so a user with several scheduled repos used to trigger
+     * that many live calls to api.github.com before the page finished
+     * rendering -- on every single page load. Branch lists rarely change, and
+     * the rate-limit budget being spent is the shared PAT's, across all
+     * tenants.
+     */
+    public function test_repeated_lookups_of_the_same_repo_hit_the_api_once(): void
+    {
+        Http::fake(['api.github.com/repos/acme/app/branches*' => Http::response([['name' => 'main']])]);
+
+        $client = app(GitHubApiClient::class);
+
+        $this->assertSame(['main'], $client->listBranches('https://github.com/acme/app'));
+        $this->assertSame(['main'], $client->listBranches('https://github.com/acme/app'));
+        $this->assertSame(['main'], $client->listBranches('https://github.com/acme/app.git'));
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_different_repos_are_cached_separately(): void
+    {
+        Http::fake([
+            'api.github.com/repos/acme/one/branches*' => Http::response([['name' => 'one-main']]),
+            'api.github.com/repos/acme/two/branches*' => Http::response([['name' => 'two-main']]),
+        ]);
+
+        $client = app(GitHubApiClient::class);
+
+        $this->assertSame(['one-main'], $client->listBranches('https://github.com/acme/one'));
+        $this->assertSame(['two-main'], $client->listBranches('https://github.com/acme/two'));
+
+        Http::assertSentCount(2);
+    }
+
     public function test_works_without_a_configured_token(): void
     {
         config(['audit.github_token' => null]);
