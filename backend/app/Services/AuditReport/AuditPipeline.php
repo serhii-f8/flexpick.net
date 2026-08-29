@@ -65,7 +65,7 @@ class AuditPipeline
 
         try {
             $this->cloner->preflight($auditRequest->repo_url);
-            $path = $this->cloner->clone($auditRequest->repo_url, $auditRequest->uuid);
+            $path = $this->cloner->clone($auditRequest->repo_url, $auditRequest->uuid, $auditRequest->branch);
             $auditRequest->appendPipelineLog('cloned', 'Repository cloned');
 
             $profile = $this->tierProfileResolver->for($auditRequest->tier);

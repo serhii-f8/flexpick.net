@@ -16,6 +16,7 @@ use App\Services\AuditReport\AuditPipeline;
 use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\ReportPayload;
+use App\Services\AuditReport\RepositoryCloner;
 use App\Services\AuditReport\Scanners\ScannerOutcome;
 use App\Services\AuditReport\Scanners\ScannerRun;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
@@ -76,6 +77,29 @@ class AuditPipelineTest extends FeatureTest
         // keys (by length, then lexicographically) on round-trip, so key order
         // is not preserved through storage even though values are unchanged.
         $this->assertEquals($expected->toPayloadScores(), $request->report->payload['scores']);
+    }
+
+    public function test_the_requests_branch_is_passed_through_to_the_cloner(): void
+    {
+        $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer);
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'file://'.$this->fixtureRepo,
+            'branch' => 'main',
+            'status' => AuditRequestStatus::QUEUED->value,
+        ]);
+
+        $this->partialMock(RepositoryCloner::class, function ($mock) use ($request) {
+            $mock->shouldReceive('clone')
+                ->once()
+                ->withArgs(fn (string $url, string $uuid, ?string $branch) => $url === $request->repo_url
+                    && $uuid === $request->uuid
+                    && $branch === 'main')
+                ->passthru();
+        });
+
+        (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
+
+        $this->assertSame(AuditRequestStatus::SENT->value, $request->refresh()->status);
     }
 
     public function test_inaccessible_repo_goes_to_followup(): void
