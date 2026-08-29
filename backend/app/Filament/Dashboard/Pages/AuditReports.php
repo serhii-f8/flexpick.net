@@ -129,8 +129,17 @@ class AuditReports extends Page
 
     public function launchAudit(?string $repoUrl = null, ?string $tier = null, ?string $branch = null): void
     {
-        $repoUrl ??= $this->repoUrl;
-        $branch ??= $this->branch;
+        // The launch form's branch belongs to the launch form's repo, so only
+        // the form's own submission (no explicit repo) may inherit it. A
+        // caller that names a repo -- the per-repo Re-run button -- names its
+        // own branch or gets none: auditing repo B against repo A's selected
+        // branch is the wrong revision at best, and a clone failure after the
+        // credit is already spent at worst.
+        if ($repoUrl === null) {
+            $repoUrl = $this->repoUrl;
+            $branch ??= $this->branch;
+        }
+
         $branch = ($branch !== null && $branch !== '') ? $branch : null;
         $user = auth()->user();
         $tenant = Filament::getTenant();

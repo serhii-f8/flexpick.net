@@ -20,6 +20,7 @@ use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\GitHub\GitHubApiClient;
 use Filament\Facades\Filament;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
@@ -263,6 +264,41 @@ class AuditReportsPageTest extends FeatureTest
             ->call('launchAudit', 'https://github.com/acme/my-app');
 
         $this->assertNull(AuditRequest::where('user_id', $user->id)->firstOrFail()->branch);
+    }
+
+    /**
+     * The Re-run button on a repo card names its own repo. The branch picked
+     * in the launch form at the top of the page belongs to whatever repo the
+     * user was about to submit there -- a different repo entirely. Auditing
+     * repo B against repo A's branch is wrong when the branch exists on both,
+     * and a clone failure (after a credit is spent) when it does not.
+     */
+    public function test_launch_audit_for_another_repo_ignores_the_launch_forms_branch(): void
+    {
+        Queue::fake([GenerateAuditReport::class]);
+        // Setting repoUrl fires updatedRepoUrl() -> loadBranches(), which
+        // would otherwise reach the real GitHub API.
+        Http::fake(['api.github.com/*' => Http::response([['name' => 'feature-x']])]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->set('repoUrl', 'https://github.com/acme/about-to-submit')
+            ->set('branch', 'feature-x')
+            ->call('launchAudit', 'https://github.com/acme/unrelated-repo', AuditTier::DIAGNOSTIC->value);
+
+        $request = AuditRequest::where('user_id', $user->id)
+            ->where('repo_url', 'https://github.com/acme/unrelated-repo')
+            ->firstOrFail();
+
+        $this->assertNotSame('feature-x', $request->branch);
+        $this->assertNull($request->branch);
     }
 
     public function test_a_new_weekly_schedule_defaults_day_of_week_to_today(): void

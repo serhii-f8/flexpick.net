@@ -192,7 +192,8 @@
                         </select>
                     </div>
 
-                    <x-filament::button size="sm" color="gray" wire:click="launchAudit('{{ $repoUrl }}', '{{ $originTier }}')">
+                    {{-- Re-run uses this repo's own configured schedule branch, never the launch form's current selection. --}}
+                    <x-filament::button size="sm" color="gray" wire:click="launchAudit('{{ $repoUrl }}', '{{ $originTier }}', '{{ $schedule?->branch }}')">
                         {{ __('Re-run') }}
                     </x-filament::button>
                 </div>
