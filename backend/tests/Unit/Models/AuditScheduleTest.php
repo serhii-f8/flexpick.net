@@ -30,5 +30,16 @@ class AuditScheduleTest extends FeatureTest
         $this->assertNull($schedule->branch);
         $this->assertNull($schedule->day_of_week);
         $this->assertNull($schedule->last_commit_sha);
+        $this->assertNull($schedule->day_of_month);
+    }
+
+    public function test_day_of_month_is_mass_assignable_and_casts_to_int(): void
+    {
+        $schedule = AuditSchedule::factory()->create(['day_of_month' => 15]);
+
+        $schedule->refresh();
+
+        $this->assertSame(15, $schedule->day_of_month);
+        $this->assertIsInt($schedule->day_of_month);
     }
 }

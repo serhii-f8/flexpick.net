@@ -37,7 +37,7 @@ class ScheduleOccurrenceProjector
             return $dates;
         }
 
-        $anchorDay = ($schedule->last_run_at ?? $schedule->created_at ?? $today)->day;
+        $anchorDay = $schedule->day_of_month ?? ($schedule->last_run_at ?? $schedule->created_at ?? $today)->day;
         $day = min($anchorDay, $monthEnd->day);
         $date = $monthStart->copy()->addDays($day - 1);
 

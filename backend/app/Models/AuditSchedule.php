@@ -14,10 +14,15 @@ class AuditSchedule extends Model
 
     protected $fillable = [
         'user_id', 'tenant_id', 'repo_url', 'frequency', 'tier', 'last_run_at',
-        'branch', 'day_of_week', 'last_commit_sha',
+        'branch', 'day_of_week', 'day_of_month', 'last_commit_sha',
     ];
 
-    protected $casts = ['last_run_at' => 'datetime', 'tier' => AuditTier::class, 'day_of_week' => 'integer'];
+    protected $casts = [
+        'last_run_at' => 'datetime',
+        'tier' => AuditTier::class,
+        'day_of_week' => 'integer',
+        'day_of_month' => 'integer',
+    ];
 
     public function user(): BelongsTo
     {

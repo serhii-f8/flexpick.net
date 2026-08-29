@@ -163,6 +163,16 @@
                                 <option value="{{ $value }}" @selected(($schedule->day_of_week ?? now()->dayOfWeek) === $value)>{{ $dayLabel }}</option>
                             @endforeach
                         </select>
+                    @elseif ($scheduleFrequency === 'monthly')
+                        <select
+                            class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
+                            wire:change="setScheduleMonthDay(@js($repoUrl), $event.target.value)"
+                            aria-label="{{ __('Day of month for :repo', ['repo' => $repoUrl]) }}"
+                        >
+                            @for ($day = 1; $day <= 31; $day++)
+                                <option value="{{ $day }}" @selected(($schedule->day_of_month ?? now()->day) === $day)>{{ $day }}</option>
+                            @endfor
+                        </select>
                     @endif
 
                     @if ($scheduleFrequency !== 'off')

@@ -381,6 +381,80 @@ class AuditReportsPageTest extends FeatureTest
         $this->assertNull($schedule->refresh()->branch);
     }
 
+    public function test_a_new_monthly_schedule_defaults_day_of_month_to_today(): void
+    {
+        // Fixtures are created BEFORE freezing time -- see the comment on
+        // test_a_new_weekly_schedule_defaults_day_of_week_to_today above.
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Carbon::setTestNow(Carbon::parse('2026-08-10'));
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setSchedule', 'https://github.com/acme/app', 'monthly');
+
+        $this->assertSame(
+            Carbon::now()->day,
+            AuditSchedule::where('user_id', $user->id)->firstOrFail()->day_of_month,
+        );
+
+        Carbon::setTestNow();
+    }
+
+    public function test_set_schedule_month_day_updates_an_existing_monthly_schedule(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+        $schedule = AuditSchedule::create([
+            'user_id' => $user->id, 'tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/app',
+            'frequency' => 'monthly', 'tier' => AuditTier::DIAGNOSTIC->value, 'day_of_month' => 1,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setScheduleMonthDay', 'https://github.com/acme/app', 15);
+
+        $this->assertSame(15, $schedule->refresh()->day_of_month);
+    }
+
+    public function test_set_schedule_month_day_clamps_to_a_valid_range(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+        $schedule = AuditSchedule::create([
+            'user_id' => $user->id, 'tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/app',
+            'frequency' => 'monthly', 'tier' => AuditTier::DIAGNOSTIC->value, 'day_of_month' => 1,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setScheduleMonthDay', 'https://github.com/acme/app', 99);
+
+        $this->assertSame(31, $schedule->refresh()->day_of_month);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setScheduleMonthDay', 'https://github.com/acme/app', 0);
+
+        $this->assertSame(1, $schedule->refresh()->day_of_month);
+    }
+
     /**
      * The lookup is entitled by the user's own audit history: this repo has an
      * AuditRequest of theirs, which is exactly the state that renders the

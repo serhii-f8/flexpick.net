@@ -274,4 +274,67 @@ class RunScheduledAuditsTest extends FeatureTest
         $this->assertSame(1, AuditRequest::where('user_id', $user->id)->count());
         $this->assertDatabaseHas('audit_requests', ['user_id' => $user->id, 'repo_url' => 'https://github.com/acme/today']);
     }
+
+    public function test_monthly_schedule_with_day_of_month_only_runs_on_that_day(): void
+    {
+        Process::fake(['*' => Process::result(exitCode: 1)]); // irrelevant here; fails open either way
+        Queue::fake();
+        $today = Carbon::now();
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+
+        AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/today',
+            'frequency' => 'monthly',
+            'tier' => AuditTier::DEEP_AI->value,
+            'day_of_month' => $today->day,
+            'last_run_at' => now()->subMonth(),
+        ]);
+        AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/tomorrow',
+            'frequency' => 'monthly',
+            'tier' => AuditTier::DEEP_AI->value,
+            'day_of_month' => ($today->day % $today->daysInMonth) + 1,
+            'last_run_at' => now()->subMonth(),
+        ]);
+
+        $this->artisan('app:run-scheduled-audits')->assertSuccessful();
+
+        $this->assertSame(1, AuditRequest::where('user_id', $user->id)->count());
+        $this->assertDatabaseHas('audit_requests', ['user_id' => $user->id, 'repo_url' => 'https://github.com/acme/today']);
+    }
+
+    public function test_monthly_schedule_with_day_of_month_clamps_to_the_months_actual_length(): void
+    {
+        // Fixtures are created BEFORE freezing time: a User row created
+        // under a frozen past "now" persists with that backdated
+        // created_at, which pollutes any later test in the same run that
+        // does an unscoped global aggregate over all Users (FeatureTest
+        // does not roll back between tests) -- MetricServiceTest is exactly
+        // such a test.
+        Process::fake(['*' => Process::result(exitCode: 1)]);
+        Queue::fake();
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+
+        Carbon::setTestNow(Carbon::parse('2026-02-28')); // 2026 is not a leap year; Feb has 28 days
+
+        AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/end-of-month',
+            'frequency' => 'monthly',
+            'tier' => AuditTier::DEEP_AI->value,
+            'day_of_month' => 31,
+            'last_run_at' => Carbon::parse('2026-01-31'),
+        ]);
+
+        $this->artisan('app:run-scheduled-audits')->assertSuccessful();
+
+        $this->assertSame(1, AuditRequest::where('user_id', $user->id)->count());
+
+        Carbon::setTestNow();
+    }
 }

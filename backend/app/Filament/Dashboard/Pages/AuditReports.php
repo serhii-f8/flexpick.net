@@ -329,6 +329,7 @@ class AuditReports extends Page
                 'frequency' => $frequency,
                 'tier' => $selected->value,
                 'day_of_week' => $frequency === 'weekly' ? ($existing->day_of_week ?? now()->dayOfWeek) : null,
+                'day_of_month' => $frequency === 'monthly' ? ($existing->day_of_month ?? now()->day) : null,
             ],
         );
 
@@ -345,6 +346,18 @@ class AuditReports extends Page
             ->where('repo_url', $repoUrl)
             ->where('frequency', 'weekly')
             ->update(['day_of_week' => max(0, min(6, $dayOfWeek))]);
+    }
+
+    public function setScheduleMonthDay(string $repoUrl, int $dayOfMonth): void
+    {
+        $user = auth()->user();
+        $repoUrl = rtrim($repoUrl, '/');
+
+        AuditSchedule::query()
+            ->where('user_id', $user->id)
+            ->where('repo_url', $repoUrl)
+            ->where('frequency', 'monthly')
+            ->update(['day_of_month' => max(1, min(31, $dayOfMonth))]);
     }
 
     public function setScheduleBranch(string $repoUrl, ?string $branch): void

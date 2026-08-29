@@ -121,6 +121,36 @@ class AuditReportsRenderTest extends FeatureTest
             ->assertSee('60 → 75', false);
     }
 
+    public function test_a_monthly_schedule_shows_a_day_of_month_selector_with_the_configured_day_selected(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        $request = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/monthly-repo',
+        ]);
+        AuditReport::factory()->create(['audit_request_id' => $request->id, 'user_id' => $user->id]);
+
+        AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/monthly-repo',
+            'frequency' => 'monthly',
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'day_of_month' => 20,
+        ]);
+
+        $html = Livewire::test(AuditReports::class)->assertOk()->html();
+
+        $this->assertMatchesRegularExpression(
+            '/setScheduleMonthDay\(.*?\).*?<option value="20" selected/s',
+            $html,
+        );
+        // A weekly-only day-of-week select must never appear for a monthly schedule.
+        $this->assertStringNotContainsString('setScheduleDay(', $html);
+    }
+
     /**
      * A repo URL interpolated into a wire:/x- attribute lands in a JavaScript
      * context, not an HTML text one. Blade's {{ }} turns a quote into &#039;,

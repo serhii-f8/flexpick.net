@@ -85,9 +85,11 @@ class RunScheduledAudits extends Command
 
     /**
      * Weekly schedules with a chosen day_of_week are due only on that
-     * weekday. A weekly schedule created before day_of_week existed (still
-     * null) falls back to the original last_run_at + 1 week check, so no
-     * pre-existing row silently stops firing.
+     * weekday, and monthly schedules with a chosen day_of_month (clamped to
+     * the current month's actual length) are due only on that day. A
+     * schedule created before either column existed (still null) falls back
+     * to the original last_run_at + 1 week/month check, so no pre-existing
+     * row silently stops firing.
      */
     private function isDue(AuditSchedule $schedule): bool
     {
@@ -97,6 +99,12 @@ class RunScheduledAudits extends Command
 
         if ($schedule->frequency === 'weekly' && $schedule->day_of_week !== null) {
             return now()->dayOfWeek === $schedule->day_of_week && $schedule->last_run_at->isBefore(now()->startOfDay());
+        }
+
+        if ($schedule->frequency === 'monthly' && $schedule->day_of_month !== null) {
+            $dueDay = min($schedule->day_of_month, now()->daysInMonth);
+
+            return now()->day === $dueDay && $schedule->last_run_at->isBefore(now()->startOfDay());
         }
 
         return $schedule->last_run_at <= ($schedule->frequency === 'weekly' ? now()->subWeek() : now()->subMonth());

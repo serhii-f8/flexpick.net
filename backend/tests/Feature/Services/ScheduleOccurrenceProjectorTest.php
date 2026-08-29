@@ -68,6 +68,35 @@ class ScheduleOccurrenceProjectorTest extends FeatureTest
         $this->assertSame(['2026-02-28'], array_map(fn ($d) => $d->toDateString(), $dates)); // 2026 is not a leap year
     }
 
+    public function test_monthly_schedule_with_day_of_month_set_uses_that_day_not_the_anchor(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-01'));
+        $schedule = AuditSchedule::factory()->make([
+            'frequency' => 'monthly',
+            'day_of_month' => 15,
+            // last_run_at deliberately conflicts with day_of_month, to prove
+            // day_of_month wins once it's set.
+            'last_run_at' => Carbon::parse('2026-07-03'),
+        ]);
+
+        $dates = app(ScheduleOccurrenceProjector::class)->upcomingDatesInMonth($schedule, Carbon::parse('2026-08-01'));
+
+        $this->assertSame(['2026-08-15'], array_map(fn ($d) => $d->toDateString(), $dates));
+    }
+
+    public function test_monthly_schedule_with_day_of_month_clamps_to_a_shorter_month(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-02-01'));
+        $schedule = AuditSchedule::factory()->make([
+            'frequency' => 'monthly',
+            'day_of_month' => 31,
+        ]);
+
+        $dates = app(ScheduleOccurrenceProjector::class)->upcomingDatesInMonth($schedule, Carbon::parse('2026-02-01'));
+
+        $this->assertSame(['2026-02-28'], array_map(fn ($d) => $d->toDateString(), $dates)); // 2026 is not a leap year
+    }
+
     public function test_a_past_month_projects_nothing(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-10'));
