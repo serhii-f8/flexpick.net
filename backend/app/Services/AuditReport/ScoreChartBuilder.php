@@ -18,7 +18,11 @@ class ScoreChartBuilder
             return [];
         }
 
-        $max = max(1, $scores->max());
+        // Audit scores are always 0-100, so the axis is too. Scaling to the
+        // observed max instead would pin a repo's personal best to the top of
+        // its own chart -- a 75 drawn exactly where another repo's 100 sits --
+        // and would put the 25/50/75 gridlines on meaningless offsets.
+        $max = 100;
         $step = 200 / max(1, $scores->count() - 1);
         $points = [];
         $previous = null;

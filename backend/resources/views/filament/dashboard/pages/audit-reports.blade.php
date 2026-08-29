@@ -109,10 +109,11 @@
 
             {{-- Only meaningful with history; single-audit repos show a score and no chart. --}}
             @if (count($group['chartPoints']) > 1)
+                {{-- Gridlines at the 75 / 50 / 25 score bands, on ScoreChartBuilder's fixed 0-100 axis: y = 34 - (score / 100) * 30. --}}
                 <svg viewBox="0 0 200 40" class="mt-3 h-10 w-full" fill="none" aria-hidden="true">
-                    <line x1="0" y1="9" x2="200" y2="9" stroke="currentColor" stroke-width="0.5" class="text-gray-200 dark:text-gray-700" />
+                    <line x1="0" y1="11.5" x2="200" y2="11.5" stroke="currentColor" stroke-width="0.5" class="text-gray-200 dark:text-gray-700" />
                     <line x1="0" y1="19" x2="200" y2="19" stroke="currentColor" stroke-width="0.5" class="text-gray-200 dark:text-gray-700" />
-                    <line x1="0" y1="29" x2="200" y2="29" stroke="currentColor" stroke-width="0.5" class="text-gray-200 dark:text-gray-700" />
+                    <line x1="0" y1="26.5" x2="200" y2="26.5" stroke="currentColor" stroke-width="0.5" class="text-gray-200 dark:text-gray-700" />
 
                     @foreach ($group['chartPoints'] as $i => $point)
                         @if ($i > 0)

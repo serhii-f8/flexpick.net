@@ -51,6 +51,28 @@ class ScoreChartBuilderTest extends TestCase
         $this->assertSame('text-gray-400', $points[1]->colorClass);
     }
 
+    /**
+     * The y axis is the fixed 0-100 score scale, not the observed max for this
+     * repo's history -- otherwise a repo whose best score is 75 draws that 75
+     * pinned to the top exactly where another repo's 100 sits, the two charts
+     * are not comparable, and the 25/50/75 gridlines the blade draws land on
+     * nothing real.
+     */
+    public function test_y_positions_use_the_fixed_0_to_100_scale_not_the_observed_max(): void
+    {
+        $dates = collect([Carbon::parse('2026-08-01'), Carbon::parse('2026-08-20')]);
+
+        $points = (new ScoreChartBuilder)->build(collect([25, 75]), $dates);
+
+        // y = 34 - (score / 100) * 30
+        $this->assertSame(26.5, $points[0]->y);
+        $this->assertSame(11.5, $points[1]->y);
+
+        // The same score sits at the same height in a history that peaks lower.
+        $lowerPeak = (new ScoreChartBuilder)->build(collect([10, 25]), $dates);
+        $this->assertSame(26.5, $lowerPeak[1]->y);
+    }
+
     public function test_points_span_the_full_200_unit_width(): void
     {
         $scores = collect([50, 60, 70, 80]);
