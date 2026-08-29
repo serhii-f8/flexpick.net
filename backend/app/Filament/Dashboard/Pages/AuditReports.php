@@ -7,16 +7,21 @@ use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Jobs\GenerateAuditReport;
 use App\Listeners\Order\HandleAuditTierOrder;
+use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
+use App\Models\AuditScheduleRun;
 use App\Models\UserParameter;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\ScheduleOccurrenceProjector;
+use App\Services\AuditReport\ScoreChartBuilder;
 use App\Services\AuditReport\TierQuota;
 use App\Services\GitHub\GitHubApiClient;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Carbon;
 
 class AuditReports extends Page
 {
@@ -37,9 +42,12 @@ class AuditReports extends Page
     /** @var array<string, list<string>> */
     public array $branchesByRepo = [];
 
+    public string $calendarMonth = '';
+
     public function mount(): void
     {
         $this->tier = $this->defaultTier()->value;
+        $this->calendarMonth = now()->format('Y-m');
     }
 
     public function updatedRepoUrl(): void
@@ -58,6 +66,21 @@ class AuditReports extends Page
         }
 
         $this->branchesByRepo[$key] = app(GitHubApiClient::class)->listBranches($repoUrl);
+    }
+
+    public function prevCalendarMonth(): void
+    {
+        $this->calendarMonth = $this->calendarMonthStart()->subMonthNoOverflow()->format('Y-m');
+    }
+
+    public function nextCalendarMonth(): void
+    {
+        $this->calendarMonth = $this->calendarMonthStart()->addMonthNoOverflow()->format('Y-m');
+    }
+
+    private function calendarMonthStart(): Carbon
+    {
+        return Carbon::createFromFormat('Y-m', $this->calendarMonth)->startOfMonth();
     }
 
     /**
@@ -298,6 +321,8 @@ class AuditReports extends Page
         $user = auth()->user();
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
+        $chartBuilder = app(ScoreChartBuilder::class);
+        $projector = app(ScheduleOccurrenceProjector::class);
 
         $reports = $user->auditReports()
             ->with('auditRequest')
@@ -306,6 +331,39 @@ class AuditReports extends Page
 
         $quotas = $entitlements->quotas($user, $tenant);
 
+        $schedules = AuditSchedule::query()->where('user_id', $user->id)
+            ->get()
+            ->keyBy(fn (AuditSchedule $s): string => rtrim($s->repo_url, '/'));
+
+        $repoGroups = $reports
+            ->groupBy(fn ($report) => rtrim((string) $report->auditRequest->repo_url, '/'))
+            ->map(function ($group) use ($chartBuilder) {
+                $ordered = $group->reverse()->values();
+                $scores = $ordered->map(fn ($r) => (int) data_get($r->payload, 'scores.overall', 0));
+                $dates = $ordered->map(fn (AuditReport $r) => $r->created_at);
+
+                return [
+                    'reports' => $group,
+                    'scores' => $scores,
+                    'chartPoints' => $chartBuilder->build($scores, $dates),
+                ];
+            });
+
+        $calendarMonthStart = $this->calendarMonthStart();
+        $calendarMonthEnd = $calendarMonthStart->copy()->endOfMonth();
+
+        $calendarByRepo = $schedules->mapWithKeys(function (AuditSchedule $schedule) use ($projector, $calendarMonthStart, $calendarMonthEnd) {
+            $past = AuditScheduleRun::query()
+                ->where('audit_schedule_id', $schedule->id)
+                ->whereBetween('scheduled_for', [$calendarMonthStart->toDateString(), $calendarMonthEnd->toDateString()])
+                ->get()
+                ->keyBy(fn (AuditScheduleRun $run) => $run->scheduled_for->toDateString());
+
+            $upcoming = $projector->upcomingDatesInMonth($schedule, $calendarMonthStart);
+
+            return [rtrim($schedule->repo_url, '/') => ['past' => $past, 'upcoming' => $upcoming]];
+        });
+
         return [
             'reports' => $reports,
             'quotas' => $quotas,
@@ -313,15 +371,15 @@ class AuditReports extends Page
             'canRun' => collect($quotas)->contains(
                 fn (TierQuota $quota): bool => $quota->hasRuns() || $quota->purchasable(),
             ),
-            'schedules' => AuditSchedule::query()->where('user_id', $user->id)
-                ->get()
-                ->keyBy(fn (AuditSchedule $s): string => rtrim($s->repo_url, '/')),
-            'repoGroups' => $reports
-                ->groupBy(fn ($report) => rtrim((string) $report->auditRequest->repo_url, '/'))
-                ->map(fn ($group) => [
-                    'reports' => $group,
-                    'scores' => $group->reverse()->values()->map(fn ($r) => (int) data_get($r->payload, 'scores.overall', 0)),
-                ]),
+            'schedules' => $schedules,
+            'repoGroups' => $repoGroups,
+            // Named calendarMonthStart, not calendarMonth: Livewire injects
+            // this component's public properties into the view AFTER
+            // getViewData() runs, so a 'calendarMonth' view-data key would be
+            // silently overwritten by the public string $calendarMonth
+            // property (format 'Y-m') that backs prev/nextCalendarMonth().
+            'calendarMonthStart' => $calendarMonthStart,
+            'calendarByRepo' => $calendarByRepo,
             'deltas' => $reports
                 ->groupBy(fn ($report) => rtrim((string) $report->auditRequest->repo_url, '/'))
                 ->map(function ($group): ?int {

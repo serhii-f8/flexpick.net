@@ -108,15 +108,24 @@
             </div>
 
             {{-- Only meaningful with history; single-audit repos show a score and no chart. --}}
-            @if ($group['scores']->count() > 1)
-                @php
-                    $scores = $group['scores'];
-                    $max = max(1, $scores->max());
-                    $step = 200 / max(1, $scores->count() - 1);
-                    $points = $scores->map(fn ($s, $i) => round($i * $step, 2).','.round(34 - ($s / $max) * 30, 2))->implode(' ');
-                @endphp
+            @if (count($group['chartPoints']) > 1)
                 <svg viewBox="0 0 200 40" class="mt-3 h-10 w-full" fill="none" aria-hidden="true">
-                    <polyline points="{{ $points }}" stroke="currentColor" stroke-width="2" class="text-primary-500" />
+                    <line x1="0" y1="9" x2="200" y2="9" stroke="currentColor" stroke-width="0.5" class="text-gray-200 dark:text-gray-700" />
+                    <line x1="0" y1="19" x2="200" y2="19" stroke="currentColor" stroke-width="0.5" class="text-gray-200 dark:text-gray-700" />
+                    <line x1="0" y1="29" x2="200" y2="29" stroke="currentColor" stroke-width="0.5" class="text-gray-200 dark:text-gray-700" />
+
+                    @foreach ($group['chartPoints'] as $i => $point)
+                        @if ($i > 0)
+                            @php
+                                $previousPoint = $group['chartPoints'][$i - 1];
+                            @endphp
+                            <line x1="{{ $previousPoint->x }}" y1="{{ $previousPoint->y }}" x2="{{ $point->x }}" y2="{{ $point->y }}" stroke="currentColor" stroke-width="2" class="{{ $point->colorClass }}" />
+                        @endif
+
+                        <circle cx="{{ $point->x }}" cy="{{ $point->y }}" r="{{ $point->delta !== null ? min(4, 1.5 + abs($point->delta) / 10) : 1.5 }}" fill="currentColor" class="{{ $point->colorClass }}">
+                            <title>{{ $point->tooltip }}</title>
+                        </circle>
+                    @endforeach
                 </svg>
             @endif
 
@@ -187,6 +196,13 @@
                         {{ __('Re-run') }}
                     </x-filament::button>
                 </div>
+
+                @if ($scheduleFrequency !== 'off')
+                    @include('filament.dashboard.pages.partials.audit-calendar', [
+                        'calendarMonth' => $calendarMonthStart,
+                        'calendarData' => $calendarByRepo[$repoUrl] ?? ['past' => collect(), 'upcoming' => []],
+                    ])
+                @endif
             @endif
 
             <div class="mt-4 divide-y divide-gray-200 border-t border-gray-200 pt-2 dark:divide-gray-700 dark:border-gray-700">

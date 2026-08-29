@@ -6,6 +6,10 @@ use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Models\AuditReport;
+use App\Models\AuditRequest;
+use App\Models\AuditSchedule;
+use App\Models\AuditScheduleRun;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 use Tests\Support\CreatesAuditSubscriptions;
@@ -90,5 +94,95 @@ class AuditReportsRenderTest extends FeatureTest
             ->assertOk()
             ->assertSee('read-only collaborator')
             ->assertSee('sentinel-review-account');
+    }
+
+    public function test_the_score_chart_renders_a_colored_point_per_report(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        foreach ([[60, 10], [75, 0]] as [$score, $daysAgo]) {
+            $request = AuditRequest::factory()->create([
+                'user_id' => $user->id,
+                'repo_url' => 'https://github.com/acme/charted',
+                'created_at' => now()->subDays($daysAgo),
+            ]);
+            AuditReport::factory()->create([
+                'audit_request_id' => $request->id,
+                'user_id' => $user->id,
+                'payload' => ['scores' => ['overall' => $score]],
+                'created_at' => now()->subDays($daysAgo),
+            ]);
+        }
+
+        Livewire::test(AuditReports::class)
+            ->assertOk()
+            ->assertSee('text-emerald-500', false)
+            ->assertSee('60 → 75', false);
+    }
+
+    public function test_the_calendar_shows_a_completed_and_a_skipped_day_for_a_scheduled_repo(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-10'));
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        // The calendar renders inside a repo's card, which only appears once
+        // the repo has at least one report (matching the real UI: the
+        // schedule controls, and thus the calendar, live on that card). A
+        // schedule with no prior report for its repo would never surface a
+        // card to hold the calendar, so give it one here.
+        $request = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/calendared',
+        ]);
+        AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'user_id' => $user->id,
+        ]);
+
+        $schedule = AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/calendared',
+            'frequency' => 'weekly',
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'day_of_week' => 1,
+        ]);
+        AuditScheduleRun::create([
+            'audit_schedule_id' => $schedule->id,
+            'scheduled_for' => '2026-08-03',
+            'status' => 'completed',
+        ]);
+        AuditScheduleRun::create([
+            'audit_schedule_id' => $schedule->id,
+            'scheduled_for' => '2026-08-04',
+            'status' => 'skipped',
+            'reason' => 'no_changes',
+        ]);
+
+        Livewire::test(AuditReports::class)
+            ->assertOk()
+            ->assertSee('audit-calendar-day-completed', false)
+            ->assertSee('audit-calendar-day-skipped', false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_calendar_month_navigation_moves_forward_and_back(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-10'));
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(AuditReports::class)
+            ->assertSet('calendarMonth', '2026-08')
+            ->call('nextCalendarMonth')
+            ->assertSet('calendarMonth', '2026-09')
+            ->call('prevCalendarMonth')
+            ->call('prevCalendarMonth')
+            ->assertSet('calendarMonth', '2026-07');
+
+        Carbon::setTestNow();
     }
 }
