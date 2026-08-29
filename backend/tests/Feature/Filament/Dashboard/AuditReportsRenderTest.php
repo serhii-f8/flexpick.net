@@ -185,7 +185,14 @@ class AuditReportsRenderTest extends FeatureTest
 
     public function test_the_calendar_shows_a_completed_and_a_skipped_day_for_a_scheduled_repo(): void
     {
-        Carbon::setTestNow(Carbon::parse('2026-08-10'));
+        // Fixtures are created BEFORE freezing time: a User row created
+        // under a frozen past "now" persists with that backdated
+        // created_at, which pollutes any later test in the same run that
+        // does an unscoped global aggregate over all Users (FeatureTest
+        // does not roll back between tests) -- MetricServiceTest is exactly
+        // such a test. Freezing only around the calendar rendering below
+        // keeps this test's own assertions deterministic without leaking a
+        // backdated fixture into the rest of the suite.
         [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
         $this->actAsTenantUser($user, $tenant);
 
@@ -223,6 +230,8 @@ class AuditReportsRenderTest extends FeatureTest
             'reason' => 'no_changes',
         ]);
 
+        Carbon::setTestNow(Carbon::parse('2026-08-10'));
+
         Livewire::test(AuditReports::class)
             ->assertOk()
             ->assertSee('audit-calendar-day-completed', false)
@@ -233,9 +242,12 @@ class AuditReportsRenderTest extends FeatureTest
 
     public function test_calendar_month_navigation_moves_forward_and_back(): void
     {
-        Carbon::setTestNow(Carbon::parse('2026-08-10'));
+        // Fixtures are created BEFORE freezing time -- see the comment on
+        // the previous test for why.
         [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
         $this->actAsTenantUser($user, $tenant);
+
+        Carbon::setTestNow(Carbon::parse('2026-08-10'));
 
         Livewire::test(AuditReports::class)
             ->assertSet('calendarMonth', '2026-08')

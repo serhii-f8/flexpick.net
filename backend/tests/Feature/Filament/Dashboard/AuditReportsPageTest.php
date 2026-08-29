@@ -303,7 +303,14 @@ class AuditReportsPageTest extends FeatureTest
 
     public function test_a_new_weekly_schedule_defaults_day_of_week_to_today(): void
     {
-        Carbon::setTestNow(Carbon::parse('2026-08-10'));
+        // Fixtures are created BEFORE freezing time: a User row created
+        // under a frozen past "now" persists with that backdated
+        // created_at, which pollutes any later test in the same run that
+        // does an unscoped global aggregate over all Users (FeatureTest
+        // does not roll back between tests) -- MetricServiceTest is exactly
+        // such a test. Freezing only around the day-of-week logic below
+        // keeps this test's own assertion deterministic without leaking a
+        // backdated fixture into the rest of the suite.
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
@@ -311,6 +318,8 @@ class AuditReportsPageTest extends FeatureTest
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
         Filament::setTenant($tenant);
+
+        Carbon::setTestNow(Carbon::parse('2026-08-10'));
 
         Livewire::actingAs($user)
             ->test(AuditReports::class)
