@@ -109,13 +109,23 @@ class RunScheduledAudits extends Command
         ?int $auditRequestId = null,
         ?string $commitSha = null,
     ): void {
-        AuditScheduleRun::create([
-            'audit_schedule_id' => $schedule->id,
-            'scheduled_for' => now()->toDateString(),
-            'status' => $status,
-            'reason' => $reason,
-            'audit_request_id' => $auditRequestId,
-            'commit_sha' => $commitSha,
-        ]);
+        // Upsert, not insert: this command fires daily, and a schedule that
+        // keeps being skipped never advances last_run_at, so a monthly (or
+        // legacy weekly) schedule stays due every day once its cadence has
+        // elapsed. Inserting each time grew the table without bound and drew
+        // a month of duplicate dots on the calendar this table feeds. One row
+        // per calendar day, last outcome wins.
+        AuditScheduleRun::updateOrCreate(
+            [
+                'audit_schedule_id' => $schedule->id,
+                'scheduled_for' => now()->toDateString(),
+            ],
+            [
+                'status' => $status,
+                'reason' => $reason,
+                'audit_request_id' => $auditRequestId,
+                'commit_sha' => $commitSha,
+            ],
+        );
     }
 }

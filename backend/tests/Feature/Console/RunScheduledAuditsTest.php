@@ -7,6 +7,7 @@ use App\Constants\AuditTier;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
+use App\Models\AuditScheduleRun;
 use App\Services\AuditReport\AuditEntitlementService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Process;
@@ -203,6 +204,43 @@ class RunScheduledAuditsTest extends FeatureTest
         $this->artisan('app:run-scheduled-audits')->assertSuccessful();
 
         Queue::assertPushed(GenerateAuditReport::class);
+    }
+
+    /**
+     * The scheduler fires daily. A monthly schedule whose cadence has elapsed
+     * stays due every single day (last_run_at <= now()->subMonth() keeps
+     * matching), and a no_changes skip deliberately does not advance
+     * last_run_at -- so an unchanged repo used to insert one audit_schedule_runs
+     * row per day, forever. That is unbounded table growth, and it paints ~30
+     * duplicate gray dots across the calendar this table exists to feed.
+     * One row per (schedule, calendar day) is the invariant.
+     */
+    public function test_a_repeated_run_on_the_same_day_records_only_one_history_row(): void
+    {
+        Process::fake(['*' => Process::result(output: "sha-same\tHEAD\n")]);
+        Queue::fake();
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+
+        $schedule = AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://github.com/acme/monthly-unchanged',
+            'frequency' => 'monthly',
+            'tier' => AuditTier::DEEP_AI->value,
+            'last_run_at' => now()->subMonths(2),
+            'last_commit_sha' => 'sha-same',
+        ]);
+
+        $this->artisan('app:run-scheduled-audits')->assertSuccessful();
+        $this->artisan('app:run-scheduled-audits')->assertSuccessful();
+
+        $this->assertSame(1, AuditScheduleRun::where('audit_schedule_id', $schedule->id)->count());
+        $this->assertDatabaseHas('audit_schedule_runs', [
+            'audit_schedule_id' => $schedule->id,
+            'scheduled_for' => now()->toDateString(),
+            'status' => 'skipped',
+            'reason' => 'no_changes',
+        ]);
     }
 
     public function test_weekly_schedule_with_day_of_week_only_runs_on_that_weekday(): void
