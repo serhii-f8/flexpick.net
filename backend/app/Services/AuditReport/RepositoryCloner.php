@@ -21,14 +21,22 @@ class RepositoryCloner
         }
     }
 
-    public function clone(string $url, string $uuid): string
+    public function clone(string $url, string $uuid, ?string $branch = null): string
     {
         $path = $this->workdirPath($uuid);
         File::ensureDirectoryExists(dirname($path));
 
+        $command = ['git', 'clone', '--depth', (string) config('audit.clone_depth'), '--no-tags', '--single-branch'];
+        if ($branch !== null) {
+            $command[] = '--branch';
+            $command[] = $branch;
+        }
+        $command[] = $this->authenticatedUrl($url);
+        $command[] = $path;
+
         $result = Process::timeout(config('audit.clone_timeout'))
             ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run(['git', 'clone', '--depth', (string) config('audit.clone_depth'), '--no-tags', '--single-branch', $this->authenticatedUrl($url), $path]);
+            ->run($command);
 
         if (! $result->successful()) {
             $this->cleanup($uuid);
@@ -46,6 +54,30 @@ class RepositoryCloner
         }
 
         return $path;
+    }
+
+    /**
+     * The current SHA of a remote ref, without cloning. `null` on any
+     * failure (unreachable host, private repo, network error) -- callers
+     * (ScheduledAuditChangeChecker) must treat that as "unknown," never as
+     * "unchanged."
+     */
+    public function remoteHeadSha(string $url, ?string $branch = null): ?string
+    {
+        $ref = $branch !== null ? 'refs/heads/'.$branch : 'HEAD';
+
+        $result = Process::timeout(config('audit.preflight_timeout'))
+            ->env(['GIT_TERMINAL_PROMPT' => '0'])
+            ->run(['git', 'ls-remote', $this->authenticatedUrl($url), $ref]);
+
+        if (! $result->successful()) {
+            return null;
+        }
+
+        $firstLine = trim(explode("\n", trim($result->output()))[0] ?? '');
+        $sha = strtok($firstLine, "\t ");
+
+        return $sha !== false && $sha !== '' ? $sha : null;
     }
 
     public function sizeKb(string $path): int
