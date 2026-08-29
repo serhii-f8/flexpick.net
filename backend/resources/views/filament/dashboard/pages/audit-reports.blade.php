@@ -145,7 +145,7 @@
                 <div class="mt-3 flex flex-wrap items-center gap-2">
                     <select
                         class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
-                        wire:change="setSchedule('{{ $repoUrl }}', $event.target.value, '{{ $scheduleTier }}')"
+                        wire:change="setSchedule(@js($repoUrl), $event.target.value, @js($scheduleTier))"
                         aria-label="{{ __('Audit schedule for :repo', ['repo' => $repoUrl]) }}"
                     >
                         @foreach (['off' => __('No schedule'), 'weekly' => __('Audit weekly'), 'monthly' => __('Audit monthly')] as $value => $optionLabel)
@@ -156,7 +156,7 @@
                     @if ($scheduleFrequency === 'weekly')
                         <select
                             class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
-                            wire:change="setScheduleDay('{{ $repoUrl }}', $event.target.value)"
+                            wire:change="setScheduleDay(@js($repoUrl), $event.target.value)"
                             aria-label="{{ __('Day of week for :repo', ['repo' => $repoUrl]) }}"
                         >
                             @foreach ([0 => __('Sun'), 1 => __('Mon'), 2 => __('Tue'), 3 => __('Wed'), 4 => __('Thu'), 5 => __('Fri'), 6 => __('Sat')] as $value => $dayLabel)
@@ -168,7 +168,7 @@
                     @if ($scheduleFrequency !== 'off')
                         <select
                             class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
-                            wire:change="setSchedule('{{ $repoUrl }}', '{{ $scheduleFrequency }}', $event.target.value)"
+                            wire:change="setSchedule(@js($repoUrl), @js($scheduleFrequency), $event.target.value)"
                             aria-label="{{ __('Scheduled audit type for :repo', ['repo' => $repoUrl]) }}"
                         >
                             @foreach ($quotas as $quota)
@@ -179,11 +179,11 @@
                         </select>
                     @endif
 
-                    <div x-data x-init="$wire.loadBranches('{{ $repoUrl }}')">
+                    <div x-data x-init="$wire.loadBranches(@js($repoUrl))">
                         @php($scheduleBranches = $branchesByRepo[rtrim($repoUrl, '/')] ?? [])
                         <select
                             class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
-                            wire:change="setScheduleBranch('{{ $repoUrl }}', $event.target.value)"
+                            wire:change="setScheduleBranch(@js($repoUrl), $event.target.value)"
                             aria-label="{{ __('Branch to schedule for :repo', ['repo' => $repoUrl]) }}"
                         >
                             <option value="">{{ __('Repo default branch') }}</option>
@@ -194,7 +194,7 @@
                     </div>
 
                     {{-- Re-run uses this repo's own configured schedule branch, never the launch form's current selection. --}}
-                    <x-filament::button size="sm" color="gray" wire:click="launchAudit('{{ $repoUrl }}', '{{ $originTier }}', '{{ $schedule?->branch }}')">
+                    <x-filament::button size="sm" color="gray" wire:click="launchAudit(@js($repoUrl), @js($originTier), @js($schedule?->branch))">
                         {{ __('Re-run') }}
                     </x-filament::button>
                 </div>

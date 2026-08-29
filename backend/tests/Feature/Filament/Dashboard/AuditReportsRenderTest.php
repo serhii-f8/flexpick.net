@@ -121,6 +121,68 @@ class AuditReportsRenderTest extends FeatureTest
             ->assertSee('60 → 75', false);
     }
 
+    /**
+     * A repo URL interpolated into a wire:/x- attribute lands in a JavaScript
+     * context, not an HTML text one. Blade's {{ }} turns a quote into &#039;,
+     * but the HTML parser decodes that back to a bare ' before Alpine and
+     * Livewire ever evaluate the attribute as JS -- so the quote breaks out of
+     * the string literal and the rest of the URL runs as code. This asserts on
+     * the entity-decoded document precisely because that is what the browser
+     * hands the evaluator.
+     *
+     * The payload passes the launch guard (str_starts_with($url, 'http')), so
+     * a user really can store it on their own AuditRequest and self-XSS.
+     */
+    public function test_repo_urls_are_escaped_for_the_javascript_context_of_wire_attributes(): void
+    {
+        $hostile = "http://x'); alert(1); //";
+
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        $request = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'repo_url' => $hostile,
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+        AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'user_id' => $user->id,
+        ]);
+
+        $html = Livewire::test(AuditReports::class)->assertOk()->html();
+
+        // Only the attributes that are evaluated as JavaScript. The URL is
+        // also rendered as ordinary HTML text elsewhere on the card, where
+        // {{ }}'s escaping is exactly right and decoding it back is expected.
+        preg_match_all(
+            '/(?:wire:(?:click|change|input|submit|keydown)[\w.:-]*|x-init|x-on:[\w.:-]+)="([^"]*)"/i',
+            $html,
+            $matches,
+        );
+
+        $expressions = array_map(
+            fn (string $attribute): string => html_entity_decode($attribute, ENT_QUOTES | ENT_HTML5),
+            $matches[1],
+        );
+
+        $handlersWithTheUrl = array_filter(
+            $expressions,
+            fn (string $expression): bool => str_contains($expression, 'alert(1)'),
+        );
+
+        // The URL still has to reach the handlers -- escaped, not dropped.
+        $this->assertNotEmpty($handlersWithTheUrl, 'No JS-context handler carried the repo URL.');
+
+        foreach ($handlersWithTheUrl as $expression) {
+            $this->assertStringNotContainsString(
+                "'); alert(1)",
+                $expression,
+                "Repo URL broke out of its string literal in: {$expression}",
+            );
+        }
+    }
+
     public function test_the_calendar_shows_a_completed_and_a_skipped_day_for_a_scheduled_repo(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-10'));
