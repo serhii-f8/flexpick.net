@@ -5,12 +5,36 @@
                 <div class="grow">
                     <label class="text-sm font-medium" for="audit-repo-url">{{ __('Repository URL') }}</label>
                     <x-filament::input.wrapper>
-                        <x-filament::input id="audit-repo-url" type="url" wire:model="repoUrl" placeholder="https://github.com/you/repo" aria-describedby="audit-private-repo" />
+                        <x-filament::input id="audit-repo-url" type="url" wire:model.live.blur="repoUrl" placeholder="https://github.com/you/repo" aria-describedby="audit-private-repo" />
                     </x-filament::input.wrapper>
                     <p id="audit-private-repo" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                         {{ __('Private repository? Invite :account on GitHub as a read-only collaborator (Settings → Collaborators → Add people), then paste the URL here. We start the audit as soon as the invite lands.', ['account' => config('audit.github_account')]) }}
                     </p>
                 </div>
+
+                @php
+                    $launchBranches = $repoUrl ? ($branchesByRepo[rtrim($repoUrl, '/')] ?? null) : null;
+                @endphp
+                @if ($launchBranches !== null)
+                    <div>
+                        <label class="text-sm font-medium" for="audit-branch">{{ __('Branch') }}</label>
+                        @if ($launchBranches !== [])
+                            <select id="audit-branch" class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800" wire:model="branch">
+                                <option value="">{{ __('Repo default branch') }}</option>
+                                @foreach ($launchBranches as $b)
+                                    <option value="{{ $b }}">{{ $b }}</option>
+                                @endforeach
+                            </select>
+                        @else
+                            <x-filament::input.wrapper>
+                                <x-filament::input id="audit-branch" type="text" wire:model="branch" placeholder="{{ __('branch name (optional)') }}" />
+                            </x-filament::input.wrapper>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {{ __('We couldn\'t look up branches for this repo — you can still type one, or leave blank for the default branch.') }}
+                            </p>
+                        @endif
+                    </div>
+                @endif
             </div>
 
             <fieldset class="mt-4">
@@ -119,6 +143,18 @@
                         @endforeach
                     </select>
 
+                    @if ($scheduleFrequency === 'weekly')
+                        <select
+                            class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
+                            wire:change="setScheduleDay('{{ $repoUrl }}', $event.target.value)"
+                            aria-label="{{ __('Day of week for :repo', ['repo' => $repoUrl]) }}"
+                        >
+                            @foreach ([0 => __('Sun'), 1 => __('Mon'), 2 => __('Tue'), 3 => __('Wed'), 4 => __('Thu'), 5 => __('Fri'), 6 => __('Sat')] as $value => $dayLabel)
+                                <option value="{{ $value }}" @selected(($schedule->day_of_week ?? now()->dayOfWeek) === $value)>{{ $dayLabel }}</option>
+                            @endforeach
+                        </select>
+                    @endif
+
                     @if ($scheduleFrequency !== 'off')
                         <select
                             class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
@@ -132,6 +168,20 @@
                             @endforeach
                         </select>
                     @endif
+
+                    <div x-data x-init="$wire.loadBranches('{{ $repoUrl }}')">
+                        @php($scheduleBranches = $branchesByRepo[rtrim($repoUrl, '/')] ?? [])
+                        <select
+                            class="fi-select-input rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800"
+                            wire:change="setScheduleBranch('{{ $repoUrl }}', $event.target.value)"
+                            aria-label="{{ __('Branch to schedule for :repo', ['repo' => $repoUrl]) }}"
+                        >
+                            <option value="">{{ __('Repo default branch') }}</option>
+                            @foreach ($scheduleBranches as $b)
+                                <option value="{{ $b }}" @selected($schedule?->branch === $b)>{{ $b }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
                     <x-filament::button size="sm" color="gray" wire:click="launchAudit('{{ $repoUrl }}', '{{ $originTier }}')">
                         {{ __('Re-run') }}

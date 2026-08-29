@@ -10,13 +10,16 @@ use App\Filament\Dashboard\Pages\AuditReports;
 use App\Jobs\GenerateAuditReport;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Models\AuditSchedule;
 use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\GitHub\GitHubApiClient;
 use Filament\Facades\Filament;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
@@ -224,6 +227,133 @@ class AuditReportsPageTest extends FeatureTest
         Livewire::test(AuditReports::class)
             ->assertSee('68')
             ->assertSee('+8');
+    }
+
+    public function test_launch_audit_persists_the_chosen_branch(): void
+    {
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://github.com/acme/my-app', null, 'release/2.0');
+
+        $this->assertSame('release/2.0', AuditRequest::where('user_id', $user->id)->firstOrFail()->branch);
+    }
+
+    public function test_launch_audit_leaves_branch_null_when_not_supplied(): void
+    {
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://github.com/acme/my-app');
+
+        $this->assertNull(AuditRequest::where('user_id', $user->id)->firstOrFail()->branch);
+    }
+
+    public function test_a_new_weekly_schedule_defaults_day_of_week_to_today(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-10'));
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setSchedule', 'https://github.com/acme/app', 'weekly');
+
+        $this->assertSame(
+            Carbon::now()->dayOfWeek,
+            AuditSchedule::where('user_id', $user->id)->firstOrFail()->day_of_week,
+        );
+
+        Carbon::setTestNow();
+    }
+
+    public function test_set_schedule_day_updates_an_existing_weekly_schedule(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+        $schedule = AuditSchedule::create([
+            'user_id' => $user->id, 'tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/app',
+            'frequency' => 'weekly', 'tier' => AuditTier::DIAGNOSTIC->value, 'day_of_week' => 1,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setScheduleDay', 'https://github.com/acme/app', 4);
+
+        $this->assertSame(4, $schedule->refresh()->day_of_week);
+    }
+
+    public function test_set_schedule_branch_updates_an_existing_schedule(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+        $schedule = AuditSchedule::create([
+            'user_id' => $user->id, 'tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/app',
+            'frequency' => 'weekly', 'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setScheduleBranch', 'https://github.com/acme/app', 'develop');
+
+        $this->assertSame('develop', $schedule->refresh()->branch);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setScheduleBranch', 'https://github.com/acme/app', '');
+
+        $this->assertNull($schedule->refresh()->branch);
+    }
+
+    public function test_load_branches_populates_branches_by_repo_from_the_github_client(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->mock(GitHubApiClient::class, function ($mock) {
+            $mock->shouldReceive('listBranches')->once()->with('https://github.com/acme/app')->andReturn(['main', 'develop']);
+        });
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('loadBranches', 'https://github.com/acme/app')
+            ->assertSet('branchesByRepo', ['https://github.com/acme/app' => ['main', 'develop']]);
     }
 
     private function createTenantFor(User $user): Tenant

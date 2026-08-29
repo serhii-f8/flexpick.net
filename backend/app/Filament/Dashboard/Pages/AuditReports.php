@@ -12,6 +12,7 @@ use App\Models\AuditSchedule;
 use App\Models\UserParameter;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\TierQuota;
+use App\Services\GitHub\GitHubApiClient;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -31,9 +32,32 @@ class AuditReports extends Page
 
     public string $tier = '';
 
+    public ?string $branch = null;
+
+    /** @var array<string, list<string>> */
+    public array $branchesByRepo = [];
+
     public function mount(): void
     {
         $this->tier = $this->defaultTier()->value;
+    }
+
+    public function updatedRepoUrl(): void
+    {
+        if ($this->repoUrl !== null && str_starts_with($this->repoUrl, 'http')) {
+            $this->loadBranches($this->repoUrl);
+        }
+    }
+
+    public function loadBranches(string $repoUrl): void
+    {
+        $key = rtrim($repoUrl, '/');
+
+        if (array_key_exists($key, $this->branchesByRepo)) {
+            return;
+        }
+
+        $this->branchesByRepo[$key] = app(GitHubApiClient::class)->listBranches($repoUrl);
     }
 
     /**
@@ -80,9 +104,11 @@ class AuditReports extends Page
         return app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
     }
 
-    public function launchAudit(?string $repoUrl = null, ?string $tier = null): void
+    public function launchAudit(?string $repoUrl = null, ?string $tier = null, ?string $branch = null): void
     {
         $repoUrl ??= $this->repoUrl;
+        $branch ??= $this->branch;
+        $branch = ($branch !== null && $branch !== '') ? $branch : null;
         $user = auth()->user();
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
@@ -107,7 +133,7 @@ class AuditReports extends Page
 
         if (! $quota->hasRuns()) {
             if ($quota->purchasable()) {
-                $this->purchase($repoUrl, $selected);
+                $this->purchase($repoUrl, $selected, $branch);
 
                 return;
             }
@@ -125,6 +151,7 @@ class AuditReports extends Page
             'name' => $user->name,
             'email' => $user->email,
             'repo_url' => $repoUrl,
+            'branch' => $branch,
             'status' => AuditRequestStatus::QUEUED->value,
             'email_verified_at' => now(),
             'source' => 'dashboard',
@@ -143,6 +170,7 @@ class AuditReports extends Page
 
         GenerateAuditReport::dispatch($auditRequest);
         $this->repoUrl = null;
+        $this->branch = null;
 
         Notification::make()
             ->title(__('Audit started'))
@@ -159,7 +187,7 @@ class AuditReports extends Page
      * It is funded as a purchase from the start, so a customer who abandons
      * checkout is never charged a plan credit for it.
      */
-    private function purchase(string $repoUrl, AuditTier $tier): void
+    private function purchase(string $repoUrl, AuditTier $tier, ?string $branch = null): void
     {
         $user = auth()->user();
         $slug = collect((array) config('pricing.tiers'))
@@ -175,6 +203,7 @@ class AuditReports extends Page
             'name' => $user->name,
             'email' => $user->email,
             'repo_url' => $repoUrl,
+            'branch' => $branch,
             'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
             'email_verified_at' => now(),
             'source' => 'dashboard',
@@ -226,12 +255,42 @@ class AuditReports extends Page
             return;
         }
 
+        $existing = AuditSchedule::query()->where('user_id', $user->id)->where('repo_url', $repoUrl)->first();
+
         AuditSchedule::updateOrCreate(
             ['user_id' => $user->id, 'repo_url' => $repoUrl],
-            ['tenant_id' => $tenant->id, 'frequency' => $frequency, 'tier' => $selected->value],
+            [
+                'tenant_id' => $tenant->id,
+                'frequency' => $frequency,
+                'tier' => $selected->value,
+                'day_of_week' => $frequency === 'weekly' ? ($existing->day_of_week ?? now()->dayOfWeek) : null,
+            ],
         );
 
         Notification::make()->title(__('Audits scheduled :frequency', ['frequency' => __($frequency)]))->success()->send();
+    }
+
+    public function setScheduleDay(string $repoUrl, int $dayOfWeek): void
+    {
+        $user = auth()->user();
+        $repoUrl = rtrim($repoUrl, '/');
+
+        AuditSchedule::query()
+            ->where('user_id', $user->id)
+            ->where('repo_url', $repoUrl)
+            ->where('frequency', 'weekly')
+            ->update(['day_of_week' => max(0, min(6, $dayOfWeek))]);
+    }
+
+    public function setScheduleBranch(string $repoUrl, ?string $branch): void
+    {
+        $user = auth()->user();
+        $repoUrl = rtrim($repoUrl, '/');
+
+        AuditSchedule::query()
+            ->where('user_id', $user->id)
+            ->where('repo_url', $repoUrl)
+            ->update(['branch' => ($branch !== null && $branch !== '') ? $branch : null]);
     }
 
     public function getViewData(): array
