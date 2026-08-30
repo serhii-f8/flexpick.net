@@ -3,6 +3,7 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\PartnerAttributionSource;
+use App\Constants\SessionConstants;
 use App\Constants\SubscriptionStatus;
 use App\Models\PartnerReferralLink;
 use App\Models\Plan;
@@ -25,6 +26,13 @@ class PartnerAttributionServiceTest extends FeatureTest
 
         $service->clearPendingCode();
         $this->assertNull($service->pendingCode());
+    }
+
+    public function test_pending_code_ignores_a_non_string_session_value(): void
+    {
+        session([SessionConstants::PARTNER_REFERRAL_CODE => ['x']]);
+
+        $this->assertNull(app(PartnerAttributionService::class)->pendingCode());
     }
 
     public function test_resolve_tenant_for_code_finds_the_linked_tenant(): void

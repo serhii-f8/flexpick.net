@@ -21,7 +21,9 @@ class PartnerAttributionService
 
     public function pendingCode(): ?string
     {
-        return session(SessionConstants::PARTNER_REFERRAL_CODE);
+        $code = session(SessionConstants::PARTNER_REFERRAL_CODE);
+
+        return is_string($code) ? $code : null;
     }
 
     public function clearPendingCode(): void

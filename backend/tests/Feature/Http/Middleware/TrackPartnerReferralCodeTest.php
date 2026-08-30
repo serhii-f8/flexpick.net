@@ -45,4 +45,14 @@ class TrackPartnerReferralCodeTest extends FeatureTest
 
         $response->assertSessionHas(SessionConstants::PARTNER_REFERRAL_CODE, 'STILLWORKS');
     }
+
+    public function test_array_shaped_partner_code_is_ignored_without_error(): void
+    {
+        $this->withExceptionHandling();
+
+        $response = $this->get('/login?'.PartnerConstants::HTTP_PARAM_PARTNER_CODE.'[]=x');
+
+        $response->assertSessionMissing(SessionConstants::PARTNER_REFERRAL_CODE);
+        $response->assertStatus(200);
+    }
 }
