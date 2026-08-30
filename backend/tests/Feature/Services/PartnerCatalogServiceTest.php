@@ -77,6 +77,26 @@ class PartnerCatalogServiceTest extends FeatureTest
         app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan, 4900, ['audit_diagnostic_credits' => 5], true);
     }
 
+    public function test_set_plan_offering_ignores_a_blank_quota_field_instead_of_rejecting_the_save(): void
+    {
+        $tenant = $this->createTenant();
+        $plan = $this->planWithBasePrice(4900, ['audit_diagnostic_credits' => 10], ['audit_diagnostic_credits']);
+
+        $offering = app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan, 4900, ['audit_diagnostic_credits' => null], true);
+
+        $this->assertSame([], $offering->quota_overrides);
+    }
+
+    public function test_set_plan_offering_casts_string_quota_values_to_int(): void
+    {
+        $tenant = $this->createTenant();
+        $plan = $this->planWithBasePrice(4900, ['audit_diagnostic_credits' => 10], ['audit_diagnostic_credits']);
+
+        $offering = app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan, 4900, ['audit_diagnostic_credits' => '15'], true);
+
+        $this->assertSame(['audit_diagnostic_credits' => 15], $offering->quota_overrides);
+    }
+
     public function test_set_plan_offering_updates_an_existing_offering_instead_of_duplicating(): void
     {
         $tenant = $this->createTenant();
@@ -149,6 +169,26 @@ class PartnerCatalogServiceTest extends FeatureTest
 
         $this->expectException(PartnerOfferingValidationException::class);
         app(PartnerCatalogService::class)->setProductOffering($tenant, $product, 500, [], true);
+    }
+
+    public function test_set_product_offering_ignores_a_blank_quota_field_instead_of_rejecting_the_save(): void
+    {
+        $tenant = $this->createTenant();
+        $product = $this->oneTimeProductWithBasePrice(1500, ['bonus_credits' => 10], ['bonus_credits']);
+
+        $offering = app(PartnerCatalogService::class)->setProductOffering($tenant, $product, 1500, ['bonus_credits' => null], true);
+
+        $this->assertSame([], $offering->quota_overrides);
+    }
+
+    public function test_set_product_offering_casts_string_quota_values_to_int(): void
+    {
+        $tenant = $this->createTenant();
+        $product = $this->oneTimeProductWithBasePrice(1500, ['bonus_credits' => 10], ['bonus_credits']);
+
+        $offering = app(PartnerCatalogService::class)->setProductOffering($tenant, $product, 1500, ['bonus_credits' => '15'], true);
+
+        $this->assertSame(['bonus_credits' => 15], $offering->quota_overrides);
     }
 
     public function test_set_product_offering_updates_an_existing_offering_instead_of_duplicating(): void

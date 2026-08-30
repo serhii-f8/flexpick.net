@@ -33,6 +33,8 @@ class PartnerCatalogService
 
     public function setPlanOffering(Tenant $tenant, Plan $plan, int $price, array $quotaOverrides, bool $isEnabled): PartnerPlanOffering
     {
+        $quotaOverrides = $this->normalizeQuotaOverrides($quotaOverrides);
+
         $this->assertPriceAtOrAboveBase($price, $this->planBasePrice($plan));
         $this->assertQuotasValid(
             $quotaOverrides,
@@ -61,6 +63,8 @@ class PartnerCatalogService
 
     public function setProductOffering(Tenant $tenant, OneTimeProduct $product, int $price, array $quotaOverrides, bool $isEnabled): PartnerProductOffering
     {
+        $quotaOverrides = $this->normalizeQuotaOverrides($quotaOverrides);
+
         $this->assertPriceAtOrAboveBase($price, $this->productBasePrice($product));
         $this->assertQuotasValid(
             $quotaOverrides,
@@ -71,6 +75,14 @@ class PartnerCatalogService
         return PartnerProductOffering::updateOrCreate(
             ['tenant_id' => $tenant->id, 'one_time_product_id' => $product->id],
             ['price' => $price, 'quota_overrides' => $quotaOverrides, 'is_enabled' => $isEnabled],
+        );
+    }
+
+    private function normalizeQuotaOverrides(array $quotaOverrides): array
+    {
+        return array_map(
+            'intval',
+            array_filter($quotaOverrides, fn ($value): bool => $value !== null && $value !== ''),
         );
     }
 
