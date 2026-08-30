@@ -30,6 +30,8 @@ class TenancyPermissionConstants
 
     public const PERMISSION_VIEW_TRANSACTIONS = 'tenancy: view transactions';
 
+    public const PERMISSION_MANAGE_RESELLER_CATALOG = 'tenancy: manage reseller catalog';
+
     public const PERMISSION_INVITE_MEMBERS = 'tenancy: invite members';
 
     public const PERMISSION_MANAGE_TEAM = 'tenancy: manage team';
