@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Constants\PartnerAttributionSource;
 use App\Constants\SessionConstants;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
@@ -11,7 +12,8 @@ use Illuminate\Support\Str;
 class UserService
 {
     public function __construct(
-        private ReferralService $referralService
+        private ReferralService $referralService,
+        private PartnerAttributionService $partnerAttributionService,
     ) {}
 
     public function createUser(array $data, bool $dispatchRegisterEvent = false): User
@@ -26,6 +28,8 @@ class UserService
             $this->referralService->trackReferral($user, session(SessionConstants::REFERRAL_CODE));
             session()->forget(SessionConstants::REFERRAL_CODE);
         }
+
+        $this->partnerAttributionService->attribute($user, PartnerAttributionSource::REGISTRATION);
 
         if ($dispatchRegisterEvent) {
             event(new Registered($user));

@@ -2,6 +2,13 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\PartnerAttributionSource;
+use App\Constants\SessionConstants;
+use App\Constants\SubscriptionStatus;
+use App\Models\PartnerReferralLink;
+use App\Models\Plan;
+use App\Models\Product;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Services\UserService;
 use Tests\Feature\FeatureTest;
@@ -39,5 +46,29 @@ class UserServiceTest extends FeatureTest
         $this->assertEquals('Some notes', $user->notes); // Should remain as is
         $this->assertNull($user->address);
         $this->assertNotEquals('password', $user->password);
+    }
+
+    public function test_creating_a_user_attributes_a_pending_partner_code(): void
+    {
+        $partnerTenant = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        Subscription::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+        PartnerReferralLink::factory()->create(['tenant_id' => $partnerTenant->id, 'code' => 'SIGNUPCODE']);
+        session([SessionConstants::PARTNER_REFERRAL_CODE => 'SIGNUPCODE']);
+
+        $user = app(UserService::class)->createUser([
+            'name' => 'Jane Doe',
+            'email' => 'jane-'.uniqid().'@example.com',
+            'password' => 'password',
+        ]);
+
+        $this->assertTrue($user->partnerTenant->is($partnerTenant));
+        $this->assertSame(PartnerAttributionSource::REGISTRATION->value, $user->partner_attribution_source);
     }
 }
