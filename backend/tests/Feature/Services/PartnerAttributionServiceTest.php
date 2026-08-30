@@ -2,7 +2,13 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\PartnerAttributionSource;
+use App\Constants\SubscriptionStatus;
 use App\Models\PartnerReferralLink;
+use App\Models\Plan;
+use App\Models\Product;
+use App\Models\Subscription;
+use App\Models\User;
 use App\Services\PartnerAttributionService;
 use Tests\Feature\FeatureTest;
 
@@ -42,5 +48,97 @@ class PartnerAttributionServiceTest extends FeatureTest
     public function test_resolve_tenant_for_code_returns_null_for_unknown_code(): void
     {
         $this->assertNull(app(PartnerAttributionService::class)->resolveTenantForCode('NOPE'));
+    }
+
+    public function test_attribute_sets_partner_tenant_when_code_resolves_to_an_active_partner(): void
+    {
+        $partnerTenant = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        Subscription::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+        PartnerReferralLink::factory()->create(['tenant_id' => $partnerTenant->id, 'code' => 'REGCODE1']);
+        $user = User::factory()->create();
+
+        $service = app(PartnerAttributionService::class);
+        $service->rememberPendingCode('REGCODE1');
+        $service->attribute($user, PartnerAttributionSource::REGISTRATION);
+
+        $user->refresh();
+        $this->assertTrue($user->partnerTenant->is($partnerTenant));
+        $this->assertSame(PartnerAttributionSource::REGISTRATION->value, $user->partner_attribution_source);
+        $this->assertNull($service->pendingCode());
+    }
+
+    public function test_attribute_does_not_overwrite_an_existing_attribution(): void
+    {
+        $originalPartner = $this->createTenant();
+        $otherPartner = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        Subscription::factory()->create([
+            'tenant_id' => $otherPartner->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+        PartnerReferralLink::factory()->create(['tenant_id' => $otherPartner->id, 'code' => 'OTHERCODE']);
+        $user = User::factory()->create(['partner_tenant_id' => $originalPartner->id]);
+
+        $service = app(PartnerAttributionService::class);
+        $service->rememberPendingCode('OTHERCODE');
+        $service->attribute($user, PartnerAttributionSource::LOGIN);
+
+        $this->assertSame($originalPartner->id, $user->fresh()->partner_tenant_id);
+    }
+
+    public function test_attribute_ignores_a_code_for_a_tenant_that_is_not_an_active_partner(): void
+    {
+        $tenant = $this->createTenant();
+        PartnerReferralLink::factory()->create(['tenant_id' => $tenant->id, 'code' => 'LAPSEDCODE']);
+        $user = User::factory()->create();
+
+        $service = app(PartnerAttributionService::class);
+        $service->rememberPendingCode('LAPSEDCODE');
+        $service->attribute($user, PartnerAttributionSource::REGISTRATION);
+
+        $this->assertNull($user->fresh()->partner_tenant_id);
+    }
+
+    public function test_pending_code_conflicts_with_existing_attribution(): void
+    {
+        $originalPartner = $this->createTenant();
+        $otherPartner = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        Subscription::factory()->create([
+            'tenant_id' => $otherPartner->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+        PartnerReferralLink::factory()->create(['tenant_id' => $otherPartner->id, 'code' => 'CONFLICTCODE']);
+        $user = User::factory()->create(['partner_tenant_id' => $originalPartner->id]);
+
+        $service = app(PartnerAttributionService::class);
+        $service->rememberPendingCode('CONFLICTCODE');
+
+        $this->assertTrue($service->pendingCodeConflictsWithExisting($user));
+    }
+
+    public function test_pending_code_does_not_conflict_when_it_matches_existing_attribution(): void
+    {
+        $partnerTenant = $this->createTenant();
+        PartnerReferralLink::factory()->create(['tenant_id' => $partnerTenant->id, 'code' => 'SAMECODE']);
+        $user = User::factory()->create(['partner_tenant_id' => $partnerTenant->id]);
+
+        $service = app(PartnerAttributionService::class);
+        $service->rememberPendingCode('SAMECODE');
+
+        $this->assertFalse($service->pendingCodeConflictsWithExisting($user));
     }
 }
