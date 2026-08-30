@@ -138,7 +138,7 @@ class PartnerPlanCatalogResource extends Resource
 
     private static function offeringFor(Plan $plan): ?PartnerPlanOffering
     {
-        return PartnerPlanOffering::where('tenant_id', Filament::getTenant()->id)
+        return PartnerPlanOffering::where('tenant_id', Filament::getTenant()->getKey())
             ->where('plan_id', $plan->id)
             ->first();
     }

@@ -137,7 +137,7 @@ class PartnerProductCatalogResource extends Resource
 
     private static function offeringFor(OneTimeProduct $product): ?PartnerProductOffering
     {
-        return PartnerProductOffering::where('tenant_id', Filament::getTenant()->id)
+        return PartnerProductOffering::where('tenant_id', Filament::getTenant()->getKey())
             ->where('one_time_product_id', $product->id)
             ->first();
     }

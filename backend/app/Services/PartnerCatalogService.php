@@ -9,6 +9,7 @@ use App\Models\PartnerPlanOffering;
 use App\Models\PartnerProductOffering;
 use App\Models\Plan;
 use App\Models\PlanPrice;
+use App\Models\Product;
 use App\Models\Tenant;
 
 class PartnerCatalogService
@@ -97,7 +98,9 @@ class PartnerCatalogService
 
     public function isPlanOfferingBelowMinimum(PartnerPlanOffering $offering): bool
     {
+        /** @var Plan $plan */
         $plan = $offering->plan;
+        /** @var Product $product */
         $product = $plan->product;
 
         return $offering->price < $this->planBasePrice($plan)

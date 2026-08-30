@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Plan;
+use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use Illuminate\Support\Collection;
@@ -27,7 +29,15 @@ class PartnerCapabilityService
     {
         return $this->activeSubscriptionsFor($tenant)
             ->contains(function (Subscription $subscription): bool {
-                $product = $subscription->plan?->product;
+                /** @var Plan|null $plan */
+                $plan = $subscription->plan;
+
+                if ($plan === null) {
+                    return false;
+                }
+
+                /** @var Product|null $product */
+                $product = $plan->product;
 
                 return $product !== null && (bool) data_get($product->metadata, self::RESELLER_METADATA_KEY, false);
             });

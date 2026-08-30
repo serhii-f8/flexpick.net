@@ -31,10 +31,18 @@ class PartnerAttributionService
 
     public function resolveTenantForCode(string $code): ?Tenant
     {
-        return PartnerReferralLink::where('code', $code)
+        $link = PartnerReferralLink::where('code', $code)
             ->where('is_active', true)
-            ->first()
-            ?->tenant;
+            ->first();
+
+        if ($link === null) {
+            return null;
+        }
+
+        /** @var Tenant|null $tenant */
+        $tenant = $link->tenant;
+
+        return $tenant;
     }
 
     public function attribute(User $user, PartnerAttributionSource $source): void
