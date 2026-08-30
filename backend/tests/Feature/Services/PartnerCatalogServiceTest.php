@@ -12,9 +12,12 @@ use Tests\Feature\FeatureTest;
 
 class PartnerCatalogServiceTest extends FeatureTest
 {
-    private function planWithBasePrice(int $basePrice, array $metadata = []): Plan
+    private function planWithBasePrice(int $basePrice, array $metadata = [], array $resellerQuotaKeys = []): Plan
     {
-        $product = Product::factory()->create(['metadata' => $metadata]);
+        $product = Product::factory()->create([
+            'reseller_quota_keys' => $resellerQuotaKeys,
+            'metadata' => $metadata,
+        ]);
         $plan = Plan::factory()->create(['product_id' => $product->id]);
         PlanPrice::factory()->create([
             'plan_id' => $plan->id,
@@ -35,7 +38,7 @@ class PartnerCatalogServiceTest extends FeatureTest
     public function test_set_plan_offering_succeeds_at_or_above_the_floor(): void
     {
         $tenant = $this->createTenant();
-        $plan = $this->planWithBasePrice(4900, ['reseller_quota_keys' => ['audit_diagnostic_credits'], 'audit_diagnostic_credits' => 10]);
+        $plan = $this->planWithBasePrice(4900, ['audit_diagnostic_credits' => 10], ['audit_diagnostic_credits']);
 
         $offering = app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan, 5900, ['audit_diagnostic_credits' => 15], true);
 
@@ -56,7 +59,7 @@ class PartnerCatalogServiceTest extends FeatureTest
     public function test_set_plan_offering_rejects_a_quota_key_not_on_the_allowlist(): void
     {
         $tenant = $this->createTenant();
-        $plan = $this->planWithBasePrice(4900, ['reseller_quota_keys' => []]);
+        $plan = $this->planWithBasePrice(4900, [], []);
 
         $this->expectException(PartnerOfferingValidationException::class);
         app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan, 4900, ['audit_diagnostic_credits' => 100], true);
@@ -65,7 +68,7 @@ class PartnerCatalogServiceTest extends FeatureTest
     public function test_set_plan_offering_rejects_a_quota_value_below_the_base_value(): void
     {
         $tenant = $this->createTenant();
-        $plan = $this->planWithBasePrice(4900, ['reseller_quota_keys' => ['audit_diagnostic_credits'], 'audit_diagnostic_credits' => 10]);
+        $plan = $this->planWithBasePrice(4900, ['audit_diagnostic_credits' => 10], ['audit_diagnostic_credits']);
 
         $this->expectException(PartnerOfferingValidationException::class);
         app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan, 4900, ['audit_diagnostic_credits' => 5], true);
@@ -82,5 +85,24 @@ class PartnerCatalogServiceTest extends FeatureTest
 
         $this->assertSame($first->id, $second->id);
         $this->assertSame(5900, $second->fresh()->price);
+    }
+
+    public function test_set_plan_offering_reads_the_quota_allowlist_from_the_dedicated_column_not_metadata(): void
+    {
+        $tenant = $this->createTenant();
+        $product = Product::factory()->create([
+            'reseller_quota_keys' => ['audit_diagnostic_credits'],
+            'metadata' => ['audit_diagnostic_credits' => 10],
+        ]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        PlanPrice::factory()->create([
+            'plan_id' => $plan->id,
+            'currency_id' => Currency::where('code', 'USD')->first()->id,
+            'price' => 4900,
+        ]);
+
+        $offering = app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan->fresh(), 4900, ['audit_diagnostic_credits' => 15], true);
+
+        $this->assertSame(['audit_diagnostic_credits' => 15], $offering->quota_overrides);
     }
 }

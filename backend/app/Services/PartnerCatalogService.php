@@ -32,7 +32,7 @@ class PartnerCatalogService
         $this->assertPriceAtOrAboveBase($price, $this->planBasePrice($plan));
         $this->assertQuotasValid(
             $quotaOverrides,
-            (array) data_get($plan->product->metadata, 'reseller_quota_keys', []),
+            (array) ($plan->product->reseller_quota_keys ?? []),
             (array) ($plan->product->metadata ?? []),
         );
 
