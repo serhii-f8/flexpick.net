@@ -21,11 +21,13 @@ class OneTimeProduct extends Model
         'features',
         'is_active',
         'is_visible',
+        'reseller_quota_keys',
     ];
 
     protected $casts = [
         'features' => 'array',
         'metadata' => 'array',
+        'reseller_quota_keys' => 'array',
     ];
 
     public function prices(): HasMany

@@ -18,11 +18,13 @@ class Product extends Model
         'is_popular',
         'is_default',
         'metadata',
+        'reseller_quota_keys',
     ];
 
     protected $casts = [
         'features' => 'array',
         'metadata' => 'array',
+        'reseller_quota_keys' => 'array',
     ];
 
     public function plans(): HasMany
