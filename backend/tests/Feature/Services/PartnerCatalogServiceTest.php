@@ -109,9 +109,12 @@ class PartnerCatalogServiceTest extends FeatureTest
         $this->assertSame(['audit_diagnostic_credits' => 15], $offering->quota_overrides);
     }
 
-    private function oneTimeProductWithBasePrice(int $basePrice, array $metadata = []): OneTimeProduct
+    private function oneTimeProductWithBasePrice(int $basePrice, array $metadata = [], array $resellerQuotaKeys = []): OneTimeProduct
     {
-        $product = OneTimeProduct::factory()->create(['metadata' => $metadata]);
+        $product = OneTimeProduct::factory()->create([
+            'reseller_quota_keys' => $resellerQuotaKeys,
+            'metadata' => $metadata,
+        ]);
         OneTimeProductPrice::factory()->create([
             'one_time_product_id' => $product->id,
             'currency_id' => Currency::where('code', 'USD')->first()->id,
@@ -159,5 +162,33 @@ class PartnerCatalogServiceTest extends FeatureTest
 
         $this->assertSame($first->id, $second->id);
         $this->assertSame(2500, $second->fresh()->price);
+    }
+
+    public function test_set_product_offering_reads_the_quota_allowlist_from_the_dedicated_column_not_metadata(): void
+    {
+        $tenant = $this->createTenant();
+        $product = $this->oneTimeProductWithBasePrice(1500, ['bonus_credits' => 10], ['bonus_credits']);
+
+        $offering = app(PartnerCatalogService::class)->setProductOffering($tenant, $product, 1500, ['bonus_credits' => 15], true);
+
+        $this->assertSame(['bonus_credits' => 15], $offering->quota_overrides);
+    }
+
+    public function test_set_product_offering_rejects_a_quota_key_not_on_the_allowlist(): void
+    {
+        $tenant = $this->createTenant();
+        $product = $this->oneTimeProductWithBasePrice(1500, [], []);
+
+        $this->expectException(PartnerOfferingValidationException::class);
+        app(PartnerCatalogService::class)->setProductOffering($tenant, $product, 1500, ['bonus_credits' => 100], true);
+    }
+
+    public function test_set_product_offering_rejects_a_quota_value_below_the_base_value(): void
+    {
+        $tenant = $this->createTenant();
+        $product = $this->oneTimeProductWithBasePrice(1500, ['bonus_credits' => 10], ['bonus_credits']);
+
+        $this->expectException(PartnerOfferingValidationException::class);
+        app(PartnerCatalogService::class)->setProductOffering($tenant, $product, 1500, ['bonus_credits' => 5], true);
     }
 }
