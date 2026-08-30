@@ -94,4 +94,32 @@ class PartnerCatalogService
             }
         }
     }
+
+    public function isPlanOfferingBelowMinimum(PartnerPlanOffering $offering): bool
+    {
+        $plan = $offering->plan;
+        $product = $plan->product;
+
+        return $offering->price < $this->planBasePrice($plan)
+            || $this->hasQuotaBelowFloor((array) $offering->quota_overrides, (array) ($product->metadata ?? []));
+    }
+
+    public function isProductOfferingBelowMinimum(PartnerProductOffering $offering): bool
+    {
+        $product = $offering->oneTimeProduct;
+
+        return $offering->price < $this->productBasePrice($product)
+            || $this->hasQuotaBelowFloor((array) $offering->quota_overrides, (array) ($product->metadata ?? []));
+    }
+
+    private function hasQuotaBelowFloor(array $quotaOverrides, array $baseMetadata): bool
+    {
+        foreach ($quotaOverrides as $key => $value) {
+            if ((int) $value < (int) data_get($baseMetadata, $key, 0)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

@@ -191,4 +191,35 @@ class PartnerCatalogServiceTest extends FeatureTest
         $this->expectException(PartnerOfferingValidationException::class);
         app(PartnerCatalogService::class)->setProductOffering($tenant, $product, 1500, ['bonus_credits' => 5], true);
     }
+
+    public function test_plan_offering_is_flagged_below_minimum_after_a_base_price_increase(): void
+    {
+        $tenant = $this->createTenant();
+        $plan = $this->planWithBasePrice(4900);
+        $offering = app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan, 4900, [], true);
+
+        PlanPrice::where('plan_id', $plan->id)->update(['price' => 6900]);
+
+        $this->assertTrue(app(PartnerCatalogService::class)->isPlanOfferingBelowMinimum($offering->fresh()));
+    }
+
+    public function test_plan_offering_is_not_flagged_when_still_at_or_above_minimum(): void
+    {
+        $tenant = $this->createTenant();
+        $plan = $this->planWithBasePrice(4900);
+        $offering = app(PartnerCatalogService::class)->setPlanOffering($tenant, $plan, 9900, [], true);
+
+        $this->assertFalse(app(PartnerCatalogService::class)->isPlanOfferingBelowMinimum($offering->fresh()));
+    }
+
+    public function test_product_offering_is_flagged_below_minimum_after_a_base_price_increase(): void
+    {
+        $tenant = $this->createTenant();
+        $product = $this->oneTimeProductWithBasePrice(1500);
+        $offering = app(PartnerCatalogService::class)->setProductOffering($tenant, $product, 1500, [], true);
+
+        OneTimeProductPrice::where('one_time_product_id', $product->id)->update(['price' => 3000]);
+
+        $this->assertTrue(app(PartnerCatalogService::class)->isProductOfferingBelowMinimum($offering->fresh()));
+    }
 }
