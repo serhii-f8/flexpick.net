@@ -5,6 +5,7 @@ use App\Http\Controllers\HealthResultsController;
 use App\Http\Middleware\BlockedUser;
 use App\Http\Middleware\Sitemapped;
 use App\Http\Middleware\TrackCouponCode;
+use App\Http\Middleware\TrackPartnerReferralCode;
 use App\Http\Middleware\TrackReferralCode;
 use App\Http\Middleware\UpdateUserLastSeenAt;
 use Illuminate\Foundation\Application;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
             UpdateUserLastSeenAt::class,
             TrackReferralCode::class,
             TrackCouponCode::class,
+            TrackPartnerReferralCode::class,
         ]);
 
         $middleware->alias([
