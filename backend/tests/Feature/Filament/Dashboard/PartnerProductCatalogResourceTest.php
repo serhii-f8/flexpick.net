@@ -51,6 +51,17 @@ class PartnerProductCatalogResourceTest extends FeatureTest
         $this->assertFalse(PartnerProductCatalogResource::canAccess());
     }
 
+    public function test_it_denies_access_without_the_permission_even_for_an_active_partner(): void
+    {
+        $tenant = $this->activePartnerTenant();
+        $user = $this->createUser($tenant, []);
+        $this->actingAs($user);
+
+        Filament::setTenant($tenant);
+
+        $this->assertFalse(PartnerProductCatalogResource::canAccess());
+    }
+
     public function test_only_visible_products_are_listed(): void
     {
         OneTimeProduct::factory()->create(['is_visible' => true]);
