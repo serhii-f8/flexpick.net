@@ -141,4 +141,39 @@ class PartnerAttributionServiceTest extends FeatureTest
 
         $this->assertFalse($service->pendingCodeConflictsWithExisting($user));
     }
+
+    public function test_attribute_is_not_overwritten_by_a_concurrent_call_after_the_first_wins(): void
+    {
+        $winningPartner = $this->createTenant();
+        $losingPartner = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        foreach ([$winningPartner, $losingPartner] as $tenant) {
+            Subscription::factory()->create([
+                'tenant_id' => $tenant->id,
+                'plan_id' => $plan->id,
+                'status' => SubscriptionStatus::ACTIVE->value,
+                'ends_at' => now()->addDays(30),
+            ]);
+        }
+        PartnerReferralLink::factory()->create(['tenant_id' => $winningPartner->id, 'code' => 'WINCODE']);
+        PartnerReferralLink::factory()->create(['tenant_id' => $losingPartner->id, 'code' => 'LOSECODE']);
+        $user = User::factory()->create();
+
+        $service = app(PartnerAttributionService::class);
+
+        // Simulate the first call already having won the race by writing directly.
+        User::whereKey($user->id)->update([
+            'partner_tenant_id' => $winningPartner->id,
+            'partner_attributed_at' => now(),
+            'partner_attribution_source' => PartnerAttributionSource::REGISTRATION->value,
+        ]);
+
+        // The in-memory $user object is still stale (partner_tenant_id null in memory),
+        // simulating a second concurrent request that read the row before the first write.
+        $service->rememberPendingCode('LOSECODE');
+        $service->attribute($user, PartnerAttributionSource::LOGIN);
+
+        $this->assertSame($winningPartner->id, $user->fresh()->partner_tenant_id);
+    }
 }

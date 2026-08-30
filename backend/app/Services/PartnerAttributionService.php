@@ -49,12 +49,21 @@ class PartnerAttributionService
             return;
         }
 
-        $user->update([
+        $attributes = [
             'partner_tenant_id' => $tenant->id,
             'partner_attributed_at' => now(),
             'partner_attribution_source' => $source->value,
-        ]);
+        ];
 
+        $updated = User::whereKey($user->id)
+            ->whereNull('partner_tenant_id')
+            ->update($attributes);
+
+        if ($updated === 0) {
+            return;
+        }
+
+        $user->forceFill($attributes);
         $this->clearPendingCode();
     }
 
