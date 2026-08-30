@@ -19,4 +19,6 @@ class SessionConstants
     public const REFERRAL_CODE = 'referralCode';
 
     public const COUPON_CODE = 'couponCode';
+
+    public const PARTNER_REFERRAL_CODE = 'partnerReferralCode';
 }
