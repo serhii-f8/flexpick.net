@@ -3,7 +3,10 @@
 namespace App\Services;
 
 use App\Exceptions\PartnerOfferingValidationException;
+use App\Models\OneTimeProduct;
+use App\Models\OneTimeProductPrice;
 use App\Models\PartnerPlanOffering;
+use App\Models\PartnerProductOffering;
 use App\Models\Plan;
 use App\Models\PlanPrice;
 use App\Models\Tenant;
@@ -38,6 +41,34 @@ class PartnerCatalogService
 
         return PartnerPlanOffering::updateOrCreate(
             ['tenant_id' => $tenant->id, 'plan_id' => $plan->id],
+            ['price' => $price, 'quota_overrides' => $quotaOverrides, 'is_enabled' => $isEnabled],
+        );
+    }
+
+    public function productBasePrice(OneTimeProduct $product): int
+    {
+        $price = OneTimeProductPrice::where('one_time_product_id', $product->id)
+            ->where('currency_id', $this->currencyService->getCurrency()->id)
+            ->value('price');
+
+        if ($price === null) {
+            throw new PartnerOfferingValidationException("Product [{$product->slug}] has no price in the default currency.");
+        }
+
+        return (int) $price;
+    }
+
+    public function setProductOffering(Tenant $tenant, OneTimeProduct $product, int $price, array $quotaOverrides, bool $isEnabled): PartnerProductOffering
+    {
+        $this->assertPriceAtOrAboveBase($price, $this->productBasePrice($product));
+        $this->assertQuotasValid(
+            $quotaOverrides,
+            (array) ($product->reseller_quota_keys ?? []),
+            (array) ($product->metadata ?? []),
+        );
+
+        return PartnerProductOffering::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'one_time_product_id' => $product->id],
             ['price' => $price, 'quota_overrides' => $quotaOverrides, 'is_enabled' => $isEnabled],
         );
     }
