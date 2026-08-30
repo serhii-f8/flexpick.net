@@ -11,6 +11,7 @@ use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -45,6 +46,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants, MustVeri
         'phone_number',
         'phone_number_verified_at',
         'last_seen_at',
+        'partner_tenant_id',
+        'partner_attributed_at',
+        'partner_attribution_source',
     ];
 
     /**
@@ -67,6 +71,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants, MustVeri
         'phone_number_verified_at' => 'datetime',
         'password' => 'hashed',
         'last_seen_at' => 'datetime',
+        'partner_attributed_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -186,6 +191,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants, MustVeri
     public function address(): HasOne
     {
         return $this->hasOne(Address::class);
+    }
+
+    public function partnerTenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'partner_tenant_id');
     }
 
     public function tenants(): BelongsToMany

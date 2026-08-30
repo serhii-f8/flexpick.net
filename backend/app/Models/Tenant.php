@@ -41,6 +41,11 @@ class Tenant extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function partnerReferredUsers(): HasMany
+    {
+        return $this->hasMany(User::class, 'partner_tenant_id');
+    }
+
     public function stripeData(): HasOne
     {
         return $this->hasOne(UserStripeData::class);
