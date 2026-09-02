@@ -638,8 +638,7 @@ Expected: FAIL on both new tests — no summary sentence exists in the view yet 
 In `backend/resources/views/reports/audit-web.blade.php`, insert a new section immediately after the existing `@if ($groups !== [])` … `@endif` block for "What we found" (the block ending just before `@php($metrics = $report->auditRequest->metrics)`):
 
 ```blade
-    @php($allGroupsList = $allGroups instanceof \Illuminate\Support\Collection ? $allGroups : collect($allGroups))
-    @if ($allGroupsList->isNotEmpty())
+    @if ($allGroups->isNotEmpty())
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
             @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
             <h2 class="text-base font-bold mb-3">{{ __('Full issue list') }}</h2>
@@ -652,15 +651,15 @@ In `backend/resources/views/reports/audit-web.blade.php`, insert a new section i
                     {{ __('since your previous audit on :date', ['date' => $groupDeltas['previous_at']->format('Y-m-d')]) }}
                 </p>
             @endif
-            @foreach ($allGroupsList as $group)
-                @php($deltaKey = "{$group->rule_family}|{$group->directory}|{$group->dimension}")
+            @foreach ($allGroups as $fullGroup)
+                @php($deltaKey = "{$fullGroup->rule_family}|{$fullGroup->directory}|{$fullGroup->dimension}")
                 @php($groupDelta = $groupDeltas['groups'][$deltaKey] ?? null)
                 <div class="border-t border-stone-200 py-3">
                     <div class="flex flex-wrap items-center gap-2.5">
-                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase {{ $groupBadge[$group->severity] ?? 'bg-stone-100 text-stone-700' }}">{{ $group->severity }}</span>
-                        <span class="font-semibold">{{ $group->rule_family }}</span>
-                        <span class="text-xs text-stone-500">{{ $group->directory }} ·
-                            {{ trans_choice('{1} :count finding|[2,*] :count findings', $group->count, ['count' => $group->count]) }}
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase {{ $groupBadge[$fullGroup->severity] ?? 'bg-stone-100 text-stone-700' }}">{{ $fullGroup->severity }}</span>
+                        <span class="font-semibold">{{ $fullGroup->rule_family }}</span>
+                        <span class="text-xs text-stone-500">{{ $fullGroup->directory }} ·
+                            {{ trans_choice('{1} :count finding|[2,*] :count findings', $fullGroup->count, ['count' => $fullGroup->count]) }}
                         </span>
                         @if ($groupDelta !== null && $groupDelta['status'] === 'new')
                             <span class="rounded-full bg-lime-50 px-2 py-0.5 text-[10px] font-bold text-lime-800">{{ __('new') }}</span>
@@ -734,12 +733,12 @@ In `backend/resources/views/reports/audit.blade.php`, insert a new section immed
         <h2>{{ __('Full issue list') }}</h2>
         <table>
             <tr><th>{{ __('Rule family') }}</th><th>{{ __('Location') }}</th><th>{{ __('Severity') }}</th><th>{{ __('Count') }}</th></tr>
-            @foreach ($allGroups as $group)
+            @foreach ($allGroups as $fullGroup)
                 <tr>
-                    <td>{{ $group->rule_family }}</td>
-                    <td>{{ $group->directory }}</td>
-                    <td class="impact-{{ $group->severity }}">{{ strtoupper($group->severity) }}</td>
-                    <td>{{ $group->count }}</td>
+                    <td>{{ $fullGroup->rule_family }}</td>
+                    <td>{{ $fullGroup->directory }}</td>
+                    <td class="impact-{{ $fullGroup->severity }}">{{ strtoupper($fullGroup->severity) }}</td>
+                    <td>{{ $fullGroup->count }}</td>
                 </tr>
             @endforeach
         </table>
