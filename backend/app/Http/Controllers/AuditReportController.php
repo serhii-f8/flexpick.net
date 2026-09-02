@@ -10,6 +10,7 @@ use App\Services\AuditGuestAccountService;
 use App\Services\AuditReport\AuditBenchmarkService;
 use App\Services\AuditReport\AuditDeltaService;
 use App\Services\AuditReport\AuditFunnelRecorder;
+use App\Services\AuditReport\AuditGroupDeltaService;
 use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -43,6 +44,8 @@ class AuditReportController extends Controller
                 ['auditReport' => $auditReport->uuid],
             ),
             'deltas' => app(AuditDeltaService::class)->deltasFor($auditReport),
+            'groupDeltas' => app(AuditGroupDeltaService::class)->deltasFor($auditReport),
+            'allGroups' => $auditReport->auditRequest->findingGroups,
         ]);
     }
 
@@ -76,6 +79,10 @@ class AuditReportController extends Controller
                     'deltas' => $fixture['deltas'],
                 ]
                 : null,
+            // The sample is a static fixture, not a persisted AuditRequest --
+            // there is no audit_finding_groups row to list or diff.
+            'groupDeltas' => null,
+            'allGroups' => collect(),
         ]);
     }
 

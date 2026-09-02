@@ -4,6 +4,7 @@ namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\AuditRequestStatus;
 use App\Mail\Audit\AuditReportReady;
+use App\Models\AuditFindingGroup;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditReportService;
@@ -172,5 +173,21 @@ class AuditReportControllerTest extends FeatureTest
 
         $response->assertOk();
         $response->assertDontSee('Human expert review');
+    }
+
+    public function test_report_view_lists_every_persisted_finding_group(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create();
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $report->audit_request_id,
+            'rule_family' => 'php.injection',
+            'directory' => 'app/Http',
+            'severity' => 'high',
+        ]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+
+        $response->assertOk();
+        $response->assertSee('php.injection');
     }
 }
