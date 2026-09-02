@@ -122,7 +122,13 @@ return [
     ],
 
     'findings' => [
-        'max_groups' => 20,
+        // A safety valve, not a display cap — FindingGrouper already
+        // dedupes and buckets by rule_family+directory before this point, so
+        // group count is bounded by distinct (rule × directory) combinations,
+        // not raw finding count. 1000 is high enough that no realistic repo
+        // hits it; it exists to stop a pathological ruleset from producing
+        // an unbounded number of DB rows, not to trim a normal report.
+        'max_groups' => 1000,
         'max_group_examples' => 8,
         'directory_depth' => 2,
         'severity_weights' => [
