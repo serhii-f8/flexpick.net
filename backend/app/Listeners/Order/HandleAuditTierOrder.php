@@ -71,6 +71,7 @@ class HandleAuditTierOrder
                 'name' => $source->name,
                 'email' => $source->email,
                 'repo_url' => $source->repo_url,
+                'branch' => $source->branch,
                 'message' => $source->message,
                 'user_id' => $source->user_id,
                 'tier' => $tierValue,

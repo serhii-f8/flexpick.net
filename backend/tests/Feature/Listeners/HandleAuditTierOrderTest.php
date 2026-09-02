@@ -47,6 +47,29 @@ class HandleAuditTierOrderTest extends FeatureTest
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
+    public function test_the_cloned_run_keeps_the_source_diagnostics_branch(): void
+    {
+        Queue::fake();
+
+        $user = $this->createUser();
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'repo_url' => 'https://github.com/acme/app',
+            'branch' => 'feature/foo',
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+
+        $this->completeOrderFor($user, 'audit-deep-ai');
+
+        $upgraded = AuditRequest::where('user_id', $user->id)
+            ->where('tier', AuditTier::DEEP_AI->value)
+            ->firstOrFail();
+
+        $this->assertSame('feature/foo', $upgraded->branch, 'A tier purchase must audit the same branch as the diagnostic it was upgraded from.');
+    }
+
     public function test_the_original_diagnostic_run_is_left_intact(): void
     {
         Queue::fake();
