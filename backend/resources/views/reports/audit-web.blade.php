@@ -118,6 +118,40 @@
         </div>
     @endif
 
+    @if ($allGroups->isNotEmpty())
+        <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+            @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
+            <h2 class="text-base font-bold mb-3">{{ __('Full issue list') }}</h2>
+            @if ($groupDeltas !== null)
+                <p class="text-xs text-stone-500 mb-3">
+                    @php($resolved = $groupDeltas['summary']['resolved_findings'])
+                    @php($new = $groupDeltas['summary']['new_findings'])
+                    {{ trans_choice('{0} No issues resolved|{1} 1 issue resolved|[2,*] :count issues resolved', $resolved, ['count' => $resolved]) }},
+                    {{ trans_choice('{0} no new issues|{1} 1 new issue|[2,*] :count new issues', $new, ['count' => $new]) }}
+                    {{ __('since your previous audit on :date', ['date' => $groupDeltas['previous_at']->format('Y-m-d')]) }}
+                </p>
+            @endif
+            @foreach ($allGroups as $fullGroup)
+                @php($deltaKey = "{$fullGroup->rule_family}|{$fullGroup->directory}|{$fullGroup->dimension}")
+                @php($groupDelta = $groupDeltas['groups'][$deltaKey] ?? null)
+                <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase {{ $groupBadge[$fullGroup->severity] ?? 'bg-stone-100 text-stone-700' }}">{{ $fullGroup->severity }}</span>
+                        <span class="font-semibold">{{ $fullGroup->rule_family }}</span>
+                        <span class="text-xs text-stone-500">{{ $fullGroup->directory }} ·
+                            {{ trans_choice('{1} :count finding|[2,*] :count findings', $fullGroup->count, ['count' => $fullGroup->count]) }}
+                        </span>
+                        @if ($groupDelta !== null && $groupDelta['status'] === 'new')
+                            <span class="rounded-full bg-lime-50 px-2 py-0.5 text-[10px] font-bold text-lime-800">{{ __('new') }}</span>
+                        @elseif ($groupDelta !== null && $groupDelta['status'] === 'persisting' && $groupDelta['count_delta'] !== 0)
+                            <span class="rounded-full px-2 py-0.5 text-[10px] font-bold {{ $groupDelta['count_delta'] > 0 ? 'bg-red-50 text-red-800' : 'bg-lime-50 text-lime-800' }}">{{ sprintf('%+d', $groupDelta['count_delta']) }}</span>
+                        @endif
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     @php($metrics = $report->auditRequest->metrics)
     @if (is_array($metrics) && $metrics !== [])
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">

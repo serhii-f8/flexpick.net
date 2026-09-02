@@ -190,4 +190,42 @@ class AuditReportControllerTest extends FeatureTest
         $response->assertOk();
         $response->assertSee('php.injection');
     }
+
+    public function test_report_view_shows_a_resolved_and_new_findings_summary_when_a_previous_run_exists(): void
+    {
+        $previousRequest = AuditRequest::factory()->verified()->create(['email' => 'summary@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $previousReport = AuditReport::factory()->locked()->create(['audit_request_id' => $previousRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $previousRequest->id,
+            'rule_family' => 'secrets.credential',
+            'directory' => 'config',
+            'count' => 1,
+        ]);
+
+        $currentRequest = AuditRequest::factory()->verified()->create(['email' => 'summary@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $currentReport = AuditReport::factory()->unlocked()->create(['audit_request_id' => $currentRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $currentRequest->id,
+            'rule_family' => 'style.formatting',
+            'directory' => 'app',
+            'count' => 2,
+        ]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport));
+
+        $response->assertOk();
+        $response->assertSee('1 issue resolved', false);
+        $response->assertSee('2 new', false);
+    }
+
+    public function test_report_view_shows_no_delta_summary_on_a_first_run(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create();
+        AuditFindingGroup::factory()->create(['audit_request_id' => $report->audit_request_id]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+
+        $response->assertOk();
+        $response->assertDontSee('issue resolved', false);
+    }
 }
