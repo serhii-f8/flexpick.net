@@ -5,10 +5,12 @@ namespace Tests\Feature\Services;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Mail\Audit\AuditReportReady;
+use App\Models\AuditFindingGroup;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\Feature\FeatureTest;
 
 class AuditReportServiceTest extends FeatureTest
@@ -118,6 +120,36 @@ class AuditReportServiceTest extends FeatureTest
         $this->assertNotNull($report->pdf_path);
         $this->assertSame(AuditRequestStatus::SENT->value, $report->auditRequest->fresh()->status);
         Mail::assertQueued(AuditReportReady::class);
+    }
+
+    public function test_generated_pdf_lists_every_persisted_finding_group(): void
+    {
+        $request = AuditRequest::factory()->dashboardSource()->create();
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $request->id,
+            'rule_family' => 'jscpd.duplication',
+            'directory' => 'src',
+        ]);
+
+        $report = app(AuditReportService::class)->create($request, $this->payload(), 1);
+
+        $pdfContents = Storage::disk('local')->get($report->pdf_path);
+        // dompdf encodes text as UTF-16LE with null bytes, so we search for that pattern
+        $this->assertTrue($this->pdfContainsString($pdfContents, 'jscpd.duplication'));
+    }
+
+    private function pdfContainsString(string $pdfContent, string $search): bool
+    {
+        // Extract the decompressed PDF stream to search for UTF-16LE encoded text
+        if (! preg_match('/stream\s+(.*?)\s+endstream/s', $pdfContent, $matches)) {
+            return false;
+        }
+
+        $decompressed = gzuncompress($matches[1]);
+        // Convert search string to UTF-16LE pattern (each char followed by null byte, no trailing null)
+        $pattern = implode("\0", str_split($search));
+
+        return strpos($decompressed, $pattern) !== false;
     }
 
     private function payload(): array

@@ -86,6 +86,22 @@
         </table>
     @endif
 
+    @php($allGroups = $report->auditRequest->findingGroups)
+    @if ($allGroups->isNotEmpty())
+        <h2>{{ __('Full issue list') }}</h2>
+        <table>
+            <tr><th>{{ __('Rule family') }}</th><th>{{ __('Location') }}</th><th>{{ __('Severity') }}</th><th>{{ __('Count') }}</th></tr>
+            @foreach ($allGroups as $fullGroup)
+                <tr>
+                    <td>{{ $fullGroup->rule_family }}</td>
+                    <td>{{ $fullGroup->directory }}</td>
+                    <td class="impact-{{ $fullGroup->severity }}">{{ strtoupper($fullGroup->severity) }}</td>
+                    <td>{{ $fullGroup->count }}</td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
+
     @php($metrics = $report->auditRequest->metrics)
     @if (is_array($metrics) && $metrics !== [])
         <h2>{{ __('Repository facts') }}</h2>
