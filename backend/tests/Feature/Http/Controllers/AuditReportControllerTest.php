@@ -228,4 +228,26 @@ class AuditReportControllerTest extends FeatureTest
         $response->assertOk();
         $response->assertDontSee('issue resolved', false);
     }
+
+    public function test_send_mails_a_resolved_and_new_findings_summary_when_a_previous_run_exists(): void
+    {
+        Mail::fake();
+
+        $previousRequest = AuditRequest::factory()->verified()->create(['email' => 'mailsummary@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $service = app(AuditReportService::class);
+        $previousReport = $service->create($previousRequest, $this->payload(), ScoreCalculator::VERSION);
+        AuditFindingGroup::factory()->create(['audit_request_id' => $previousRequest->id, 'rule_family' => 'secrets.credential', 'directory' => 'config', 'count' => 1]);
+
+        $currentRequest = AuditRequest::factory()->verified()->create(['email' => 'mailsummary@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $currentReport = $service->create($currentRequest, $this->payload(), ScoreCalculator::VERSION);
+        AuditFindingGroup::factory()->create(['audit_request_id' => $currentRequest->id, 'rule_family' => 'style.formatting', 'directory' => 'app', 'count' => 2]);
+
+        $service->send($currentReport->fresh());
+
+        Mail::assertQueued(AuditReportReady::class, function ($mail) {
+            $rendered = $mail->render();
+
+            return str_contains($rendered, '1 issue resolved') && str_contains($rendered, '2 new');
+        });
+    }
 }
