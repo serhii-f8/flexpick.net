@@ -19,7 +19,8 @@ class AuditDeltaService
         $previous = AuditReport::query()
             ->whereHas('auditRequest', fn ($query) => $query
                 ->where('email', $report->auditRequest->email)
-                ->whereIn('repo_url', [$repoUrl, $repoUrl.'/']))
+                ->whereIn('repo_url', [$repoUrl, $repoUrl.'/'])
+                ->where('branch', $report->auditRequest->branch))
             ->where('id', '<', $report->id)
             ->where('scoring_version', $report->scoring_version)
             ->latest('id')

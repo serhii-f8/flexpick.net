@@ -4,6 +4,7 @@ namespace App\Services\AuditReport;
 
 use App\Models\AuditFindingGroup;
 use App\Models\AuditReport;
+use Illuminate\Support\Carbon;
 
 /**
  * Compares persisted finding groups between the current report and the most
@@ -14,6 +15,19 @@ use App\Models\AuditReport;
  */
 class AuditGroupDeltaService
 {
+    private const PRE_MIGRATION_GROUP_CAP = 20;
+
+    /**
+     * @return array{
+     *     previous_at: Carbon,
+     *     groups: array<string, array{
+     *         rule_family: string, directory: string, dimension: string,
+     *         status: 'new'|'fixed'|'persisting',
+     *         count: int|null, previous_count: int|null, count_delta: int|null,
+     *     }>,
+     *     summary: array{fixed_groups: int, new_groups: int, resolved_findings: int, new_findings: int},
+     * }|null
+     */
     public function deltasFor(AuditReport $report): ?array
     {
         $auditRequest = $report->auditRequest;
@@ -34,6 +48,17 @@ class AuditGroupDeltaService
             ->first();
 
         if ($previousReport === null) {
+            return null;
+        }
+
+        // The pre-migration group cap (config('audit.findings.max_groups') was 20
+        // before 2026-09-02's uncap, config/audit.php). A previous run with exactly
+        // 20 persisted groups may have been silently truncated -- comparing against
+        // it would report every group beyond the old cap as spuriously "new" rather
+        // than skip the comparison. A repo that genuinely has exactly 20 groups
+        // post-migration loses one comparison (degrades to "no delta shown"), which
+        // is the safe direction to fail in.
+        if (AuditFindingGroup::query()->where('audit_request_id', $previousReport->audit_request_id)->count() === self::PRE_MIGRATION_GROUP_CAP) {
             return null;
         }
 

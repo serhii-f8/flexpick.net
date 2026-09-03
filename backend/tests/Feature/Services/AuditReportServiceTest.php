@@ -124,6 +124,9 @@ class AuditReportServiceTest extends FeatureTest
 
     public function test_generated_pdf_lists_every_persisted_finding_group(): void
     {
+        // dashboardSource() is required, not incidental: AuditReportService::create()
+        // only calls generatePdf() when the report is unlocked, and dashboardSource()
+        // is what unlocks a freshly-created report's fixture.
         $request = AuditRequest::factory()->dashboardSource()->create();
         AuditFindingGroup::factory()->create([
             'audit_request_id' => $request->id,

@@ -175,6 +175,45 @@ class AuditGroupDeltaServiceTest extends FeatureTest
         $this->assertNull(app(AuditGroupDeltaService::class)->deltasFor($current));
     }
 
+    public function test_a_previous_run_with_exactly_the_pre_migration_group_cap_is_treated_as_unreliable(): void
+    {
+        $previousGroups = [];
+        for ($i = 0; $i < 20; $i++) {
+            $previousGroups[] = ['rule_family' => "rule.family{$i}", 'directory' => 'app', 'dimension' => 'structure', 'count' => 1];
+        }
+        $this->reportWithGroups('gd11@example.com', 'https://github.com/acme/app', null, $previousGroups);
+        $current = $this->reportWithGroups('gd11@example.com', 'https://github.com/acme/app', null, [
+            ['rule_family' => 'rule.family0', 'directory' => 'app', 'dimension' => 'structure', 'count' => 1],
+        ]);
+
+        $this->assertNull(app(AuditGroupDeltaService::class)->deltasFor($current));
+    }
+
+    public function test_a_previous_run_with_nineteen_or_twenty_one_groups_is_not_treated_as_the_pre_migration_cap(): void
+    {
+        $nineteenGroups = [];
+        for ($i = 0; $i < 19; $i++) {
+            $nineteenGroups[] = ['rule_family' => "rule.family{$i}", 'directory' => 'app', 'dimension' => 'structure', 'count' => 1];
+        }
+        $this->reportWithGroups('gd12@example.com', 'https://github.com/acme/app', null, $nineteenGroups);
+        $current19 = $this->reportWithGroups('gd12@example.com', 'https://github.com/acme/app', null, [
+            ['rule_family' => 'rule.family0', 'directory' => 'app', 'dimension' => 'structure', 'count' => 1],
+        ]);
+
+        $this->assertNotNull(app(AuditGroupDeltaService::class)->deltasFor($current19));
+
+        $twentyOneGroups = [];
+        for ($i = 0; $i < 21; $i++) {
+            $twentyOneGroups[] = ['rule_family' => "rule.family{$i}", 'directory' => 'app', 'dimension' => 'structure', 'count' => 1];
+        }
+        $this->reportWithGroups('gd13@example.com', 'https://github.com/acme/app', null, $twentyOneGroups);
+        $current21 = $this->reportWithGroups('gd13@example.com', 'https://github.com/acme/app', null, [
+            ['rule_family' => 'rule.family0', 'directory' => 'app', 'dimension' => 'structure', 'count' => 1],
+        ]);
+
+        $this->assertNotNull(app(AuditGroupDeltaService::class)->deltasFor($current21));
+    }
+
     public function test_summary_totals_aggregate_across_a_mixed_set_of_groups(): void
     {
         $this->reportWithGroups('gd10@example.com', 'https://github.com/acme/app', null, [

@@ -118,7 +118,7 @@
         </div>
     @endif
 
-    @if ($allGroups->isNotEmpty())
+    @if ($allGroups->isNotEmpty() || $groupDeltas !== null)
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
             @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
             <h2 class="text-base font-bold mb-3">{{ __('Full issue list') }}</h2>
@@ -149,6 +149,20 @@
                     </div>
                 </div>
             @endforeach
+            @if ($groupDeltas !== null)
+                @foreach ($groupDeltas['groups'] as $groupDelta)
+                    @continue($groupDelta['status'] !== 'fixed')
+                    <div class="border-t border-stone-200 py-3">
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <span class="font-semibold">{{ $groupDelta['rule_family'] }}</span>
+                            <span class="text-xs text-stone-500">{{ $groupDelta['directory'] }} ·
+                                {{ trans_choice('{1} :count finding|[2,*] :count findings', $groupDelta['previous_count'], ['count' => $groupDelta['previous_count']]) }}
+                            </span>
+                            <span class="rounded-full bg-lime-50 px-2 py-0.5 text-[10px] font-bold text-lime-800">{{ __('resolved') }}</span>
+                        </div>
+                    </div>
+                @endforeach
+            @endif
         </div>
     @endif
 
