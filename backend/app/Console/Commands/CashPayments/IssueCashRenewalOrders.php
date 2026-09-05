@@ -9,6 +9,7 @@ use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
 use App\Models\Subscription;
 use App\Services\CashPayments\CashSubscriptionService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -27,6 +28,7 @@ class IssueCashRenewalOrders extends Command
     public function handle(): int
     {
         $leadHours = (int) config('cash_payments.renewal_lead_hours');
+        $sweepFloor = $this->parseSweepFloor();
 
         $subscriptions = Subscription::query()
             ->where('type', SubscriptionType::LOCALLY_MANAGED)
@@ -35,6 +37,10 @@ class IssueCashRenewalOrders extends Command
             ->where('is_canceled_at_end_of_cycle', false)
             ->whereNotNull('ends_at')
             ->where('ends_at', '<=', now()->addHours($leadHours))
+            // A subscription created before the cash-payment feature existed
+            // (config('cash_payments.sweep_from')) is left alone: it predates
+            // the feature, so it never opted into the renewal-order ladder.
+            ->when($sweepFloor !== null, fn (Builder $query) => $query->where('created_at', '>=', $sweepFloor))
             ->whereHas('paymentProvider', fn (Builder $query) => $query->where('slug', PaymentProviderConstants::OFFLINE_SLUG))
             // One open renewal order at a time. Once approved, ends_at moves
             // beyond the lead window, so the next cycle is picked up naturally.
@@ -50,5 +56,16 @@ class IssueCashRenewalOrders extends Command
         $this->info("Opened {$subscriptions->count()} cash renewal order(s).");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * A null or empty config value means no floor at all, rather than
+     * crashing on Carbon::parse('').
+     */
+    private function parseSweepFloor(): ?Carbon
+    {
+        $configured = (string) config('cash_payments.sweep_from');
+
+        return $configured === '' ? null : Carbon::parse($configured);
     }
 }

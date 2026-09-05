@@ -17,6 +17,7 @@ use App\Models\Product;
 use App\Models\Subscription;
 use App\Services\CashPayments\CashSubscriptionService;
 use App\Services\SubscriptionService;
+use Carbon\Carbon;
 use Tests\Feature\FeatureTest;
 
 class ExpirePendingCashOrdersTest extends FeatureTest
@@ -53,6 +54,11 @@ class ExpirePendingCashOrdersTest extends FeatureTest
 
     public function test_a_stale_purchase_order_is_rejected_by_the_system(): void
     {
+        // Not testing the sweep floor here (that has its own test below) --
+        // disabled so a 100-hour-old fixture can't collide with a sweep_from
+        // default of "today" on the day this suite happens to run.
+        config(['cash_payments.sweep_from' => null]);
+
         $tenant = $this->createTenant();
         $user = $this->createUser($tenant);
 
@@ -88,6 +94,9 @@ class ExpirePendingCashOrdersTest extends FeatureTest
 
     public function test_expiring_a_purchase_order_cancels_its_pending_subscription(): void
     {
+        // See the note in the previous test: not exercising the floor here.
+        config(['cash_payments.sweep_from' => null]);
+
         $subscription = $this->cashSubscription([
             'status' => SubscriptionStatus::NEW->value,
             'ends_at' => null,
@@ -182,6 +191,41 @@ class ExpirePendingCashOrdersTest extends FeatureTest
         $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
 
         $this->assertSame(OrderStatus::REJECTED->value, $renewal->fresh()->status);
+    }
+
+    public function test_a_stale_purchase_order_created_before_the_sweep_floor_is_left_alone(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+        $floor = Carbon::parse(config('cash_payments.sweep_from'));
+
+        $legacy = Order::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'status' => OrderStatus::PENDING->value,
+            'is_local' => true,
+            'total_amount' => 4900,
+            'type' => OrderType::PURCHASE->value,
+            'created_at' => $floor->copy()->subDay(),
+        ]);
+
+        $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
+
+        $this->assertSame(OrderStatus::PENDING->value, $legacy->fresh()->status);
+    }
+
+    public function test_a_cash_subscription_created_before_the_sweep_floor_is_not_transitioned(): void
+    {
+        $floor = Carbon::parse(config('cash_payments.sweep_from'));
+
+        $legacy = $this->cashSubscription([
+            'ends_at' => now()->subHour(),
+            'created_at' => $floor->copy()->subDay(),
+        ]);
+
+        $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
+
+        $this->assertSame(SubscriptionStatus::ACTIVE->value, $legacy->fresh()->status);
     }
 
     public function test_the_local_cleanup_sweep_leaves_cash_subscriptions_alone(): void

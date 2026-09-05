@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Subscription;
 use App\Services\CashPayments\OrderApprovalService;
 use App\Services\SubscriptionService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -35,12 +36,19 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * Renewal orders are aged off ends_at, not created_at: they are opened before
  * the cycle they renew and would otherwise expire before that cycle ends.
+ *
+ * Every order/subscription query here is floored at cash_payments.sweep_from
+ * so rows that predate the cash-payment feature (every pre-existing order
+ * defaulted to type=purchase, and the cash-subscription predicate is purely
+ * structural) are left to whatever behaviour they already had.
  */
 class ExpirePendingCashOrders extends Command
 {
     protected $signature = 'app:expire-pending-cash-orders';
 
     protected $description = 'Reject stale pending cash orders and retire the subscriptions behind them';
+
+    private ?Carbon $sweepFloor = null;
 
     public function __construct(
         private OrderApprovalService $approvalService,
@@ -51,6 +59,8 @@ class ExpirePendingCashOrders extends Command
 
     public function handle(): int
     {
+        $this->sweepFloor = $this->parseSweepFloor();
+
         $ttlHours = (int) config('cash_payments.pending_ttl_hours');
 
         $expired = $this->expireStalePurchaseOrders($ttlHours);
@@ -63,6 +73,17 @@ class ExpirePendingCashOrders extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * A null or empty config value means no floor at all, rather than
+     * crashing on Carbon::parse('').
+     */
+    private function parseSweepFloor(): ?Carbon
+    {
+        $configured = (string) config('cash_payments.sweep_from');
+
+        return $configured === '' ? null : Carbon::parse($configured);
+    }
+
     private function expireStalePurchaseOrders(int $ttlHours): int
     {
         $orders = Order::query()
@@ -70,6 +91,7 @@ class ExpirePendingCashOrders extends Command
             ->where('is_local', true)
             ->where('type', OrderType::PURCHASE->value)
             ->where('created_at', '<', now()->subHours($ttlHours))
+            ->when($this->sweepFloor !== null, fn (Builder $query) => $query->where('created_at', '>=', $this->sweepFloor))
             ->get();
 
         $rejected = 0;
@@ -169,6 +191,7 @@ class ExpirePendingCashOrders extends Command
         $orders = Order::query()
             ->where('status', OrderStatus::PENDING->value)
             ->where('type', OrderType::RENEWAL->value)
+            ->when($this->sweepFloor !== null, fn (Builder $query) => $query->where('created_at', '>=', $this->sweepFloor))
             ->where(function (Builder $query) {
                 $query->whereNull('subscription_id')
                     ->orWhereHas('subscription', fn (Builder $q) => $q->whereNotIn('status', [
@@ -201,6 +224,7 @@ class ExpirePendingCashOrders extends Command
             ->where('type', SubscriptionType::LOCALLY_MANAGED)
             ->where('price', '>', 0)
             ->whereNotNull('ends_at')
+            ->when($this->sweepFloor !== null, fn (Builder $query) => $query->where('created_at', '>=', $this->sweepFloor))
             ->whereHas('paymentProvider', fn (Builder $query) => $query->where('slug', PaymentProviderConstants::OFFLINE_SLUG));
     }
 }

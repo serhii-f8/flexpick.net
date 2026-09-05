@@ -12,6 +12,7 @@ use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
+use Carbon\Carbon;
 use Tests\Feature\FeatureTest;
 
 class IssueCashRenewalOrdersTest extends FeatureTest
@@ -113,6 +114,17 @@ class IssueCashRenewalOrdersTest extends FeatureTest
     public function test_it_ignores_a_payment_provider_managed_subscription(): void
     {
         $subscription = $this->cashSubscription(['type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED]);
+
+        $this->artisan('app:issue-cash-renewal-orders')->assertSuccessful();
+
+        $this->assertSame(0, $subscription->orders()->count());
+    }
+
+    public function test_it_ignores_a_subscription_created_before_the_sweep_floor(): void
+    {
+        $floor = Carbon::parse(config('cash_payments.sweep_from'));
+
+        $subscription = $this->cashSubscription(['created_at' => $floor->copy()->subDay()]);
 
         $this->artisan('app:issue-cash-renewal-orders')->assertSuccessful();
 
