@@ -93,7 +93,10 @@ class OrderApprovalServiceTest extends FeatureTest
         $service = app(OrderApprovalService::class);
 
         $this->assertTrue($service->approve($order, OrderApprovalActor::ADMIN));
-        $this->assertFalse($service->approve($order->fresh(), OrderApprovalActor::ADMIN));
+        // Deliberately the stale in-memory $order (still PENDING in memory),
+        // not $order->fresh(): the guard must trust the locked row it reads
+        // for itself, not whatever status the caller happens to hand it.
+        $this->assertFalse($service->approve($order, OrderApprovalActor::ADMIN));
 
         $this->assertSame(1, OrderApproval::where('order_id', $order->id)->count());
         $this->assertSame(OrderStatus::SUCCESS->value, $order->fresh()->status);
@@ -189,5 +192,60 @@ class OrderApprovalServiceTest extends FeatureTest
         $gateway = $this->pendingProductOrder();
         $gateway->update(['is_local' => false]);
         $this->assertFalse($service->isPendingCashOrder($gateway->fresh()));
+    }
+
+    public function test_approve_refuses_a_pending_order_that_is_not_local(): void
+    {
+        $order = $this->pendingProductOrder();
+        $order->update(['is_local' => false]);
+
+        $result = app(OrderApprovalService::class)->approve($order->fresh(), OrderApprovalActor::ADMIN);
+
+        $this->assertFalse($result);
+        $this->assertSame(OrderStatus::PENDING->value, $order->fresh()->status);
+        $this->assertSame(0, OrderApproval::where('order_id', $order->id)->count());
+    }
+
+    public function test_approving_a_new_renewal_after_a_rejected_one_clears_the_sticky_cancel_flag(): void
+    {
+        $subscription = $this->pendingCashSubscription();
+        $endsAt = now()->addDays(2);
+        $subscription->update(['status' => SubscriptionStatus::ACTIVE->value, 'ends_at' => $endsAt]);
+
+        $rejectedOrder = app(CashSubscriptionService::class)->createPendingOrder($subscription->fresh(), OrderType::RENEWAL);
+        app(OrderApprovalService::class)->reject($rejectedOrder, OrderApprovalActor::PARTNER);
+
+        $this->assertTrue((bool) $subscription->fresh()->is_canceled_at_end_of_cycle);
+
+        $newOrder = app(CashSubscriptionService::class)->createPendingOrder($subscription->fresh(), OrderType::RENEWAL);
+        app(OrderApprovalService::class)->approve($newOrder, OrderApprovalActor::PARTNER);
+
+        $subscription->refresh();
+
+        $this->assertSame(SubscriptionStatus::ACTIVE->value, $subscription->status);
+        $this->assertFalse((bool) $subscription->is_canceled_at_end_of_cycle);
+        $this->assertSame(
+            $endsAt->copy()->addMonth()->toDateString(),
+            Carbon::parse($subscription->ends_at)->toDateString(),
+        );
+    }
+
+    public function test_approving_two_pending_renewals_in_sequence_extends_the_subscription_twice(): void
+    {
+        $subscription = $this->pendingCashSubscription();
+        $endsAt = now()->addDays(2);
+        $subscription->update(['status' => SubscriptionStatus::ACTIVE->value, 'ends_at' => $endsAt]);
+
+        $firstOrder = app(CashSubscriptionService::class)->createPendingOrder($subscription->fresh(), OrderType::RENEWAL);
+        $secondOrder = app(CashSubscriptionService::class)->createPendingOrder($subscription->fresh(), OrderType::RENEWAL);
+
+        $service = app(OrderApprovalService::class);
+        $this->assertTrue($service->approve($firstOrder, OrderApprovalActor::PARTNER));
+        $this->assertTrue($service->approve($secondOrder, OrderApprovalActor::PARTNER));
+
+        $this->assertSame(
+            $endsAt->copy()->addMonths(2)->toDateString(),
+            Carbon::parse($subscription->fresh()->ends_at)->toDateString(),
+        );
     }
 }

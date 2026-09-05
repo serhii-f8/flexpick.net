@@ -61,8 +61,7 @@ class OrderApprovalService
 
             $this->recordDecision($locked, $actor, $actingUser, OrderApprovalDecision::APPROVED, $note);
 
-            /** @var Subscription|null $subscription */
-            $subscription = $locked->subscription;
+            $subscription = $this->lockSubscriptionForOrder($locked);
 
             if ($subscription !== null) {
                 $this->extendSubscription($subscription);
@@ -85,8 +84,7 @@ class OrderApprovalService
 
             $this->recordDecision($locked, $actor, $actingUser, OrderApprovalDecision::REJECTED, $note);
 
-            /** @var Subscription|null $subscription */
-            $subscription = $locked->subscription;
+            $subscription = $this->lockSubscriptionForOrder($locked);
 
             if ($subscription !== null) {
                 if ($locked->type === OrderType::RENEWAL->value) {
@@ -110,19 +108,43 @@ class OrderApprovalService
     }
 
     /**
-     * Row lock plus a status re-read inside the transaction: two concurrent
-     * approvals serialise here, and the loser sees a non-PENDING row.
+     * Row lock plus a re-read inside the transaction: two concurrent
+     * approvals serialise here, and the loser sees a row that no longer
+     * qualifies. Gating on isPendingCashOrder() (not the bare status) keeps
+     * this service inside its own domain — a gateway order that happens to be
+     * PENDING is not this service's to complete or reject.
      */
     private function lockIfPending(Order $order): ?Order
     {
         /** @var Order|null $locked */
         $locked = Order::whereKey($order->getKey())->lockForUpdate()->first();
 
-        if ($locked === null || $locked->status !== OrderStatus::PENDING->value) {
+        if ($locked === null || ! $this->isPendingCashOrder($locked)) {
             return null;
         }
 
         return $locked;
+    }
+
+    /**
+     * Locks the order's subscription (if any) inside the same transaction as
+     * the order row. The lock order is always order -> subscription, which is
+     * the only order this service takes, so it cannot deadlock against
+     * itself. Without this, two different PENDING orders on the same
+     * subscription (e.g. two renewals approved back to back) would each read
+     * the same ends_at and the second write would silently overwrite the
+     * first, losing a paid cycle.
+     */
+    private function lockSubscriptionForOrder(Order $order): ?Subscription
+    {
+        if ($order->subscription_id === null) {
+            return null;
+        }
+
+        /** @var Subscription|null $subscription */
+        $subscription = Subscription::whereKey($order->subscription_id)->lockForUpdate()->first();
+
+        return $subscription;
     }
 
     private function recordDecision(Order $order, OrderApprovalActor $actor, ?User $actingUser, OrderApprovalDecision $decision, ?string $note): void
@@ -152,6 +174,10 @@ class OrderApprovalService
 
         $this->subscriptionService->updateSubscription($subscription, [
             'status' => SubscriptionStatus::ACTIVE->value,
+            // A prior rejected renewal may have left this sticky (reject()
+            // sets it without touching ends_at, on purpose, to let the paid
+            // cycle run out). Paying for a fresh cycle now supersedes that.
+            'is_canceled_at_end_of_cycle' => false,
             'ends_at' => $start->copy()->add(
                 $interval->date_identifier,
                 (int) $subscription->interval_count,
