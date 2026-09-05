@@ -17,6 +17,7 @@ use App\Services\AuditReport\Scanners\JscpdScanner;
 use App\Services\AuditReport\Scanners\OsvScanner;
 use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Scanners\SemgrepScanner;
+use App\Services\PartnerPricingResolver;
 use App\Services\PaymentProviders\Creem\CreemProvider;
 use App\Services\PaymentProviders\LemonSqueezy\LemonSqueezyProvider;
 use App\Services\PaymentProviders\Offline\OfflineProvider;
@@ -81,6 +82,12 @@ class AppServiceProvider extends ServiceProvider
             $app->make(HotspotCollector::class),
             $app->make(ExcerptCollector::class),
         ]));
+
+        // Scoped, not bound fresh: the pricing page asks this service once per
+        // plan card, and each miss would re-run the partner's active-subscription
+        // lookup. One instance per request. Tests that mutate offerings after a
+        // resolution must call flush().
+        $this->app->scoped(PartnerPricingResolver::class);
     }
 
     /**

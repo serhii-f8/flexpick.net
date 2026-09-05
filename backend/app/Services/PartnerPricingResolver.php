@@ -1,0 +1,195 @@
+<?php
+
+namespace App\Services;
+
+use App\Constants\PaymentProviderConstants;
+use App\Models\OneTimeProduct;
+use App\Models\PartnerPlanOffering;
+use App\Models\PartnerProductOffering;
+use App\Models\PaymentProvider;
+use App\Models\Plan;
+use App\Models\Tenant;
+use App\Models\User;
+
+/**
+ * The single answer to "does a usable partner offering exist for this buyer
+ * and this item?" (spec §8.1).
+ *
+ * Both sides of the feature ask this service rather than re-deriving the
+ * rules: the storefront and the totals calculation read it, and
+ * PurchaseSnapshotService delegates to it when stamping partner_tenant_id
+ * onto a new order. Two implementations of "usable" would drift, and the
+ * drift would be a customer quoted one price and charged another.
+ *
+ * "Usable" means all four of:
+ *   - the buyer resolves to a partner tenant (attributed user, or an
+ *     anonymous visitor carrying an active referral code in session),
+ *   - that tenant's Partner Plan is currently active (spec §7.5),
+ *   - the offering exists and is_enabled,
+ *   - the offering is still at or above the live admin floor (spec §5.5).
+ *
+ * Plus one operational precondition: the Offline payment provider must be
+ * active. A partner price can only ever be charged in cash, so advertising
+ * one while Offline is switched off would quote a price with no checkout
+ * behind it. Failing closed here makes display and checkout degrade together.
+ */
+class PartnerPricingResolver
+{
+    /** @var array<int, Tenant|null> keyed by user id, 0 for an anonymous visitor */
+    private array $tenantMemo = [];
+
+    /** @var array<string, PartnerPlanOffering|null> keyed by "<userKey>:<planId>" */
+    private array $planOfferingMemo = [];
+
+    /** @var array<string, PartnerProductOffering|null> keyed by "<userKey>:<productId>" */
+    private array $productOfferingMemo = [];
+
+    private ?bool $offlineActiveMemo = null;
+
+    public function __construct(
+        private PartnerAttributionService $attributionService,
+        private PartnerCapabilityService $capabilityService,
+        private PartnerCatalogService $catalogService,
+    ) {}
+
+    /**
+     * Drop every memo. Required in tests whenever offerings, subscriptions or
+     * the Offline provider row are mutated after something has already
+     * resolved them — the container binding is scoped, so the instance
+     * outlives the change.
+     */
+    public function flush(): void
+    {
+        $this->tenantMemo = [];
+        $this->planOfferingMemo = [];
+        $this->productOfferingMemo = [];
+        $this->offlineActiveMemo = null;
+    }
+
+    public function resolvePartnerTenant(?User $user = null): ?Tenant
+    {
+        $key = $this->userKey($user);
+
+        if (array_key_exists($key, $this->tenantMemo)) {
+            return $this->tenantMemo[$key];
+        }
+
+        return $this->tenantMemo[$key] = $this->computePartnerTenant($user);
+    }
+
+    public function usablePlanOffering(?User $user, Plan $plan): ?PartnerPlanOffering
+    {
+        $key = $this->userKey($user).':'.$plan->id;
+
+        if (array_key_exists($key, $this->planOfferingMemo)) {
+            return $this->planOfferingMemo[$key];
+        }
+
+        return $this->planOfferingMemo[$key] = $this->computePlanOffering($user, $plan);
+    }
+
+    public function usableProductOffering(?User $user, OneTimeProduct $product): ?PartnerProductOffering
+    {
+        $key = $this->userKey($user).':'.$product->id;
+
+        if (array_key_exists($key, $this->productOfferingMemo)) {
+            return $this->productOfferingMemo[$key];
+        }
+
+        return $this->productOfferingMemo[$key] = $this->computeProductOffering($user, $product);
+    }
+
+    public function planPrice(?User $user, Plan $plan): ?int
+    {
+        $offering = $this->usablePlanOffering($user, $plan);
+
+        return $offering === null ? null : (int) $offering->price;
+    }
+
+    public function productPrice(?User $user, OneTimeProduct $product): ?int
+    {
+        $offering = $this->usableProductOffering($user, $product);
+
+        return $offering === null ? null : (int) $offering->price;
+    }
+
+    private function computePartnerTenant(?User $user): ?Tenant
+    {
+        $tenant = $user !== null && $user->partner_tenant_id !== null
+            ? $this->attributedTenant($user)
+            : $this->tenantFromPendingCode();
+
+        if ($tenant === null) {
+            return null;
+        }
+
+        return $this->capabilityService->tenantIsActivePartner($tenant) ? $tenant : null;
+    }
+
+    private function attributedTenant(User $user): ?Tenant
+    {
+        /** @var Tenant|null $tenant */
+        $tenant = $user->partnerTenant;
+
+        return $tenant;
+    }
+
+    private function tenantFromPendingCode(): ?Tenant
+    {
+        $code = $this->attributionService->pendingCode();
+
+        return $code === null ? null : $this->attributionService->resolveTenantForCode($code);
+    }
+
+    private function computePlanOffering(?User $user, Plan $plan): ?PartnerPlanOffering
+    {
+        $tenant = $this->resolvePartnerTenant($user);
+
+        if ($tenant === null || ! $this->offlineProviderIsActive()) {
+            return null;
+        }
+
+        $offering = PartnerPlanOffering::where('tenant_id', $tenant->id)
+            ->where('plan_id', $plan->id)
+            ->where('is_enabled', true)
+            ->first();
+
+        if ($offering === null) {
+            return null;
+        }
+
+        return $this->catalogService->isPlanOfferingBelowMinimum($offering) ? null : $offering;
+    }
+
+    private function computeProductOffering(?User $user, OneTimeProduct $product): ?PartnerProductOffering
+    {
+        $tenant = $this->resolvePartnerTenant($user);
+
+        if ($tenant === null || ! $this->offlineProviderIsActive()) {
+            return null;
+        }
+
+        $offering = PartnerProductOffering::where('tenant_id', $tenant->id)
+            ->where('one_time_product_id', $product->id)
+            ->where('is_enabled', true)
+            ->first();
+
+        if ($offering === null) {
+            return null;
+        }
+
+        return $this->catalogService->isProductOfferingBelowMinimum($offering) ? null : $offering;
+    }
+
+    private function offlineProviderIsActive(): bool
+    {
+        return $this->offlineActiveMemo ??= PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->where('is_active', true)
+            ->exists();
+    }
+
+    private function userKey(?User $user): int
+    {
+        return $user?->id ?? 0;
+    }
+}
