@@ -2,13 +2,16 @@
 
 namespace App\Filament\Admin\Resources\Orders\Pages;
 
+use App\Constants\OrderApprovalActor;
 use App\Constants\OrderStatus;
 use App\Filament\Admin\Resources\Orders\OrderResource;
 use App\Models\Order;
+use App\Services\CashPayments\OrderApprovalService;
 use App\Services\OrderService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -19,6 +22,46 @@ class ViewOrder extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('approve_cash_payment')
+                ->label(__('Approve Cash Payment'))
+                ->icon('heroicon-m-check-circle')
+                ->color('success')
+                ->requiresConfirmation()
+                ->schema([
+                    Textarea::make('note')->label(__('Internal note'))->maxLength(1000),
+                ])
+                ->visible(fn (Order $record, OrderApprovalService $service): bool => $service->isPendingCashOrder($record))
+                ->action(function (Order $record, array $data, OrderApprovalService $service) {
+                    $changed = $service->approve($record, OrderApprovalActor::ADMIN, auth()->user(), $data['note'] ?? null);
+
+                    if ($changed) {
+                        Notification::make()->success()->title(__('Order approved.'))->send();
+
+                        return;
+                    }
+
+                    Notification::make()->warning()->title(__('This order is no longer pending.'))->send();
+                }),
+            Action::make('reject_cash_payment')
+                ->label(__('Reject Cash Payment'))
+                ->icon('heroicon-m-x-circle')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->schema([
+                    Textarea::make('note')->label(__('Internal note'))->maxLength(1000),
+                ])
+                ->visible(fn (Order $record, OrderApprovalService $service): bool => $service->isPendingCashOrder($record))
+                ->action(function (Order $record, array $data, OrderApprovalService $service) {
+                    $changed = $service->reject($record, OrderApprovalActor::ADMIN, auth()->user(), $data['note'] ?? null);
+
+                    if ($changed) {
+                        Notification::make()->success()->title(__('Order rejected.'))->send();
+
+                        return;
+                    }
+
+                    Notification::make()->warning()->title(__('This order is no longer pending.'))->send();
+                }),
             Action::make('update_order')
                 ->color('gray')
                 ->label(__('Update Order'))
@@ -52,7 +95,8 @@ class ViewOrder extends ViewRecord
                         $data,
                     );
                 })
-                ->visible(fn (Order $record, OrderService $orderService): bool => $orderService->canUpdateOrder($record)),
+                ->visible(fn (Order $record, OrderService $orderService, OrderApprovalService $approvalService): bool => $orderService->canUpdateOrder($record)
+                    && ! $approvalService->isPendingCashOrder($record)),
         ];
     }
 }
