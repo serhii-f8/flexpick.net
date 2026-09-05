@@ -248,4 +248,24 @@ class OrderApprovalServiceTest extends FeatureTest
             Carbon::parse($subscription->fresh()->ends_at)->toDateString(),
         );
     }
+
+    public function test_approving_a_renewal_whose_subscription_was_ended_is_a_silent_no_op(): void
+    {
+        $subscription = $this->pendingCashSubscription();
+        $subscription->update(['status' => SubscriptionStatus::ACTIVE->value, 'ends_at' => now()->addDays(2)]);
+
+        $order = app(CashSubscriptionService::class)->createPendingOrder($subscription->fresh(), OrderType::RENEWAL);
+
+        // Mirrors SubscriptionService::endSubscription(), reachable from the
+        // admin panel's "End subscription" action, firing while the renewal
+        // order is still awaiting approval.
+        $subscription->update(['status' => SubscriptionStatus::INACTIVE->value, 'ends_at' => now()]);
+
+        $result = app(OrderApprovalService::class)->approve($order->fresh(), OrderApprovalActor::PARTNER);
+
+        $this->assertFalse($result);
+        $this->assertSame(OrderStatus::PENDING->value, $order->fresh()->status);
+        $this->assertSame(0, OrderApproval::where('order_id', $order->id)->count());
+        $this->assertSame(SubscriptionStatus::INACTIVE->value, $subscription->fresh()->status);
+    }
 }

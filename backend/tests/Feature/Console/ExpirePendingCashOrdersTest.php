@@ -151,6 +151,39 @@ class ExpirePendingCashOrdersTest extends FeatureTest
         $this->assertSame(SubscriptionStatus::CANCELED->value, $subscription->fresh()->status);
     }
 
+    public function test_a_renewal_order_is_rejected_when_its_subscription_has_left_the_ladder(): void
+    {
+        $subscription = $this->cashSubscription(['ends_at' => now()->addDays(10)]);
+
+        $renewal = app(CashSubscriptionService::class)->createPendingOrder($subscription, OrderType::RENEWAL);
+
+        // Mirrors SubscriptionService::endSubscription() firing while the
+        // renewal order is still awaiting approval -- it matches neither the
+        // PURCHASE-only rule 1 nor rule 3's PAST_DUE/flagged predicate.
+        $subscription->update(['status' => SubscriptionStatus::INACTIVE->value, 'ends_at' => now()]);
+
+        $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
+
+        $this->assertSame(OrderStatus::REJECTED->value, $renewal->fresh()->status);
+        $this->assertSame(SubscriptionStatus::INACTIVE->value, $subscription->fresh()->status);
+    }
+
+    public function test_a_renewal_order_orphaned_by_a_hard_deleted_subscription_is_rejected(): void
+    {
+        $subscription = $this->cashSubscription(['ends_at' => now()->addDays(10)]);
+
+        $renewal = app(CashSubscriptionService::class)->createPendingOrder($subscription, OrderType::RENEWAL);
+
+        // nullOnDelete() leaves subscription_id null on the order.
+        $subscription->delete();
+        $renewal->refresh();
+        $this->assertNull($renewal->subscription_id);
+
+        $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
+
+        $this->assertSame(OrderStatus::REJECTED->value, $renewal->fresh()->status);
+    }
+
     public function test_the_local_cleanup_sweep_leaves_cash_subscriptions_alone(): void
     {
         $cash = $this->cashSubscription(['ends_at' => now()->subHour()]);

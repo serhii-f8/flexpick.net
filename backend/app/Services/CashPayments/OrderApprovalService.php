@@ -72,9 +72,19 @@ class OrderApprovalService
                 return false;
             }
 
-            $this->recordDecision($locked, $actor, $actingUser, OrderApprovalDecision::APPROVED, $note);
-
             $subscription = $this->lockSubscriptionForOrder($locked);
+
+            if ($locked->type === OrderType::RENEWAL->value && ! $this->subscriptionIsRenewable($subscription)) {
+                // The subscription behind this renewal left the ladder after
+                // the order was opened -- ended by an admin, or its row is
+                // gone (subscription_id nulled by nullOnDelete()). Approving
+                // it would silently resurrect a subscription that is no
+                // longer ACTIVE/PAST_DUE, so this is the same silent no-op a
+                // non-pending order already gets.
+                return false;
+            }
+
+            $this->recordDecision($locked, $actor, $actingUser, OrderApprovalDecision::APPROVED, $note);
 
             if ($subscription !== null) {
                 $this->extendSubscription($subscription);
@@ -170,6 +180,22 @@ class OrderApprovalService
         $subscription = Subscription::whereKey($order->subscription_id)->lockForUpdate()->first();
 
         return $subscription;
+    }
+
+    /**
+     * A renewal order only ever approves onto a subscription still in the
+     * ladder (ACTIVE or PAST_DUE). Anything else -- the row is gone, or it
+     * was moved to INACTIVE/CANCELED/etc. out of band -- means the cycle this
+     * order was opened for no longer exists to extend. Purchase orders are
+     * not gated by this: a purchase order's subscription is legitimately
+     * PENDING.
+     */
+    private function subscriptionIsRenewable(?Subscription $subscription): bool
+    {
+        return $subscription !== null && in_array($subscription->status, [
+            SubscriptionStatus::ACTIVE->value,
+            SubscriptionStatus::PAST_DUE->value,
+        ], true);
     }
 
     private function recordDecision(Order $order, OrderApprovalActor $actor, ?User $actingUser, OrderApprovalDecision $decision, ?string $note): void

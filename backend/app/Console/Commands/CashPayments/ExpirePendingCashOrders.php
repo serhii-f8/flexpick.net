@@ -25,7 +25,13 @@ use Illuminate\Database\Eloquent\Builder;
  *  3. cancelled: either a PAST_DUE cash subscription more than one TTL past
  *     ends_at, or a cash subscription past ends_at that is flagged
  *     is_canceled_at_end_of_cycle — along with any renewal order still
- *     waiting on it.
+ *     waiting on it;
+ *  4. a pending RENEWAL order whose subscription has left the ladder
+ *     entirely — its row is gone (subscription_id nulled by
+ *     nullOnDelete()), or its status was moved to anything other than
+ *     ACTIVE/PAST_DUE out of band (an admin ending the subscription while
+ *     the renewal was in flight, most commonly) — is system-rejected on its
+ *     own, independent of rule 3's cash-subscription predicate.
  *
  * Renewal orders are aged off ends_at, not created_at: they are opened before
  * the cycle they renew and would otherwise expire before that cycle ends.
@@ -50,8 +56,9 @@ class ExpirePendingCashOrders extends Command
         $expired = $this->expireStalePurchaseOrders($ttlHours);
         $pastDue = $this->markLapsedSubscriptionsPastDue();
         $cancelled = $this->cancelAbandonedSubscriptions($ttlHours);
+        $orphaned = $this->rejectOrphanedRenewalOrders();
 
-        $this->info("Expired {$expired} purchase order(s), marked {$pastDue} subscription(s) past due, cancelled {$cancelled}.");
+        $this->info("Expired {$expired} purchase order(s), marked {$pastDue} subscription(s) past due, cancelled {$cancelled}, rejected {$orphaned} orphaned renewal order(s).");
 
         return self::SUCCESS;
     }
@@ -148,6 +155,41 @@ class ExpirePendingCashOrders extends Command
         }
 
         return $cancelled;
+    }
+
+    /**
+     * Rule 4: a pending renewal whose subscription no longer resolves, or
+     * has been moved out of {ACTIVE, PAST_DUE} by something other than this
+     * command, has nothing left to extend. This runs after
+     * cancelAbandonedSubscriptions(), so a renewal that rule already
+     * rejected is no longer PENDING and is not picked up again here.
+     */
+    private function rejectOrphanedRenewalOrders(): int
+    {
+        $orders = Order::query()
+            ->where('status', OrderStatus::PENDING->value)
+            ->where('type', OrderType::RENEWAL->value)
+            ->where(function (Builder $query) {
+                $query->whereNull('subscription_id')
+                    ->orWhereHas('subscription', fn (Builder $q) => $q->whereNotIn('status', [
+                        SubscriptionStatus::ACTIVE->value,
+                        SubscriptionStatus::PAST_DUE->value,
+                    ]));
+            })
+            ->get();
+
+        $rejected = 0;
+
+        foreach ($orders as $order) {
+            $rejected += (int) $this->approvalService->reject(
+                $order,
+                OrderApprovalActor::SYSTEM,
+                null,
+                __('The subscription behind this renewal is no longer active.'),
+            );
+        }
+
+        return $rejected;
     }
 
     /**
