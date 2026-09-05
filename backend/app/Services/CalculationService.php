@@ -77,7 +77,19 @@ class CalculationService
                 $totalsDto->subtotal = $planPrice->price * $quantity;
             }
         } else {
-            $totalsDto->subtotal = $planPrice->price;
+            // A partner-attributed buyer pays the partner's price for a flat-rate
+            // plan (spec §8.1). Re-derived here from the resolver, never taken
+            // from the request, which is what makes it untamperable. The base
+            // $planPrice object is left untouched — gateway product sync reads it.
+            //
+            // Resolved lazily via the container rather than constructor-injected:
+            // PartnerPricingResolver -> PartnerCapabilityService -> SubscriptionService
+            // -> CalculationService is a real cycle (SubscriptionService already
+            // depends on CalculationService), so constructor injection here causes
+            // infinite recursion when the container builds this service. The same
+            // problem, with the same fix, already exists at SubscriptionService.php:85
+            // for PurchaseSnapshotService.
+            $totalsDto->subtotal = app(PartnerPricingResolver::class)->planPrice($user, $plan) ?? $planPrice->price;
         }
 
         $totalsDto->discountAmount = 0;
