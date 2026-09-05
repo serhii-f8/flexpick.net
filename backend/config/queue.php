@@ -85,7 +85,9 @@ return [
             'queue' => env('REDIS_AUDIT_QUEUE', 'audit'),
             'retry_after' => 960,
             'block_for' => null,
-            'after_commit' => false,
+            // GenerateAuditReport pins itself to this connection via
+            // onConnection('redis-audit'), so after_commit must be here too.
+            'after_commit' => true,
         ],
 
     ],
