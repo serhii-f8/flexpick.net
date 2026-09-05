@@ -132,13 +132,21 @@ class PartnerStorefrontPricingTest extends FeatureTest
 
     public function test_the_pricing_page_shows_base_price_to_an_unattributed_customer(): void
     {
-        $plan = $this->visiblePlan(basePrice: 4900);
+        // A distinctive base price (no other method in this class uses 4901;
+        // the rest default to 4900) so seeing it proves this test's own plan
+        // rendered, rather than a $49.00 plan left over from an earlier
+        // method in this FeatureTest class (which seeds once and never
+        // truncates between methods).
+        $plan = $this->visiblePlan(basePrice: 4901);
         $user = $this->createUser();
         app(PartnerPricingResolver::class)->flush();
 
         $response = $this->actingAs($user)->get(route('pricing'));
 
         $response->assertOk();
-        $response->assertSee(money(4900, app(CurrencyService::class)->getCurrency()->code));
+        $response->assertSee(money(4901, app(CurrencyService::class)->getCurrency()->code));
+        // An unattributed customer must never see a partner price, including
+        // one configured for another test's partner tenant earlier in this class.
+        $response->assertDontSee(money(7900, app(CurrencyService::class)->getCurrency()->code));
     }
 }
