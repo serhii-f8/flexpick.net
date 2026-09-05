@@ -26,6 +26,7 @@ use App\Services\CashPayments\PurchaseSnapshotService;
 use App\Services\PaymentProviders\PaymentProviderInterface;
 use Carbon\Carbon;
 use Filament\Facades\Filament;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -652,6 +653,13 @@ class SubscriptionService
         $subscriptions = Subscription::where('type', SubscriptionType::LOCALLY_MANAGED)
             ->where('status', SubscriptionStatus::ACTIVE->value)
             ->where('ends_at', '<', now())
+            // Cash subscriptions have their own PAST_DUE -> CANCELED ladder in
+            // app:expire-pending-cash-orders. Flipping them to INACTIVE here
+            // would race it and skip the grace window.
+            ->whereNot(function (Builder $query) {
+                $query->where('price', '>', 0)
+                    ->whereHas('paymentProvider', fn (Builder $provider) => $provider->where('slug', PaymentProviderConstants::OFFLINE_SLUG));
+            })
             ->get();
 
         $subscriptions->each(function (Subscription $subscription) {

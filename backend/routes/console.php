@@ -35,6 +35,8 @@ Schedule::command('app:run-scheduled-audits')->dailyAt('06:00')->withoutOverlapp
 
 Schedule::command('app:issue-cash-renewal-orders')->hourly()->withoutOverlapping()->onOneServer();
 
+Schedule::command('app:expire-pending-cash-orders')->hourly()->withoutOverlapping()->onOneServer();
+
 // withoutOverlapping: the result store writes a batch row-by-row without a
 // transaction, so an overrunning check run would let the next tick read a
 // partial batch — a failing check could silently vanish from /health and from
