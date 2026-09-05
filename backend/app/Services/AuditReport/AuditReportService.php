@@ -20,6 +20,7 @@ class AuditReportService
     public function __construct(
         private AuditFunnelRecorder $funnel,
         private AuditDeltaService $deltaService,
+        private AuditGroupDeltaService $groupDeltaService,
         private AuditMailer $auditMailer,
     ) {}
 
@@ -92,7 +93,16 @@ class AuditReportService
 
     public function send(AuditReport $report): void
     {
-        $this->auditMailer->send(new AuditReportReady($report, $this->signedUrl($report), $this->deltaService->deltasFor($report)), $report->auditRequest->email, $report->auditRequest);
+        $this->auditMailer->send(
+            new AuditReportReady(
+                $report,
+                $this->signedUrl($report),
+                $this->deltaService->deltasFor($report),
+                $this->groupDeltaService->deltasFor($report),
+            ),
+            $report->auditRequest->email,
+            $report->auditRequest,
+        );
 
         $report->auditRequest->update(['status' => AuditRequestStatus::SENT->value]);
 

@@ -158,4 +158,16 @@ class FindingGrouperTest extends FeatureTest
     {
         $this->assertSame([], app(FindingGrouper::class)->group([]));
     }
+
+    public function test_the_default_group_cap_does_not_truncate_a_realistic_finding_set(): void
+    {
+        $findings = [];
+        for ($i = 1; $i <= 30; $i++) {
+            $findings[] = $this->deduped("family.number{$i}", "app/Dir{$i}/File.php", Severity::HIGH, $i);
+        }
+
+        // config('audit.findings.max_groups') defaults to 20 today, which
+        // silently drops 10 of these 30 distinct issues from every report.
+        $this->assertCount(30, app(FindingGrouper::class)->group($findings));
+    }
 }

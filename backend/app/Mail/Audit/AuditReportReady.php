@@ -19,6 +19,7 @@ class AuditReportReady extends Mailable implements ShouldQueue
         public AuditReport $report,
         public string $signedUrl,
         public ?array $deltas = null,
+        public ?array $groupDeltas = null,
     ) {}
 
     public function envelope(): Envelope

@@ -9,9 +9,9 @@ use Tests\Feature\FeatureTest;
 
 class AuditDeltaServiceTest extends FeatureTest
 {
-    private function reportWithOverall(string $email, string $repoUrl, int $overall): AuditReport
+    private function reportWithOverall(string $email, string $repoUrl, int $overall, ?string $branch = null): AuditReport
     {
-        $request = AuditRequest::factory()->verified()->create(['email' => $email, 'repo_url' => $repoUrl]);
+        $request = AuditRequest::factory()->verified()->create(['email' => $email, 'repo_url' => $repoUrl, 'branch' => $branch]);
         $payload = AuditReport::factory()->raw()['payload'];
         $payload['scores'] = array_map(fn () => $overall, $payload['scores']);
 
@@ -42,6 +42,14 @@ class AuditDeltaServiceTest extends FeatureTest
     {
         $this->reportWithOverall('someone-else@example.com', 'https://github.com/acme/app', 40);
         $current = $this->reportWithOverall('delta3@example.com', 'https://github.com/acme/app', 55);
+
+        $this->assertNull(app(AuditDeltaService::class)->deltasFor($current));
+    }
+
+    public function test_a_previous_run_on_a_different_branch_is_not_compared(): void
+    {
+        $this->reportWithOverall('delta5@example.com', 'https://github.com/acme/app', 40, 'main');
+        $current = $this->reportWithOverall('delta5@example.com', 'https://github.com/acme/app', 90, 'feature/x');
 
         $this->assertNull(app(AuditDeltaService::class)->deltasFor($current));
     }

@@ -4,6 +4,7 @@ namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\AuditRequestStatus;
 use App\Mail\Audit\AuditReportReady;
+use App\Models\AuditFindingGroup;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditReportService;
@@ -172,5 +173,138 @@ class AuditReportControllerTest extends FeatureTest
 
         $response->assertOk();
         $response->assertDontSee('Human expert review');
+    }
+
+    public function test_report_view_lists_every_persisted_finding_group(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create();
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $report->audit_request_id,
+            'rule_family' => 'php.injection',
+            'directory' => 'app/Http',
+            'severity' => 'high',
+        ]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+
+        $response->assertOk();
+        $response->assertSee('php.injection');
+    }
+
+    public function test_report_view_shows_a_resolved_and_new_findings_summary_when_a_previous_run_exists(): void
+    {
+        $previousRequest = AuditRequest::factory()->verified()->create(['email' => 'summary@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $previousReport = AuditReport::factory()->locked()->create(['audit_request_id' => $previousRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $previousRequest->id,
+            'rule_family' => 'secrets.credential',
+            'directory' => 'config',
+            'count' => 1,
+        ]);
+
+        $currentRequest = AuditRequest::factory()->verified()->create(['email' => 'summary@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $currentReport = AuditReport::factory()->unlocked()->create(['audit_request_id' => $currentRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $currentRequest->id,
+            'rule_family' => 'style.formatting',
+            'directory' => 'app',
+            'count' => 2,
+        ]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport));
+
+        $response->assertOk();
+        $response->assertSee('1 issue resolved', false);
+        $response->assertSee('2 new', false);
+    }
+
+    public function test_report_view_shows_no_delta_summary_on_a_first_run(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create();
+        AuditFindingGroup::factory()->create(['audit_request_id' => $report->audit_request_id]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+
+        $response->assertOk();
+        $response->assertDontSee('issue resolved', false);
+    }
+
+    public function test_report_view_renders_a_count_delta_badge_and_a_new_badge(): void
+    {
+        $previousRequest = AuditRequest::factory()->verified()->create(['email' => 'badges@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $previousReport = AuditReport::factory()->locked()->create(['audit_request_id' => $previousRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $previousRequest->id,
+            'rule_family' => 'php.injection',
+            'directory' => 'app/Http',
+            'dimension' => 'security_hygiene',
+            'count' => 2,
+        ]);
+
+        $currentRequest = AuditRequest::factory()->verified()->create(['email' => 'badges@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $currentReport = AuditReport::factory()->unlocked()->create(['audit_request_id' => $currentRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $currentRequest->id,
+            'rule_family' => 'php.injection',
+            'directory' => 'app/Http',
+            'dimension' => 'security_hygiene',
+            'count' => 5,
+        ]);
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $currentRequest->id,
+            'rule_family' => 'secrets.credential',
+            'directory' => 'config',
+            'dimension' => 'security_hygiene',
+            'count' => 1,
+        ]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport));
+
+        $response->assertOk();
+        $response->assertSee('+3', false);
+        $response->assertSee('new', false);
+    }
+
+    public function test_report_view_renders_a_resolved_badge_when_every_group_is_fixed(): void
+    {
+        $previousRequest = AuditRequest::factory()->verified()->create(['email' => 'allfixed@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $previousReport = AuditReport::factory()->locked()->create(['audit_request_id' => $previousRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
+        AuditFindingGroup::factory()->create([
+            'audit_request_id' => $previousRequest->id,
+            'rule_family' => 'php.injection',
+            'directory' => 'app/Http',
+            'dimension' => 'security_hygiene',
+            'count' => 2,
+        ]);
+
+        $currentRequest = AuditRequest::factory()->verified()->create(['email' => 'allfixed@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $currentReport = AuditReport::factory()->unlocked()->create(['audit_request_id' => $currentRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport));
+
+        $response->assertOk();
+        $response->assertSee('resolved', false);
+    }
+
+    public function test_send_mails_a_resolved_and_new_findings_summary_when_a_previous_run_exists(): void
+    {
+        Mail::fake();
+
+        $previousRequest = AuditRequest::factory()->verified()->create(['email' => 'mailsummary@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $service = app(AuditReportService::class);
+        $previousReport = $service->create($previousRequest, $this->payload(), ScoreCalculator::VERSION);
+        AuditFindingGroup::factory()->create(['audit_request_id' => $previousRequest->id, 'rule_family' => 'secrets.credential', 'directory' => 'config', 'count' => 1]);
+
+        $currentRequest = AuditRequest::factory()->verified()->create(['email' => 'mailsummary@example.com', 'repo_url' => 'https://github.com/acme/app']);
+        $currentReport = $service->create($currentRequest, $this->payload(), ScoreCalculator::VERSION);
+        AuditFindingGroup::factory()->create(['audit_request_id' => $currentRequest->id, 'rule_family' => 'style.formatting', 'directory' => 'app', 'count' => 2]);
+
+        $service->send($currentReport->fresh());
+
+        Mail::assertQueued(AuditReportReady::class, function ($mail) {
+            $rendered = $mail->render();
+
+            return str_contains($rendered, '1 issue resolved') && str_contains($rendered, '2 new');
+        });
     }
 }
