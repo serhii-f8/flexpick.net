@@ -24,6 +24,7 @@ use App\Models\User;
 use App\Models\UserSubscriptionTrial;
 use App\Services\CashPayments\PurchaseSnapshotService;
 use App\Services\PaymentProviders\PaymentProviderInterface;
+use App\Support\CashPayments\SweepFloor;
 use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
@@ -650,15 +651,23 @@ class SubscriptionService
 
     public function cleanupLocalSubscriptionStatuses()
     {
+        $sweepFloor = SweepFloor::parse();
+
         $subscriptions = Subscription::where('type', SubscriptionType::LOCALLY_MANAGED)
             ->where('status', SubscriptionStatus::ACTIVE->value)
             ->where('ends_at', '<', now())
-            // Cash subscriptions have their own PAST_DUE -> CANCELED ladder in
+            // Cash subscriptions created on or after cash_payments.sweep_from
+            // have their own PAST_DUE -> CANCELED ladder in
             // app:expire-pending-cash-orders. Flipping them to INACTIVE here
-            // would race it and skip the grace window.
-            ->whereNot(function (Builder $query) {
+            // would race it and skip the grace window. A cash subscription
+            // that predates the floor was never picked up by that ladder
+            // (the commands floor their own queries the same way), so it
+            // must fall through to this sweep exactly as it did before the
+            // cash-payment feature existed.
+            ->whereNot(function (Builder $query) use ($sweepFloor) {
                 $query->where('price', '>', 0)
-                    ->whereHas('paymentProvider', fn (Builder $provider) => $provider->where('slug', PaymentProviderConstants::OFFLINE_SLUG));
+                    ->whereHas('paymentProvider', fn (Builder $provider) => $provider->where('slug', PaymentProviderConstants::OFFLINE_SLUG))
+                    ->when($sweepFloor !== null, fn (Builder $q) => $q->where('created_at', '>=', $sweepFloor));
             })
             ->get();
 

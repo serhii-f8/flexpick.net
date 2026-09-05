@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Subscription;
 use App\Services\CashPayments\OrderApprovalService;
 use App\Services\SubscriptionService;
+use App\Support\CashPayments\SweepFloor;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
@@ -59,7 +60,7 @@ class ExpirePendingCashOrders extends Command
 
     public function handle(): int
     {
-        $this->sweepFloor = $this->parseSweepFloor();
+        $this->sweepFloor = SweepFloor::parse();
 
         $ttlHours = (int) config('cash_payments.pending_ttl_hours');
 
@@ -71,17 +72,6 @@ class ExpirePendingCashOrders extends Command
         $this->info("Expired {$expired} purchase order(s), marked {$pastDue} subscription(s) past due, cancelled {$cancelled}, rejected {$orphaned} orphaned renewal order(s).");
 
         return self::SUCCESS;
-    }
-
-    /**
-     * A null or empty config value means no floor at all, rather than
-     * crashing on Carbon::parse('').
-     */
-    private function parseSweepFloor(): ?Carbon
-    {
-        $configured = (string) config('cash_payments.sweep_from');
-
-        return $configured === '' ? null : Carbon::parse($configured);
     }
 
     private function expireStalePurchaseOrders(int $ttlHours): int

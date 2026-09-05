@@ -206,7 +206,11 @@ class ExpirePendingCashOrdersTest extends FeatureTest
             'is_local' => true,
             'total_amount' => 4900,
             'type' => OrderType::PURCHASE->value,
-            'created_at' => $floor->copy()->subDay(),
+            // Ten days before the floor, not one -- one day before the floor
+            // is also within the 72-hour TTL, so the order would be spared
+            // by its own age regardless of the floor and the test would pass
+            // even if the floor clause were removed.
+            'created_at' => $floor->copy()->subDays(10),
         ]);
 
         $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
@@ -247,5 +251,24 @@ class ExpirePendingCashOrdersTest extends FeatureTest
         $this->assertSame(SubscriptionStatus::ACTIVE->value, $cash->fresh()->status);
         $this->assertSame(SubscriptionStatus::INACTIVE->value, $compedOnOfflineProvider->fresh()->status);
         $this->assertSame(SubscriptionStatus::INACTIVE->value, $paidWithNoProvider->fresh()->status);
+    }
+
+    public function test_the_local_cleanup_sweep_still_inactivates_a_pre_floor_cash_subscription(): void
+    {
+        // A cash subscription created before cash_payments.sweep_from is not
+        // owned by the new PAST_DUE -> CANCELED ladder either (the sweep
+        // commands floor their own queries too), so it must fall through to
+        // this pre-existing sweep exactly as it would have before the
+        // cash-payment feature existed -- not be stranded ACTIVE forever.
+        $floor = Carbon::parse(config('cash_payments.sweep_from'));
+
+        $legacy = $this->cashSubscription([
+            'ends_at' => now()->subHour(),
+            'created_at' => $floor->copy()->subDays(10),
+        ]);
+
+        app(SubscriptionService::class)->cleanupLocalSubscriptionStatuses();
+
+        $this->assertSame(SubscriptionStatus::INACTIVE->value, $legacy->fresh()->status);
     }
 }

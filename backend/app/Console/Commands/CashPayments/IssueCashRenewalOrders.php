@@ -9,7 +9,7 @@ use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
 use App\Models\Subscription;
 use App\Services\CashPayments\CashSubscriptionService;
-use Carbon\Carbon;
+use App\Support\CashPayments\SweepFloor;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -28,7 +28,7 @@ class IssueCashRenewalOrders extends Command
     public function handle(): int
     {
         $leadHours = (int) config('cash_payments.renewal_lead_hours');
-        $sweepFloor = $this->parseSweepFloor();
+        $sweepFloor = SweepFloor::parse();
 
         $subscriptions = Subscription::query()
             ->where('type', SubscriptionType::LOCALLY_MANAGED)
@@ -56,16 +56,5 @@ class IssueCashRenewalOrders extends Command
         $this->info("Opened {$subscriptions->count()} cash renewal order(s).");
 
         return self::SUCCESS;
-    }
-
-    /**
-     * A null or empty config value means no floor at all, rather than
-     * crashing on Carbon::parse('').
-     */
-    private function parseSweepFloor(): ?Carbon
-    {
-        $configured = (string) config('cash_payments.sweep_from');
-
-        return $configured === '' ? null : Carbon::parse($configured);
     }
 }
