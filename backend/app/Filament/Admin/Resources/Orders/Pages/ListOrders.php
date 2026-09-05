@@ -133,6 +133,8 @@ class ListOrders extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', OrderStatus::PENDING)),
             __('failed') => Tab::make()
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', OrderStatus::FAILED)),
+            __('rejected') => Tab::make()
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', OrderStatus::REJECTED)),
             __('disputed') => Tab::make()
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', OrderStatus::DISPUTED)),
         ];

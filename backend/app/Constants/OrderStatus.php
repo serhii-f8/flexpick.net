@@ -10,4 +10,5 @@ enum OrderStatus: string
     case DISPUTED = 'disputed';
     case SUCCESS = 'success';
     case FAILED = 'failed';
+    case REJECTED = 'rejected';
 }

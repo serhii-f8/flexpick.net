@@ -13,6 +13,7 @@ class OrderStatusMapper
             OrderStatus::NEW->value => __('New'),
             OrderStatus::REFUNDED->value => __('Refunded'),
             OrderStatus::FAILED->value => __('Failed'),
+            OrderStatus::REJECTED->value => __('Rejected'),
             default => __('Pending'),
         };
     }
@@ -21,6 +22,7 @@ class OrderStatusMapper
     {
         return match ($status) {
             OrderStatus::SUCCESS->value => 'success',
+            OrderStatus::REJECTED->value => 'danger',
             default => 'warning',
         };
     }
