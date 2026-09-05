@@ -28,8 +28,14 @@
 
             <div class="text-center mx-auto">
                 <p class="mt-6">
-                    <span class="ms-1 text-primary-500 text-2xl font-bold">@money($price->price, $price->currency->code)</span>
+                    <span class="ms-1 text-primary-500 text-2xl font-bold">@money($product->partner_price ?? $price->price, $price->currency->code)</span>
                 </p>
+
+                @if($product->partner_price !== null && $product->partner_tenant_name !== null)
+                    <p class="text-xs text-neutral-400">
+                        {{ __('Sold through :partner', ['partner' => $product->partner_tenant_name]) }}
+                    </p>
+                @endif
 
                 <x-button-link.primary href="{{route('buy.product', ['productSlug' => $product->slug])}}" class="mt-6 text-lg py-4! px-6">
                     {{ __('Get :name Now', ['name' => $product->name]) }}

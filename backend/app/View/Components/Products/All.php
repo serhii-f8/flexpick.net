@@ -3,6 +3,7 @@
 namespace App\View\Components\Products;
 
 use App\Services\OneTimeProductService;
+use App\Services\PartnerPricingResolver;
 use Closure;
 use Illuminate\Contracts\View\View;
 use Illuminate\View\Component;
@@ -11,6 +12,7 @@ class All extends Component
 {
     public function __construct(
         private OneTimeProductService $productService,
+        private PartnerPricingResolver $partnerPricingResolver,
         private string $sortBy = 'name',
         private string $sortDirection = 'asc',
     ) {}
@@ -25,8 +27,10 @@ class All extends Component
 
     protected function calculateViewData()
     {
+        $products = $this->productService->getAllProductsWithPrices($this->sortBy, $this->sortDirection, true);
+
         return [
-            'products' => $this->productService->getAllProductsWithPrices($this->sortBy, $this->sortDirection, true),
+            'products' => $this->partnerPricingResolver->decorateProducts($products, auth()->user()),
         ];
     }
 }

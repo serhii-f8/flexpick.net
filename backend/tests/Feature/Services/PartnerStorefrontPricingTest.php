@@ -4,7 +4,10 @@ namespace Tests\Feature\Services;
 
 use App\Constants\PaymentProviderConstants;
 use App\Constants\SubscriptionStatus;
+use App\Models\OneTimeProduct;
+use App\Models\OneTimeProductPrice;
 use App\Models\PartnerPlanOffering;
+use App\Models\PartnerProductOffering;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Product;
@@ -148,5 +151,79 @@ class PartnerStorefrontPricingTest extends FeatureTest
         // An unattributed customer must never see a partner price, including
         // one configured for another test's partner tenant earlier in this class.
         $response->assertDontSee(money(7900, app(CurrencyService::class)->getCurrency()->code));
+    }
+
+    private function visibleProduct(int $basePrice = 4900): OneTimeProduct
+    {
+        $product = OneTimeProduct::factory()->create([
+            'is_active' => true,
+            'is_visible' => true,
+            'metadata' => ['audit_diagnostic_credits' => 1],
+            'reseller_quota_keys' => ['audit_diagnostic_credits'],
+        ]);
+        OneTimeProductPrice::create([
+            'one_time_product_id' => $product->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => $basePrice,
+        ]);
+
+        return $product;
+    }
+
+    public function test_a_configured_product_is_decorated_with_the_partner_price(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = $this->visibleProduct();
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $product->id,
+            'price' => 7900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        app(PartnerPricingResolver::class)->flush();
+
+        $decorated = app(PartnerPricingResolver::class)
+            ->decorateProducts(collect([$product]), $user)
+            ->first();
+
+        $this->assertSame(7900, $decorated->partner_price);
+        $this->assertSame($partnerTenant->name, $decorated->partner_tenant_name);
+    }
+
+    public function test_an_unconfigured_product_stays_in_the_catalog_at_base_price(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = $this->visibleProduct(basePrice: 11900);
+        $user = $this->attributedUser($partnerTenant);
+        app(PartnerPricingResolver::class)->flush();
+
+        $decorated = app(PartnerPricingResolver::class)
+            ->decorateProducts(collect([$product]), $user)
+            ->first();
+
+        $this->assertNull($decorated->partner_price);
+        $this->assertTrue($decorated->is($product));
+    }
+
+    public function test_the_pricing_page_renders_the_partner_product_price(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = $this->visibleProduct();
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $product->id,
+            'price' => 8900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        app(PartnerPricingResolver::class)->flush();
+
+        $response = $this->actingAs($user)->get(route('pricing'));
+
+        $response->assertOk();
+        $response->assertSee(money(8900, app(CurrencyService::class)->getCurrency()->code));
     }
 }
