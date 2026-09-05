@@ -23,7 +23,16 @@ class Order extends Model
         'payment_provider_id',
         'tenant_id',
         'is_local',
+        'partner_tenant_id',
+        'base_price_snapshot',
+        'quota_snapshot',
+        'subscription_id',
+        'type',
         'comments',
+    ];
+
+    protected $casts = [
+        'quota_snapshot' => 'array',
     ];
 
     public function user(): BelongsTo
@@ -65,5 +74,15 @@ class Order extends Model
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function partnerTenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'partner_tenant_id');
+    }
+
+    public function subscription(): BelongsTo
+    {
+        return $this->belongsTo(Subscription::class);
     }
 }
