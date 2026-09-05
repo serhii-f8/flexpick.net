@@ -19,9 +19,17 @@
 
     <div class="flex flex-col gap-1">
         @if($price !== null)
+            @php
+                $effectivePrice = $plan->partner_price ?? $price->price;
+            @endphp
             <div class="text-4xl">
-                @money($price->price, $price->currency->code)
+                @money($effectivePrice, $price->currency->code)
             </div>
+            @if($plan->partner_price !== null && $plan->partner_tenant_name !== null)
+                <div class="text-xs text-neutral-400">
+                    {{ __('Sold through :partner', ['partner' => $plan->partner_tenant_name]) }}
+                </div>
+            @endif
             <div class="text-neutral-400 text-sm">
                 @if($plan->type === \App\Constants\PlanType::SEAT_BASED->value && $price->type === \App\Constants\PlanPriceType::SEAT_BASED_WITH_INCLUDED_SEATS->value)
                     / {{$plan->interval_count > 1 ? $plan->interval_count : '' }} {{ __($plan->interval->name) }}

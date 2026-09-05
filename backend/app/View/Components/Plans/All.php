@@ -2,6 +2,7 @@
 
 namespace App\View\Components\Plans;
 
+use App\Services\PartnerPricingResolver;
 use App\Services\PlanService;
 use App\Services\SubscriptionService;
 use Closure;
@@ -14,6 +15,7 @@ class All extends Component
     public function __construct(
         protected PlanService $planService,
         protected SubscriptionService $subscriptionService,
+        protected PartnerPricingResolver $partnerPricingResolver,
         public array $products = [],
         public bool $isGrouped = true,
         public string $preselectedInterval = '',
@@ -36,6 +38,8 @@ class All extends Component
             $this->products,
             onlyVisible: true,
         );
+
+        $plans = $this->partnerPricingResolver->decoratePlans($plans, auth()->user());
 
         return $this->enrichViewData([], $plans);
     }

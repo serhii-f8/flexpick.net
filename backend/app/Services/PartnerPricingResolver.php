@@ -10,6 +10,7 @@ use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Support\Collection;
 
 /**
  * The single answer to "does a usable partner offering exist for this buyer
@@ -111,6 +112,56 @@ class PartnerPricingResolver
         $offering = $this->usableProductOffering($user, $product);
 
         return $offering === null ? null : (int) $offering->price;
+    }
+
+    /**
+     * Stamp each plan with the price this buyer would actually pay.
+     *
+     * Sets two transient attributes — never persisted, because listing models
+     * are read-only here:
+     *   - partner_price: int|null, the partner's price, or null for base pricing
+     *   - partner_tenant_name: string|null, for the "sold through" label
+     *
+     * A plan with no usable offering keeps partner_price = null and is left in
+     * the collection at base price (spec §8.2, as amended 2026-09-05).
+     *
+     * @param  Collection<int, Plan>  $plans
+     * @return Collection<int, Plan>
+     */
+    public function decoratePlans(Collection $plans, ?User $user = null): Collection
+    {
+        $tenant = $this->resolvePartnerTenant($user);
+
+        foreach ($plans as $plan) {
+            $price = $this->planPrice($user, $plan);
+
+            // @phpstan-ignore-next-line property.notFound (transient attribute, never persisted — see method docblock)
+            $plan->partner_price = $price;
+            // @phpstan-ignore-next-line property.notFound (transient attribute, never persisted — see method docblock)
+            $plan->partner_tenant_name = $price === null ? null : $tenant?->name;
+        }
+
+        return $plans;
+    }
+
+    /**
+     * @param  Collection<int, OneTimeProduct>  $products
+     * @return Collection<int, OneTimeProduct>
+     */
+    public function decorateProducts(Collection $products, ?User $user = null): Collection
+    {
+        $tenant = $this->resolvePartnerTenant($user);
+
+        foreach ($products as $product) {
+            $price = $this->productPrice($user, $product);
+
+            // @phpstan-ignore-next-line property.notFound (transient attribute, never persisted — see class docblock)
+            $product->partner_price = $price;
+            // @phpstan-ignore-next-line property.notFound (transient attribute, never persisted — see class docblock)
+            $product->partner_tenant_name = $price === null ? null : $tenant?->name;
+        }
+
+        return $products;
     }
 
     private function computePartnerTenant(?User $user): ?Tenant
