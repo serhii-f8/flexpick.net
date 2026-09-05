@@ -24,12 +24,6 @@ class PurchaseSnapshotServiceTest extends FeatureTest
 {
     private function activePartnerTenant(): Tenant
     {
-        // A partner price can only ever be charged in cash (spec §8.1), so a
-        // tenant this file calls "active" for pricing purposes needs the
-        // Offline provider active too, or PartnerPricingResolver will never
-        // treat any of its offerings as usable.
-        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)->update(['is_active' => true]);
-
         $tenant = $this->createTenant();
         $partnerProduct = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
         $partnerPlan = Plan::factory()->create(['product_id' => $partnerProduct->id]);
@@ -41,6 +35,18 @@ class PurchaseSnapshotServiceTest extends FeatureTest
         ]);
 
         return $tenant;
+    }
+
+    /**
+     * A partner price can only ever be charged in cash (spec §8.1), so any
+     * test that expects PartnerPricingResolver to actually treat an offering
+     * as usable must say so explicitly here — FeatureTest does not reset
+     * state between test methods, so leaving this implicit would make later
+     * tests silently depend on an earlier one's side effect.
+     */
+    private function activateOfflineProvider(): void
+    {
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)->update(['is_active' => true]);
     }
 
     /** @return array{0: Plan, 1: Product} */
@@ -74,6 +80,7 @@ class PurchaseSnapshotServiceTest extends FeatureTest
 
     public function test_an_attributed_buyer_gets_the_partners_quota_overrides_merged_over_base(): void
     {
+        $this->activateOfflineProvider();
         $partnerTenant = $this->activePartnerTenant();
         [$plan] = $this->sellablePlan(4900, ['audit_diagnostic_credits' => 10, 'audit_deep_ai_credits' => 2]);
         $user = User::factory()->create(['partner_tenant_id' => $partnerTenant->id, 'partner_attributed_at' => now()]);
@@ -159,6 +166,7 @@ class PurchaseSnapshotServiceTest extends FeatureTest
 
     public function test_it_snapshots_one_time_products_too(): void
     {
+        $this->activateOfflineProvider();
         $partnerTenant = $this->activePartnerTenant();
         $product = OneTimeProduct::factory()->create([
             'reseller_quota_keys' => ['audit_expert_credits'],
@@ -200,10 +208,12 @@ class PurchaseSnapshotServiceTest extends FeatureTest
 
     public function test_no_partner_is_stamped_when_the_offline_provider_is_inactive(): void
     {
-        // Same arrangement as test_an_attributed_buyer_gets_the_partners_quota_overrides_merged_over_base
+        // Otherwise the same arrangement as
+        // test_an_attributed_buyer_gets_the_partners_quota_overrides_merged_over_base
         // in this file — an active partner tenant with an enabled, above-minimum
-        // offering, but the Offline provider (the only way a partner price can be
-        // charged) is switched off.
+        // offering — except the Offline provider (the only way a partner price
+        // can be charged) is explicitly left/switched off, which the offering
+        // alone would otherwise make usable.
         $partnerTenant = $this->activePartnerTenant();
         [$plan] = $this->sellablePlan(4900, ['audit_diagnostic_credits' => 10, 'audit_deep_ai_credits' => 2]);
         $user = User::factory()->create(['partner_tenant_id' => $partnerTenant->id, 'partner_attributed_at' => now()]);
