@@ -62,4 +62,24 @@ class AuditSnapshotEntitlementTest extends FeatureTest
 
         $this->assertSame(1, app(AuditEntitlementService::class)->allowance($tenant, AuditTier::EXPERT));
     }
+
+    public function test_a_literal_zero_snapshot_value_wins_over_a_nonzero_plan_metadata_value(): void
+    {
+        $tenant = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['audit_diagnostic_credits' => 25]]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+            // A partner override of literal 0 means zero, not "no override" --
+            // AuditEntitlementService::planMetadata() must test !== null, not
+            // truthiness, to tell the two apart.
+            'quota_snapshot' => ['audit_diagnostic_credits' => 0],
+        ]);
+
+        $this->assertSame(0, app(AuditEntitlementService::class)->allowance($tenant, AuditTier::DIAGNOSTIC));
+    }
 }

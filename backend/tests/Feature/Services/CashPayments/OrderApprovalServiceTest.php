@@ -268,4 +268,19 @@ class OrderApprovalServiceTest extends FeatureTest
         $this->assertSame(0, OrderApproval::where('order_id', $order->id)->count());
         $this->assertSame(SubscriptionStatus::INACTIVE->value, $subscription->fresh()->status);
     }
+
+    public function test_amount_due_reports_the_discounted_total_when_it_is_positive(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'total_amount' => 9900,
+            'total_amount_after_discount' => 4900,
+        ]);
+
+        $this->assertSame(4900, app(OrderApprovalService::class)->amountDue($order));
+    }
 }
