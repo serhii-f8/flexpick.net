@@ -99,6 +99,16 @@ class AuditEntitlementService
     {
         return (int) $this->activeSubscriptionsFor($tenant)
             ->map(function (Subscription $subscription) use ($key): int {
+                // The snapshot frozen at purchase wins: a partner-granted
+                // override, or the base value as it stood when the customer
+                // bought, must not drift when an admin edits the product
+                // afterwards (spec §6.3).
+                $snapshotValue = data_get($subscription->quota_snapshot, $key);
+
+                if ($snapshotValue !== null) {
+                    return (int) $snapshotValue;
+                }
+
                 /** @var Plan|null $plan */
                 $plan = $subscription->plan;
 
