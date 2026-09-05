@@ -118,6 +118,7 @@ class RolesAndPermissionsSeeder extends Seeder
             TenancyPermissionConstants::PERMISSION_VIEW_ORDERS,
             TenancyPermissionConstants::PERMISSION_VIEW_TRANSACTIONS,
             TenancyPermissionConstants::PERMISSION_MANAGE_RESELLER_CATALOG,
+            TenancyPermissionConstants::PERMISSION_MANAGE_PARTNER_ORDERS,
             TenancyPermissionConstants::PERMISSION_INVITE_MEMBERS,
             TenancyPermissionConstants::PERMISSION_MANAGE_TEAM,
             TenancyPermissionConstants::PERMISSION_UPDATE_TENANT_SETTINGS,

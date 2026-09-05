@@ -7,14 +7,19 @@ use App\Constants\OrderApprovalDecision;
 use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\SubscriptionStatus;
+use App\Constants\TenancyPermissionConstants;
 use App\Models\Interval;
 use App\Models\Order;
 use App\Models\OrderApproval;
 use App\Models\Subscription;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\OrderService;
+use App\Services\PartnerCapabilityService;
 use App\Services\SubscriptionService;
+use App\Services\TenantPermissionService;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,6 +32,8 @@ class OrderApprovalService
     public function __construct(
         private OrderService $orderService,
         private SubscriptionService $subscriptionService,
+        private PartnerCapabilityService $capabilityService,
+        private TenantPermissionService $permissionService,
     ) {}
 
     public function isPendingCashOrder(Order $order): bool
@@ -183,5 +190,43 @@ class OrderApprovalService
                 (int) $subscription->interval_count,
             ),
         ]);
+    }
+
+    public function approveAsPartner(Order $order, User $user, Tenant $actingTenant, ?string $note = null): bool
+    {
+        $this->assertPartnerMayAct($order, $user, $actingTenant);
+
+        return $this->approve($order, OrderApprovalActor::PARTNER, $user, $note);
+    }
+
+    public function rejectAsPartner(Order $order, User $user, Tenant $actingTenant, ?string $note = null): bool
+    {
+        $this->assertPartnerMayAct($order, $user, $actingTenant);
+
+        return $this->reject($order, OrderApprovalActor::PARTNER, $user, $note);
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    private function assertPartnerMayAct(Order $order, User $user, Tenant $actingTenant): void
+    {
+        if ($order->partner_tenant_id === null || (int) $order->partner_tenant_id !== (int) $actingTenant->getKey()) {
+            throw new AuthorizationException(__('This order does not belong to your partner account.'));
+        }
+
+        // Re-checked at action time, not only at page load: a Partner Plan can
+        // lapse between rendering the queue and clicking Approve (spec §7.5).
+        if (! $this->capabilityService->tenantIsActivePartner($actingTenant)) {
+            throw new AuthorizationException(__('Your partner plan is not active.'));
+        }
+
+        if (! $this->permissionService->tenantUserHasPermissionTo(
+            $actingTenant,
+            $user,
+            TenancyPermissionConstants::PERMISSION_MANAGE_PARTNER_ORDERS,
+        )) {
+            throw new AuthorizationException(__('You do not have permission to approve partner orders.'));
+        }
     }
 }

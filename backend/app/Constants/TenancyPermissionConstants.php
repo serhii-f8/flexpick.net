@@ -32,6 +32,8 @@ class TenancyPermissionConstants
 
     public const PERMISSION_MANAGE_RESELLER_CATALOG = 'tenancy: manage reseller catalog';
 
+    public const PERMISSION_MANAGE_PARTNER_ORDERS = 'tenancy: manage partner orders';
+
     public const PERMISSION_INVITE_MEMBERS = 'tenancy: invite members';
 
     public const PERMISSION_MANAGE_TEAM = 'tenancy: manage team';
