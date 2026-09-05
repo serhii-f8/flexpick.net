@@ -22,6 +22,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserSubscriptionTrial;
+use App\Services\CashPayments\PurchaseSnapshotService;
 use App\Services\PaymentProviders\PaymentProviderInterface;
 use Carbon\Carbon;
 use Filament\Facades\Filament;
@@ -75,6 +76,15 @@ class SubscriptionService
                 'price_per_unit' => $planPrice->price_per_unit,
                 'type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED,
             ];
+
+            // Resolved through the container rather than constructor-injected:
+            // PurchaseSnapshotService -> PartnerCapabilityService ->
+            // SubscriptionService is a container cycle.
+            $snapshot = app(PurchaseSnapshotService::class)->forPlan(User::findOrFail($userId), $plan);
+
+            $subscriptionAttributes['partner_tenant_id'] = $snapshot['partner_tenant_id'];
+            $subscriptionAttributes['base_price_snapshot'] = $snapshot['base_price_snapshot'];
+            $subscriptionAttributes['quota_snapshot'] = $snapshot['quota_snapshot'];
 
             if ($paymentProvider) {
                 $subscriptionAttributes['payment_provider_id'] = $paymentProvider->id;
