@@ -58,7 +58,11 @@ class PartnerOrderApprovalResource extends Resource
     {
         return parent::getEloquentQuery()
             ->where('partner_tenant_id', Filament::getTenant()?->getKey() ?? 0)
-            ->where('status', OrderStatus::PENDING->value);
+            ->where('status', OrderStatus::PENDING->value)
+            // partner_tenant_id is written onto gateway orders too (OrderService::create
+            // merges the snapshot unconditionally); only cash orders are is_local, and
+            // that's what the Approve/Reject actions accept via isPendingCashOrder().
+            ->where('is_local', true);
     }
 
     public static function canAccess(): bool
@@ -94,7 +98,9 @@ class PartnerOrderApprovalResource extends Resource
                 TextColumn::make('type')->label(__('Type'))->badge(),
                 TextColumn::make('base_price_snapshot')
                     ->label(__('Base Price'))
-                    ->getStateUsing(fn (Order $record): string => self::formatMoney($record->base_price_snapshot)),
+                    ->getStateUsing(fn (Order $record): string => $record->base_price_snapshot === null
+                        ? '—'
+                        : self::formatMoney($record->base_price_snapshot)),
                 TextColumn::make('total_amount')
                     ->label(__('Your Price'))
                     ->getStateUsing(fn (Order $record): string => self::formatMoney(self::amountDue($record))),

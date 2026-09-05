@@ -90,6 +90,18 @@ class PartnerOrderApprovalResourceTest extends FeatureTest
         $alreadyDone = $this->pendingOrderFor($tenant, OrderStatus::SUCCESS->value);
         $theirs = $this->pendingOrderFor($otherTenant);
 
+        $gatewayCustomerTenant = $this->createTenant();
+        $gatewayCustomer = $this->createUser($gatewayCustomerTenant);
+        $gatewayOrder = Order::factory()->create([
+            'user_id' => $gatewayCustomer->id,
+            'tenant_id' => $gatewayCustomerTenant->id,
+            'partner_tenant_id' => $tenant->id,
+            'status' => OrderStatus::PENDING->value,
+            'is_local' => false,
+            'total_amount' => 6900,
+            'base_price_snapshot' => 4900,
+        ]);
+
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
         Filament::setTenant($tenant);
@@ -99,6 +111,7 @@ class PartnerOrderApprovalResourceTest extends FeatureTest
         $this->assertContains($mine->id, $ids);
         $this->assertNotContains($alreadyDone->id, $ids);
         $this->assertNotContains($theirs->id, $ids);
+        $this->assertNotContains($gatewayOrder->id, $ids);
     }
 
     public function test_the_approve_action_completes_the_order_and_logs_the_note(): void
