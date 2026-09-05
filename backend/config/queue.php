@@ -68,7 +68,15 @@ return [
             'queue' => env('REDIS_QUEUE', 'default'),
             'retry_after' => 90,
             'block_for' => null,
-            'after_commit' => false,
+            // Deferring dispatch to after the enclosing DB transaction commits
+            // closes a race in OrderApprovalService::approve(): approving a
+            // cash audit-tier order runs HandleAuditTierOrder (not itself
+            // queued) inline inside the transaction, which dispatches
+            // GenerateAuditReport to this connection immediately -- a worker
+            // can win the race and read a pre-update AuditRequest, or find
+            // none at all. This only ever *defers* a dispatch to after
+            // commit; it never drops one.
+            'after_commit' => true,
         ],
 
         'redis-audit' => [
