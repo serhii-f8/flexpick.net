@@ -94,7 +94,7 @@ class ExpirePendingCashOrdersTest extends FeatureTest
         ]);
 
         $order = app(CashSubscriptionService::class)->startPendingCashSubscription($subscription);
-        $order->update(['created_at' => now()->subHours(100)]);
+        $order->forceFill(['created_at' => now()->subHours(100)])->save();
 
         $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
 
@@ -131,7 +131,7 @@ class ExpirePendingCashOrdersTest extends FeatureTest
         $subscription = $this->cashSubscription(['ends_at' => now()->addDays(10)]);
 
         $renewal = app(CashSubscriptionService::class)->createPendingOrder($subscription, OrderType::RENEWAL);
-        $renewal->update(['created_at' => now()->subHours(100)]);
+        $renewal->forceFill(['created_at' => now()->subHours(100)])->save();
 
         $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
 
@@ -139,11 +139,28 @@ class ExpirePendingCashOrdersTest extends FeatureTest
         $this->assertSame(SubscriptionStatus::ACTIVE->value, $subscription->fresh()->status);
     }
 
+    public function test_a_flagged_cash_subscription_is_cancelled_without_a_grace_window(): void
+    {
+        $subscription = $this->cashSubscription([
+            'is_canceled_at_end_of_cycle' => true,
+            'ends_at' => now()->subHour(),
+        ]);
+
+        $this->artisan('app:expire-pending-cash-orders')->assertSuccessful();
+
+        $this->assertSame(SubscriptionStatus::CANCELED->value, $subscription->fresh()->status);
+    }
+
     public function test_the_local_cleanup_sweep_leaves_cash_subscriptions_alone(): void
     {
         $cash = $this->cashSubscription(['ends_at' => now()->subHour()]);
-        $comped = $this->cashSubscription([
+
+        $compedOnOfflineProvider = $this->cashSubscription([
             'price' => 0,
+            'ends_at' => now()->subHour(),
+        ]);
+
+        $paidWithNoProvider = $this->cashSubscription([
             'payment_provider_id' => null,
             'ends_at' => now()->subHour(),
         ]);
@@ -151,6 +168,7 @@ class ExpirePendingCashOrdersTest extends FeatureTest
         app(SubscriptionService::class)->cleanupLocalSubscriptionStatuses();
 
         $this->assertSame(SubscriptionStatus::ACTIVE->value, $cash->fresh()->status);
-        $this->assertSame(SubscriptionStatus::INACTIVE->value, $comped->fresh()->status);
+        $this->assertSame(SubscriptionStatus::INACTIVE->value, $compedOnOfflineProvider->fresh()->status);
+        $this->assertSame(SubscriptionStatus::INACTIVE->value, $paidWithNoProvider->fresh()->status);
     }
 }

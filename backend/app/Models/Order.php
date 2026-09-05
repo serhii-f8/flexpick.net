@@ -30,9 +30,6 @@ class Order extends Model
         'subscription_id',
         'type',
         'comments',
-        // Backdating a test fixture's created_at via a model update (not a
-        // query-builder update) needs this listed, same as MetricData.
-        'created_at',
     ];
 
     protected $casts = [

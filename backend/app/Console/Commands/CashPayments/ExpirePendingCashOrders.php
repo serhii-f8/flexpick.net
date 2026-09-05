@@ -19,9 +19,13 @@ use Illuminate\Database\Eloquent\Builder;
  * The cash lifecycle's dead-man's switch (spec §6.5, §6.6):
  *
  *  1. a pending PURCHASE order older than the TTL is system-rejected;
- *  2. a cash subscription past ends_at goes PAST_DUE;
- *  3. a PAST_DUE cash subscription more than one TTL past ends_at is cancelled,
- *     along with any renewal order still waiting on it.
+ *  2. a cash subscription past ends_at goes PAST_DUE, unless it is already
+ *     flagged is_canceled_at_end_of_cycle — the decision not to renew has
+ *     already been made, so it gets no grace window (rule 3 instead);
+ *  3. cancelled: either a PAST_DUE cash subscription more than one TTL past
+ *     ends_at, or a cash subscription past ends_at that is flagged
+ *     is_canceled_at_end_of_cycle — along with any renewal order still
+ *     waiting on it.
  *
  * Renewal orders are aged off ends_at, not created_at: they are opened before
  * the cycle they renew and would otherwise expire before that cycle ends.
@@ -61,8 +65,10 @@ class ExpirePendingCashOrders extends Command
             ->where('created_at', '<', now()->subHours($ttlHours))
             ->get();
 
+        $rejected = 0;
+
         foreach ($orders as $order) {
-            $this->approvalService->reject(
+            $rejected += (int) $this->approvalService->reject(
                 $order,
                 OrderApprovalActor::SYSTEM,
                 null,
@@ -70,13 +76,16 @@ class ExpirePendingCashOrders extends Command
             );
         }
 
-        return $orders->count();
+        return $rejected;
     }
 
     private function markLapsedSubscriptionsPastDue(): int
     {
         $subscriptions = $this->cashSubscriptions()
             ->where('status', SubscriptionStatus::ACTIVE->value)
+            // A subscription already flagged not to renew gets no grace
+            // window at all — rule 3 cancels it outright once ends_at passes.
+            ->where('is_canceled_at_end_of_cycle', false)
             ->where('ends_at', '<', now())
             ->get();
 
@@ -92,9 +101,21 @@ class ExpirePendingCashOrders extends Command
     private function cancelAbandonedSubscriptions(int $ttlHours): int
     {
         $subscriptions = $this->cashSubscriptions()
-            ->where('status', SubscriptionStatus::PAST_DUE->value)
-            ->where('ends_at', '<', now()->subHours($ttlHours))
+            ->where('status', '!=', SubscriptionStatus::CANCELED->value)
+            ->where(function (Builder $query) use ($ttlHours) {
+                $query->where(function (Builder $q) use ($ttlHours) {
+                    $q->where('status', SubscriptionStatus::PAST_DUE->value)
+                        ->where('ends_at', '<', now()->subHours($ttlHours));
+                })->orWhere(function (Builder $q) {
+                    // Already decided not to renew: no grace window, cancel
+                    // as soon as the paid-for cycle ends.
+                    $q->where('is_canceled_at_end_of_cycle', true)
+                        ->where('ends_at', '<', now());
+                });
+            })
             ->get();
+
+        $cancelled = 0;
 
         foreach ($subscriptions as $subscription) {
             $pendingRenewals = $subscription->orders()
@@ -111,13 +132,22 @@ class ExpirePendingCashOrders extends Command
                 );
             }
 
-            $this->subscriptionService->updateSubscription($subscription->fresh(), [
+            // A row hard-deleted between the query and here would otherwise
+            // hand updateSubscription() a null and abandon every remaining
+            // subscription in this loop.
+            if (($fresh = $subscription->fresh()) === null) {
+                continue;
+            }
+
+            $this->subscriptionService->updateSubscription($fresh, [
                 'status' => SubscriptionStatus::CANCELED->value,
                 'cancelled_at' => now(),
             ]);
+
+            $cancelled++;
         }
 
-        return $subscriptions->count();
+        return $cancelled;
     }
 
     /**
