@@ -4,6 +4,7 @@ namespace Tests\Feature\Services;
 
 use App\Constants\OrderStatus;
 use App\Events\Order\Ordered;
+use App\Events\Order\OrderedOffline;
 use App\Models\Currency;
 use App\Models\OneTimeProduct;
 use App\Models\Order;
@@ -277,7 +278,7 @@ class OrderServiceTest extends FeatureTest
         $this->assertDatabaseHas('orders', [
             'uuid' => $order->uuid,
             'user_id' => $user->id,
-            'status' => OrderStatus::SUCCESS->value,
+            'status' => OrderStatus::PENDING->value,
             'total_amount' => 1000,
             'total_discount_amount' => 100,
             'total_amount_after_discount' => 900,
@@ -290,9 +291,10 @@ class OrderServiceTest extends FeatureTest
             'quantity' => 1,
         ]);
 
-        Event::assertDispatched(Ordered::class);
+        Event::assertDispatched(OrderedOffline::class);
+        Event::assertNotDispatched(Ordered::class);
 
         $this->assertInstanceOf(Order::class, $order);
-        $this->assertEquals(OrderStatus::SUCCESS->value, $order->status); // Local orders are successful immediately
+        $this->assertEquals(OrderStatus::PENDING->value, $order->status); // A local order with amount still due waits for cash confirmation
     }
 }

@@ -17,6 +17,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -37,6 +38,7 @@ class OrderService
         ?array $orderItems = [],
         $paymentProviderOrderId = null,
         bool $isLocal = false,
+        array $snapshot = [],
     ): Order {
         $orderAttributes = [
             'uuid' => (string) Str::uuid(),
@@ -67,8 +69,24 @@ class OrderService
             $orderAttributes['payment_provider_order_id'] = $paymentProviderOrderId;
         }
 
+        $orderAttributes = array_merge($orderAttributes, Arr::only($snapshot, [
+            'partner_tenant_id',
+            'base_price_snapshot',
+            'quota_snapshot',
+            'subscription_id',
+            'type',
+        ]));
+
         if ($isLocal) {
-            $orderAttributes['status'] = OrderStatus::SUCCESS->value; // Local orders are considered successful immediately
+            // A local order with nothing left to pay is the admin-comped grant and
+            // completes immediately, exactly as it always has. A local order with
+            // money still owed is a cash sale: it stays PENDING until a partner or
+            // an admin confirms the cash arrived (spec §6.1).
+            $amountDue = $totalAmountAfterDiscount ?? $totalAmount ?? 0;
+
+            $orderAttributes['status'] = $amountDue > 0
+                ? OrderStatus::PENDING->value
+                : OrderStatus::SUCCESS->value;
         }
 
         $order = Order::create($orderAttributes);
@@ -77,9 +95,15 @@ class OrderService
             $order->items()->createMany($orderItems);
         }
 
-        if ($isLocal) {
+        if ($isLocal && $order->status === OrderStatus::SUCCESS->value) {
             // if it's a local order, dispatch the Ordered event immediately
             Ordered::dispatch($order);
+        }
+
+        if ($isLocal && $order->status === OrderStatus::PENDING->value) {
+            // Cash sale awaiting confirmation — the same event the offline
+            // checkout path already fires when an order lands in PENDING.
+            OrderedOffline::dispatch($order);
         }
 
         return $order;

@@ -8,6 +8,8 @@ use App\Dto\CartDto;
 use App\Dto\TotalsDto;
 use App\Models\Plan;
 use App\Models\Tenant;
+use App\Models\User;
+use App\Services\CashPayments\PurchaseSnapshotService;
 
 class CheckoutService
 {
@@ -16,6 +18,8 @@ class CheckoutService
         private OrderService $orderService,
         private TenantCreationService $tenantCreationService,
         private PlanService $planService,
+        private OneTimeProductService $oneTimeProductService,
+        private PurchaseSnapshotService $purchaseSnapshotService,
     ) {}
 
     public function initSubscriptionCheckout(string $planSlug, ?string $tenantUuid, int $quantity = 1, bool $shouldCreateNewTenant = false)
@@ -93,7 +97,12 @@ class CheckoutService
         }
 
         if ($order === null) {
-            $order = $this->orderService->create($user, $tenant, isLocal: $isLocalOrder);
+            $order = $this->orderService->create(
+                $user,
+                $tenant,
+                isLocal: $isLocalOrder,
+                snapshot: $this->snapshotForCart($cartDto, $user),
+            );
         }
 
         $this->orderService->refreshOrder($cartDto, $order);
@@ -124,5 +133,25 @@ class CheckoutService
         }
 
         return $tenant;
+    }
+
+    /**
+     * Product checkout is single-product in this codebase (every caller reads
+     * $cartDto->items[0]), so the snapshot follows the first cart item.
+     *
+     * @return array{partner_tenant_id: int|null, base_price_snapshot: int|null, quota_snapshot: array<string, mixed>}|array{}
+     */
+    private function snapshotForCart(CartDto $cartDto, User $user): array
+    {
+        $firstItem = $cartDto->items[0] ?? null;
+
+        if ($firstItem === null) {
+            return [];
+        }
+
+        return $this->purchaseSnapshotService->forProduct(
+            $user,
+            $this->oneTimeProductService->getOneTimeProductById($firstItem->productId),
+        );
     }
 }
