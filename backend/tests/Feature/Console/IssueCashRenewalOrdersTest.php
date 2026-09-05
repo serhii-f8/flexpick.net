@@ -91,4 +91,31 @@ class IssueCashRenewalOrdersTest extends FeatureTest
 
         $this->assertSame(0, $subscription->orders()->count());
     }
+
+    public function test_it_ignores_a_locally_managed_subscription_with_no_payment_provider(): void
+    {
+        $subscription = $this->cashSubscription(['payment_provider_id' => null]);
+
+        $this->artisan('app:issue-cash-renewal-orders')->assertSuccessful();
+
+        $this->assertSame(0, $subscription->orders()->count());
+    }
+
+    public function test_it_ignores_a_subscription_that_is_not_active(): void
+    {
+        $subscription = $this->cashSubscription(['status' => SubscriptionStatus::PAST_DUE->value]);
+
+        $this->artisan('app:issue-cash-renewal-orders')->assertSuccessful();
+
+        $this->assertSame(0, $subscription->orders()->count());
+    }
+
+    public function test_it_ignores_a_payment_provider_managed_subscription(): void
+    {
+        $subscription = $this->cashSubscription(['type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED]);
+
+        $this->artisan('app:issue-cash-renewal-orders')->assertSuccessful();
+
+        $this->assertSame(0, $subscription->orders()->count());
+    }
 }
