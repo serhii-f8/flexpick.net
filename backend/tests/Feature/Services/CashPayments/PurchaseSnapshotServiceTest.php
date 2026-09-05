@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Services\CashPayments;
 
+use App\Constants\PaymentProviderConstants;
 use App\Constants\SubscriptionStatus;
 use App\Models\Currency;
 use App\Models\OneTimeProduct;
 use App\Models\OneTimeProductPrice;
 use App\Models\PartnerPlanOffering;
 use App\Models\PartnerProductOffering;
+use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\PlanPrice;
 use App\Models\Product;
@@ -15,12 +17,19 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\CashPayments\PurchaseSnapshotService;
+use App\Services\PartnerPricingResolver;
 use Tests\Feature\FeatureTest;
 
 class PurchaseSnapshotServiceTest extends FeatureTest
 {
     private function activePartnerTenant(): Tenant
     {
+        // A partner price can only ever be charged in cash (spec §8.1), so a
+        // tenant this file calls "active" for pricing purposes needs the
+        // Offline provider active too, or PartnerPricingResolver will never
+        // treat any of its offerings as usable.
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)->update(['is_active' => true]);
+
         $tenant = $this->createTenant();
         $partnerProduct = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
         $partnerPlan = Plan::factory()->create(['product_id' => $partnerProduct->id]);
@@ -187,5 +196,35 @@ class PurchaseSnapshotServiceTest extends FeatureTest
 
         $this->assertNull($snapshot['base_price_snapshot']);
         $this->assertSame([], $snapshot['quota_snapshot']);
+    }
+
+    public function test_no_partner_is_stamped_when_the_offline_provider_is_inactive(): void
+    {
+        // Same arrangement as test_an_attributed_buyer_gets_the_partners_quota_overrides_merged_over_base
+        // in this file — an active partner tenant with an enabled, above-minimum
+        // offering, but the Offline provider (the only way a partner price can be
+        // charged) is switched off.
+        $partnerTenant = $this->activePartnerTenant();
+        [$plan] = $this->sellablePlan(4900, ['audit_diagnostic_credits' => 10, 'audit_deep_ai_credits' => 2]);
+        $user = User::factory()->create(['partner_tenant_id' => $partnerTenant->id, 'partner_attributed_at' => now()]);
+
+        PartnerPlanOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $plan->id,
+            'price' => 6900,
+            'quota_overrides' => ['audit_diagnostic_credits' => 25],
+            'is_enabled' => true,
+        ]);
+
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_active' => false]);
+        app(PartnerPricingResolver::class)->flush();
+
+        $snapshot = app(PurchaseSnapshotService::class)->forPlan($user, $plan);
+
+        $this->assertNull($snapshot['partner_tenant_id']);
+        // The base snapshot is still written — it is written for every purchase,
+        // partner-attributed or not (spec §6.2).
+        $this->assertNotNull($snapshot['base_price_snapshot']);
     }
 }
