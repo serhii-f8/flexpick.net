@@ -8,12 +8,16 @@ use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\SubscriptionStatus;
 use App\Constants\TenancyPermissionConstants;
+use App\Mail\CashPayments\CustomerOrderApproved;
+use App\Mail\CashPayments\CustomerOrderExpired;
+use App\Mail\CashPayments\CustomerOrderRejected;
 use App\Models\Interval;
 use App\Models\Order;
 use App\Models\OrderApproval;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Mail\RenderSafeMailer;
 use App\Services\OrderService;
 use App\Services\PartnerCapabilityService;
 use App\Services\SubscriptionService;
@@ -34,6 +38,7 @@ class OrderApprovalService
         private SubscriptionService $subscriptionService,
         private PartnerCapabilityService $capabilityService,
         private TenantPermissionService $permissionService,
+        private RenderSafeMailer $mailer,
     ) {}
 
     public function isPendingCashOrder(Order $order): bool
@@ -59,7 +64,7 @@ class OrderApprovalService
 
     public function approve(Order $order, OrderApprovalActor $actor, ?User $actingUser = null, ?string $note = null): bool
     {
-        return DB::transaction(function () use ($order, $actor, $actingUser, $note): bool {
+        $changed = DB::transaction(function () use ($order, $actor, $actingUser, $note): bool {
             $locked = $this->lockIfPending($order);
 
             if ($locked === null) {
@@ -78,11 +83,17 @@ class OrderApprovalService
 
             return true;
         });
+
+        if ($changed) {
+            $this->notifyCustomer($order->fresh(), OrderApprovalDecision::APPROVED, $actor);
+        }
+
+        return $changed;
     }
 
     public function reject(Order $order, OrderApprovalActor $actor, ?User $actingUser = null, ?string $note = null): bool
     {
-        return DB::transaction(function () use ($order, $actor, $actingUser, $note): bool {
+        $changed = DB::transaction(function () use ($order, $actor, $actingUser, $note): bool {
             $locked = $this->lockIfPending($order);
 
             if ($locked === null) {
@@ -112,6 +123,12 @@ class OrderApprovalService
 
             return true;
         });
+
+        if ($changed) {
+            $this->notifyCustomer($order->fresh(), OrderApprovalDecision::REJECTED, $actor);
+        }
+
+        return $changed;
     }
 
     /**
@@ -190,6 +207,25 @@ class OrderApprovalService
                 (int) $subscription->interval_count,
             ),
         ]);
+    }
+
+    private function notifyCustomer(Order $order, OrderApprovalDecision $decision, OrderApprovalActor $actor): void
+    {
+        /** @var User|null $customer */
+        $customer = $order->user;
+        $email = $customer?->email;
+
+        if ($email === null) {
+            return;
+        }
+
+        $mailable = match (true) {
+            $decision === OrderApprovalDecision::APPROVED => new CustomerOrderApproved($order),
+            $actor === OrderApprovalActor::SYSTEM => new CustomerOrderExpired($order),
+            default => new CustomerOrderRejected($order),
+        };
+
+        $this->mailer->send($mailable, $email);
     }
 
     public function approveAsPartner(Order $order, User $user, Tenant $actingTenant, ?string $note = null): bool
