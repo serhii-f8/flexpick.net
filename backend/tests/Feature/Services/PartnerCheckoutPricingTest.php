@@ -2,10 +2,17 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\OrderStatus;
 use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
+use App\Dto\CartDto;
+use App\Dto\CartItemDto;
+use App\Models\OneTimeProduct;
+use App\Models\OneTimeProductPrice;
+use App\Models\Order;
 use App\Models\PartnerPlanOffering;
+use App\Models\PartnerProductOffering;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Product;
@@ -136,5 +143,101 @@ class PartnerCheckoutPricingTest extends FeatureTest
         $planPrice = app(CalculationService::class)->getPlanPrice($plan);
 
         $this->assertSame(4900, (int) $planPrice->price);
+    }
+
+    private function visibleProduct(int $basePrice = 4900): OneTimeProduct
+    {
+        $product = OneTimeProduct::factory()->create([
+            'is_active' => true,
+            'is_visible' => true,
+            'max_quantity' => 1,
+            'metadata' => ['audit_diagnostic_credits' => 1],
+            'reseller_quota_keys' => ['audit_diagnostic_credits'],
+        ]);
+        OneTimeProductPrice::create([
+            'one_time_product_id' => $product->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => $basePrice,
+        ]);
+
+        return $product;
+    }
+
+    public function test_cart_totals_use_the_partner_price(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = $this->visibleProduct(basePrice: 4900);
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $product->id,
+            'price' => 7900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        app(PartnerPricingResolver::class)->flush();
+
+        $cart = new CartDto;
+        $item = new CartItemDto;
+        $item->productId = $product->id;
+        $item->quantity = 1;
+        $cart->items = [$item];
+
+        $totals = app(CalculationService::class)->calculateCartTotals($cart, $user);
+
+        $this->assertSame(7900, $totals->subtotal);
+        $this->assertSame(7900, $totals->amountDue);
+    }
+
+    public function test_cart_totals_fall_back_to_base_for_an_unconfigured_product(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = $this->visibleProduct(basePrice: 11900);
+        $user = $this->attributedUser($partnerTenant);
+        app(PartnerPricingResolver::class)->flush();
+
+        $cart = new CartDto;
+        $item = new CartItemDto;
+        $item->productId = $product->id;
+        $item->quantity = 1;
+        $cart->items = [$item];
+
+        $totals = app(CalculationService::class)->calculateCartTotals($cart, $user);
+
+        $this->assertSame(11900, $totals->subtotal);
+    }
+
+    public function test_order_totals_write_the_partner_price_onto_the_order(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = $this->visibleProduct(basePrice: 4900);
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $product->id,
+            'price' => 7900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        $customerTenant = $this->createTenant();
+        $customerTenant->users()->attach($user);
+        app(PartnerPricingResolver::class)->flush();
+
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => $customerTenant->id,
+            'status' => OrderStatus::NEW->value,
+        ]);
+        $order->items()->create([
+            'one_time_product_id' => $product->id,
+            'quantity' => 1,
+            'price_per_unit' => 0,
+        ]);
+        $order->refresh();
+
+        app(CalculationService::class)->calculateOrderTotals($order, $user);
+
+        $this->assertSame(7900, (int) $order->fresh()->total_amount);
+        $this->assertSame(7900, (int) $order->items()->first()->price_per_unit);
     }
 }

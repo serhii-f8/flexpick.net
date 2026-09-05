@@ -161,13 +161,25 @@ class CalculationService
             $product = $this->oneTimeProductService->getOneTimeProductById($item->productId);
             $productPrice = $product->prices()->where('currency_id', $currency->id)->firstOrFail();
 
-            $totalAmount += $productPrice->price * $item->quantity;
+            // A partner-attributed buyer pays the partner's price for this
+            // one-time product (spec §8.1). Re-derived here from the resolver,
+            // never taken from the cart, which is what makes it untamperable.
+            //
+            // Resolved lazily via the container rather than constructor-injected:
+            // PartnerPricingResolver -> PartnerCapabilityService -> SubscriptionService
+            // -> CalculationService is a real cycle (SubscriptionService already
+            // depends on CalculationService), so constructor injection here causes
+            // infinite recursion when the container builds this service. Same
+            // fix as the flat-rate branch of calculatePlanTotals() above.
+            $unitPrice = app(PartnerPricingResolver::class)->productPrice($user, $product) ?? (int) $productPrice->price;
 
-            $itemDiscountedPrice = $productPrice->price;
+            $totalAmount += $unitPrice * $item->quantity;
+
+            $itemDiscountedPrice = $unitPrice;
             $discountCode = $cart->discountCode;
             if ($discountCode !== null && $this->discountService->isCodeRedeemableForOneTimeProduct($discountCode, $user, $product)) {
-                $discountAmount = $this->discountService->getDiscountAmount($discountCode, $productPrice->price);
-                $itemDiscountedPrice = max(0, $productPrice->price - $discountAmount);
+                $discountAmount = $this->discountService->getDiscountAmount($discountCode, $unitPrice);
+                $itemDiscountedPrice = max(0, $unitPrice - $discountAmount);
             }
 
             $totalAmountAfterDiscount += $itemDiscountedPrice * $item->quantity;
@@ -194,7 +206,11 @@ class CalculationService
             $product = $orderItem->oneTimeProduct()->firstOrFail();
             $productPrice = $product->prices()->where('currency_id', $currency->id)->firstOrFail();
 
-            $orderItem->price_per_unit = $productPrice->price;
+            // Same rule as calculateCartTotals: this is the write side, and the
+            // two must agree or the customer is quoted one price and charged
+            // another. Resolved lazily via the container for the same
+            // container-cycle reason documented above.
+            $orderItem->price_per_unit = app(PartnerPricingResolver::class)->productPrice($user, $product) ?? (int) $productPrice->price;
 
             $totalAmount += $orderItem->price_per_unit * $orderItem->quantity;
 
