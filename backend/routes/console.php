@@ -48,5 +48,9 @@ Schedule::command(RunHealthChecksCommand::class)->everyFiveMinutes()->withoutOve
 
 Schedule::command('app:health-alerts')->everyFiveMinutes()->withoutOverlapping(10);
 
+// Populates the Horizon dashboard's metrics graphs; without this the
+// dashboard works but every graph stays blank.
+Schedule::command('horizon:snapshot')->everyFiveMinutes();
+
 // Must be last: it records that the scheduler itself ran (spec §18.3 O2).
 Schedule::command(ScheduleCheckHeartbeatCommand::class)->everyMinute();
