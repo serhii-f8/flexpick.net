@@ -2,6 +2,8 @@
 
 Status: Approved (design), ready for implementation planning
 Date: 2026-08-30
+Amended: 2026-09-05 — §8.2 and §10 revised ahead of Plan 3; see the
+amendment notes in each of those sections.
 
 ## 1. Goal
 
@@ -308,12 +310,36 @@ This resolver is used by:
   rather than trusting client-submitted values — this is what prevents a
   visitor from tampering with which partner's price they're charged.
 
-### 8.2 Disabled items are hidden, not fallback-priced
+### 8.2 Unconfigured items fall back to base price
 
-When a partner has disabled (or never configured) an item, it does not
-appear in that partner's attributed storefront view — it is not shown at a
-fallback base price. This prevents a partner being forced into approving
-sales of something they declined to resell.
+**Amended 2026-09-05 (Plan 3).** This section previously required that an
+item a partner had disabled or never configured be hidden entirely from that
+partner's attributed storefront. That rule was reconsidered: because
+attribution is set-once and immutable (§4.3), hiding would permanently narrow
+a customer's catalog to whatever their partner happened to configure, with no
+way back.
+
+The rule is now: when a partner has disabled (or never configured) an item,
+that item still appears in the attributed customer's storefront **at the base
+price**, and checks out normally through a payment gateway with no partner
+involvement.
+
+The guarantee that motivated the original rule is preserved on the write
+side, not the read side: a partner is never handed an approval task for an
+item they declined to resell, because `partner_tenant_id` is only stamped on
+an order when a *usable* offering exists (enabled, not below the live
+minimum). A base-priced purchase by an attributed customer is a direct sale —
+it carries no `partner_tenant_id`, generates no partner approval, and if paid
+in cash is approved by an admin under §7.3.
+
+Concretely, for a customer attributed to a partner who configured only the
+Diagnostic tier:
+
+| Item | Shown at | Checkout path | Approver |
+| --- | --- | --- | --- |
+| Diagnostic (configured) | partner price | Offline / cash only | partner |
+| Deep AI (not configured) | base price | gateway | n/a |
+| Expert (not configured) | base price | gateway | n/a |
 
 ## 9. Notifications
 
@@ -326,12 +352,21 @@ infrastructure:
 
 ## 10. Reporting & support visibility
 
-- Partner Order Approvals view and the customer-facing Orders dashboard
-  section both show `base_price_snapshot`, partner price, and computed
-  margin (partner price − base price).
-- Admin's Order resource gains the same columns plus partner identity and a
-  read-only tab showing the full approval + referral-attribution history,
-  so support staff can identify the responsible partner for any customer.
+**Amended 2026-09-05 (Plan 3).** This section previously put
+`base_price_snapshot` and the computed margin on the customer-facing Orders
+dashboard as well as the partner's. That would have shown every customer
+exactly how much their partner marked them up, which defeats the pricing
+freedom §5 grants the partner. Margin is now partner- and admin-only.
+
+- **Partner Order Approvals view (Dashboard):** `base_price_snapshot`,
+  partner price, and computed margin (partner price − base price).
+- **Customer-facing Orders dashboard:** the amount the customer actually paid,
+  plus the identity of the partner they bought through. **No
+  `base_price_snapshot`, no margin.**
+- **Admin's Order resource:** partner identity, `base_price_snapshot`, partner
+  price and margin, plus a read-only section showing the full approval
+  (`order_approvals`) and referral-attribution history, so support staff can
+  identify the responsible partner for any customer.
 
 ## 11. Dashboard restoration
 
