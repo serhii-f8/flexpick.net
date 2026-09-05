@@ -34,6 +34,9 @@ class Subscription extends Model
         'cancellation_additional_info',
         'quantity',
         'tenant_id',
+        'partner_tenant_id',
+        'base_price_snapshot',
+        'quota_snapshot',
         'price_type',
         'price_tiers',
         'price_per_unit',
@@ -45,6 +48,7 @@ class Subscription extends Model
     protected $casts = [
         'price_tiers' => 'array',
         'extra_payment_provider_data' => 'array',
+        'quota_snapshot' => 'array',
     ];
 
     public function user(): BelongsTo
@@ -101,5 +105,15 @@ class Subscription extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function partnerTenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'partner_tenant_id');
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 }
