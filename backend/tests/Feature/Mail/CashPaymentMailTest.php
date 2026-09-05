@@ -75,7 +75,14 @@ class CashPaymentMailTest extends FeatureTest
             snapshot: ['partner_tenant_id' => $partnerTenant->id, 'base_price_snapshot' => 4900],
         );
 
-        Mail::assertQueued(PartnerNewPendingOrder::class, fn ($mail) => $mail->hasTo($partnerUser->email));
+        // No discount was applied, so total_amount_after_discount stays at its
+        // NOT NULL DEFAULT 0 — the mail must still quote the real amount due
+        // (total_amount), not $0.00.
+        Mail::assertQueued(PartnerNewPendingOrder::class, function ($mail) use ($partnerUser) {
+            $mail->assertSeeInHtml((string) money(6900, 'USD'));
+
+            return $mail->hasTo($partnerUser->email);
+        });
         Mail::assertNotQueued(PartnerNewPendingOrder::class, fn ($mail) => $mail->hasTo($bystander->email));
     }
 
@@ -115,5 +122,18 @@ class CashPaymentMailTest extends FeatureTest
         $service->reject($expired, OrderApprovalActor::SYSTEM, null, 'Timed out.');
         Mail::assertQueued(CustomerOrderExpired::class, fn ($mail) => $mail->hasTo($expired->user->email));
         Mail::assertNotQueued(CustomerOrderRejected::class, fn ($mail) => $mail->hasTo($expired->user->email));
+    }
+
+    public function test_a_second_approval_is_a_silent_no_op_and_sends_no_extra_mail(): void
+    {
+        Mail::fake();
+
+        $service = app(OrderApprovalService::class);
+        $order = $this->pendingCashOrder();
+
+        $service->approve($order, OrderApprovalActor::PARTNER, User::factory()->create());
+        $service->approve($order, OrderApprovalActor::PARTNER, User::factory()->create());
+
+        Mail::assertQueued(CustomerOrderApproved::class, 1);
     }
 }

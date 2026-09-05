@@ -16,6 +16,7 @@ class PartnerNewPendingOrder extends Mailable implements ShouldQueue
 
     public function __construct(
         public Order $order,
+        public int $amountDue,
     ) {}
 
     public function envelope(): Envelope

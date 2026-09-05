@@ -7,6 +7,7 @@ use App\Events\Order\OrderedOffline;
 use App\Mail\CashPayments\PartnerNewPendingOrder;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\CashPayments\OrderApprovalService;
 use App\Services\Mail\RenderSafeMailer;
 use App\Services\TenantPermissionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -21,6 +22,7 @@ class NotifyPartnerOfPendingCashOrder implements ShouldQueue
     public function __construct(
         private RenderSafeMailer $mailer,
         private TenantPermissionService $permissionService,
+        private OrderApprovalService $approvalService,
     ) {}
 
     public function handle(OrderedOffline $event): void
@@ -38,9 +40,11 @@ class NotifyPartnerOfPendingCashOrder implements ShouldQueue
             TenancyPermissionConstants::PERMISSION_MANAGE_PARTNER_ORDERS,
         ));
 
+        $amountDue = $this->approvalService->amountDue($event->order);
+
         foreach ($recipients as $recipient) {
             /** @var User $recipient */
-            $this->mailer->send(new PartnerNewPendingOrder($event->order), $recipient->email);
+            $this->mailer->send(new PartnerNewPendingOrder($event->order, $amountDue), $recipient->email);
         }
     }
 }

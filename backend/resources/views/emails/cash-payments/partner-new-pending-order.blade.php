@@ -13,7 +13,7 @@
                 <br><br>
                 {{ __('Order number:') }} {{ $order->uuid }}<br>
                 {{ __('Customer:') }} {{ $order->user?->email }}<br>
-                {{ __('Amount:') }} {{ money((int) ($order->total_amount_after_discount ?? $order->total_amount), $order->currency?->code ?? config('app.default_currency')) }}
+                {{ __('Amount:') }} {{ money($amountDue, $order->currency?->code ?? config('app.default_currency')) }}
                 <br><br>
                 {{ __('Approve it in your dashboard once you have received the cash.') }}
             </p>

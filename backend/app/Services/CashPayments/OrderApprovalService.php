@@ -25,6 +25,7 @@ use App\Services\TenantPermissionService;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Every cash decision — partner, admin, or the expiry sweep — goes through here
@@ -209,8 +210,12 @@ class OrderApprovalService
         ]);
     }
 
-    private function notifyCustomer(Order $order, OrderApprovalDecision $decision, OrderApprovalActor $actor): void
+    private function notifyCustomer(?Order $order, OrderApprovalDecision $decision, OrderApprovalActor $actor): void
     {
+        if ($order === null) {
+            return;
+        }
+
         /** @var User|null $customer */
         $customer = $order->user;
         $email = $customer?->email;
@@ -225,7 +230,17 @@ class OrderApprovalService
             default => new CustomerOrderRejected($order),
         };
 
-        $this->mailer->send($mailable, $email);
+        // A committed cash decision must never be un-reported by a mail
+        // failure: RenderSafeMailer has already logged structured context by
+        // the time it rethrows, and the caller (a Filament action, or the
+        // expiry sweep's foreach) must not see this as the approval/rejection
+        // itself failing.
+        try {
+            $this->mailer->send($mailable, $email);
+        } catch (Throwable) {
+            // Logged inside RenderSafeMailer; swallow so a mail failure
+            // cannot escape a transition that already committed.
+        }
     }
 
     public function approveAsPartner(Order $order, User $user, Tenant $actingTenant, ?string $note = null): bool
