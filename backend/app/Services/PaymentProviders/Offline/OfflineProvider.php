@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Services\CashPayments\CashSubscriptionService;
 use App\Services\OrderService;
 use App\Services\PaymentProviders\PaymentProviderInterface;
 use App\Services\SubscriptionService;
@@ -20,6 +21,7 @@ class OfflineProvider implements PaymentProviderInterface
     public function __construct(
         private OrderService $orderService,
         private SubscriptionService $subscriptionService,
+        private CashSubscriptionService $cashSubscriptionService,
     ) {}
 
     public function initSubscriptionCheckout(Plan $plan, Subscription $subscription, ?Discount $discount = null, int $quantity = 1): array
@@ -33,6 +35,14 @@ class OfflineProvider implements PaymentProviderInterface
                 'payment_provider_id' => $paymentProvider->id,
             ]
         );
+
+        $subscription->refresh();
+
+        // Zero-price offline subscriptions are the admin-comped path and keep
+        // their existing behaviour untouched.
+        if ($this->cashSubscriptionService->isCashSubscription($subscription)) {
+            $this->cashSubscriptionService->startPendingCashSubscription($subscription);
+        }
 
         return [];
     }
