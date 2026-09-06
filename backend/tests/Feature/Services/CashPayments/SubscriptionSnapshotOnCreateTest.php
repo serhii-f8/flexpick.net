@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Services\CashPayments;
 
+use App\Constants\PaymentProviderConstants;
 use App\Constants\SubscriptionStatus;
 use App\Models\Currency;
 use App\Models\PartnerPlanOffering;
+use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\PlanPrice;
 use App\Models\Product;
@@ -52,6 +54,18 @@ class SubscriptionSnapshotOnCreateTest extends FeatureTest
         return $plan;
     }
 
+    /**
+     * A partner price can only ever be charged in cash (spec §8.1), so any
+     * test that expects PartnerPricingResolver to actually treat an offering
+     * as usable must say so explicitly here — FeatureTest does not reset
+     * state between test methods, so leaving this implicit would make later
+     * tests silently depend on an earlier one's side effect.
+     */
+    private function activateOfflineProvider(): void
+    {
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)->update(['is_active' => true]);
+    }
+
     public function test_a_direct_subscription_freezes_the_base_metadata(): void
     {
         $plan = $this->sellablePlan(['audit_deep_ai_credits' => 2]);
@@ -72,6 +86,7 @@ class SubscriptionSnapshotOnCreateTest extends FeatureTest
 
     public function test_a_partner_attributed_subscription_freezes_the_partner_overrides(): void
     {
+        $this->activateOfflineProvider();
         $partnerTenant = $this->activePartnerTenant();
         $plan = $this->sellablePlan(['audit_deep_ai_credits' => 2]);
         $tenant = $this->createTenant();
