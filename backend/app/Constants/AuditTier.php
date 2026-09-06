@@ -18,6 +18,19 @@ enum AuditTier: string
     }
 
     /**
+     * One line of what the tier adds, for the picker on the run-an-audit
+     * page. Each tier builds on the one before it, and the copy says so.
+     */
+    public function tagline(): string
+    {
+        return match ($this) {
+            self::DIAGNOSTIC => __('Five static analyzers, an AI reading of the results, and a fix-first plan.'),
+            self::DEEP_AI => __('Everything in Diagnostic, plus an AI review of your key files and core flows.'),
+            self::EXPERT => __('Everything in Deep AI, plus a manual review by one of our developers.'),
+        };
+    }
+
+    /**
      * Catalog price in cents from config('pricing.tiers'), or null if this
      * tier has no priced product yet. Single source of truth shared by
      * AuditEntitlementService::tierPriceCents() and labelWithPrice().

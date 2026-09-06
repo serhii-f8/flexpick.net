@@ -339,4 +339,49 @@ class AuditReportsRenderTest extends FeatureTest
 
         Carbon::setTestNow();
     }
+
+    public function test_the_launch_button_names_the_selected_tier(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 1);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(AuditReports::class)
+            ->set('tier', AuditTier::DEEP_AI->value)
+            ->assertSee(__('Run :tier', ['tier' => AuditTier::DEEP_AI->label()]))
+            ->set('tier', AuditTier::DIAGNOSTIC->value)
+            ->assertSee(__('Run :tier', ['tier' => AuditTier::DIAGNOSTIC->label()]));
+    }
+
+    public function test_buying_a_tier_names_it_and_its_price_on_the_button(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 0);
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(AuditReports::class)
+            ->set('tier', AuditTier::DEEP_AI->value)
+            ->assertSee(__('Buy :tier for $:price', [
+                'tier' => AuditTier::DEEP_AI->label(),
+                'price' => number_format(AuditTier::DEEP_AI->priceCents() / 100),
+            ]));
+    }
+
+    public function test_repositories_show_their_short_name_and_keep_scheduling_behind_a_disclosure(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        $report = AuditReport::factory()->create(['user_id' => $user->id]);
+        $report->auditRequest->update([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'repo_url' => 'https://github.com/acme/short-name',
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+
+        Livewire::test(AuditReports::class)
+            ->assertOk()
+            ->assertSee('acme/short-name')
+            ->assertSee(__('Schedule re-audits'))
+            ->assertSee(__('needs work'));
+    }
 }
