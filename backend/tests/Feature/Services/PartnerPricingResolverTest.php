@@ -28,8 +28,12 @@ class PartnerPricingResolverTest extends FeatureTest
     {
         parent::setUp();
 
+        // Both columns: PartnerPricingResolver gates on exactly the pair
+        // checkout itself filters on (is_active AND is_enabled_for_new_payments).
+        // Set explicitly here rather than relying on the seeded default —
+        // FeatureTest does not reset the database between test classes.
         PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
-            ->update(['is_active' => true]);
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
 
         app(PartnerPricingResolver::class)->flush();
     }
@@ -179,6 +183,38 @@ class PartnerPricingResolverTest extends FeatureTest
         $this->resolver()->flush();
 
         $this->assertNull($this->resolver()->planPrice($user, $plan));
+    }
+
+    /**
+     * Checkout resolves its provider list through
+     * PaymentService::getActivePaymentProvidersFromDatabase(), which requires
+     * is_enabled_for_new_payments as well as is_active whenever $isNewPayment
+     * — and both checkout forms pass true. A resolver that checked only
+     * is_active would quote a partner price and then have
+     * restrictToPartnerProviders() filter the list to empty, throwing an
+     * unhandled NoPaymentProvidersAvailableException at the customer.
+     */
+    public function test_an_offline_provider_closed_to_new_payments_yields_no_partner_price(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        [$plan] = $this->sellablePlan($partnerTenant);
+        $user = $this->attributedUser($partnerTenant);
+
+        $this->assertSame(7900, $this->resolver()->planPrice($user, $plan), 'Arrangement failure: expected a usable offering to begin with.');
+
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_enabled_for_new_payments' => false]);
+        $this->resolver()->flush();
+
+        $this->assertNull($this->resolver()->planPrice($user, $plan));
+        $this->assertNull($this->resolver()->usablePlanOffering($user, $plan));
+
+        // Restore the shared row: FeatureTest does not reset the database
+        // between test classes, so a mutation left behind here would silently
+        // disable partner pricing for every later class.
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_enabled_for_new_payments' => true]);
+        $this->resolver()->flush();
     }
 
     public function test_a_seat_based_plan_yields_no_partner_price(): void

@@ -25,8 +25,12 @@ class PartnerStorefrontPricingTest extends FeatureTest
     {
         parent::setUp();
 
+        // Both columns: PartnerPricingResolver gates on exactly the pair
+        // checkout itself filters on (is_active AND is_enabled_for_new_payments).
+        // Set explicitly here rather than relying on the seeded default —
+        // FeatureTest does not reset the database between test classes.
         PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
-            ->update(['is_active' => true]);
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
 
         app(PartnerPricingResolver::class)->flush();
     }

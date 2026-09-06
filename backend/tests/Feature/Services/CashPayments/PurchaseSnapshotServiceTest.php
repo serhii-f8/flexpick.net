@@ -47,7 +47,8 @@ class PurchaseSnapshotServiceTest extends FeatureTest
      */
     private function activateOfflineProvider(): void
     {
-        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)->update(['is_active' => true]);
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
     }
 
     /** @return array{0: Plan, 1: Product} */

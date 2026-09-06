@@ -63,7 +63,8 @@ class SubscriptionSnapshotOnCreateTest extends FeatureTest
      */
     private function activateOfflineProvider(): void
     {
-        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)->update(['is_active' => true]);
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
     }
 
     public function test_a_direct_subscription_freezes_the_base_metadata(): void

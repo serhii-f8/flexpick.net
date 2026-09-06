@@ -30,13 +30,17 @@ use Illuminate\Support\Collection;
  *   - the offering exists and is_enabled,
  *   - the offering is still at or above the live admin floor (spec §5.5).
  *
- * Plus two operational preconditions, both about the Offline payment
+ * Plus three operational preconditions, all about the Offline payment
  * provider being the only thing that can ever collect a partner price:
- *   - the Offline provider must be active (a partner price with checkout
- *     switched off would quote a price with no way to pay it), and
+ *   - the Offline provider must be active AND open to new payments — the two
+ *     columns checkout itself filters on (a partner price with checkout
+ *     switched off would quote a price with no way to pay it),
  *   - for a plan offering specifically, Offline must actually support the
  *     plan's type (today: flat-rate only — Offline cannot bill seat-based
- *     or usage-based plans at all, partner or not).
+ *     or usage-based plans at all, partner or not), and
+ *   - for a plan with a trial, this buyer must still be eligible for one —
+ *     a returning customer who has used up their trials makes checkout ask
+ *     for a provider that can skip the trial, which Offline cannot do.
  * Failing closed here makes display and checkout degrade together — a plan
  * this gate rejects shows base pricing and keeps every provider, exactly as
  * if no partner offering existed.
@@ -52,7 +56,7 @@ class PartnerPricingResolver
     /** @var array<string, PartnerProductOffering|null> keyed by "<userKey>:<productId>" */
     private array $productOfferingMemo = [];
 
-    private ?bool $offlineActiveMemo = null;
+    private ?bool $offlineUsableMemo = null;
 
     /** @var array<int, bool> keyed by plan id */
     private array $offlineSupportsPlanMemo = [];
@@ -74,7 +78,7 @@ class PartnerPricingResolver
         $this->tenantMemo = [];
         $this->planOfferingMemo = [];
         $this->productOfferingMemo = [];
-        $this->offlineActiveMemo = null;
+        $this->offlineUsableMemo = null;
         $this->offlineSupportsPlanMemo = [];
     }
 
@@ -207,7 +211,7 @@ class PartnerPricingResolver
     {
         $tenant = $this->resolvePartnerTenant($user);
 
-        if ($tenant === null || ! $this->offlineProviderIsActive() || ! $this->offlineProviderSupportsPlan($plan)) {
+        if ($tenant === null || ! $this->offlineProviderAcceptsNewPayments() || ! $this->offlineProviderSupportsPlan($plan)) {
             return null;
         }
 
@@ -227,7 +231,7 @@ class PartnerPricingResolver
     {
         $tenant = $this->resolvePartnerTenant($user);
 
-        if ($tenant === null || ! $this->offlineProviderIsActive()) {
+        if ($tenant === null || ! $this->offlineProviderAcceptsNewPayments()) {
             return null;
         }
 
@@ -243,10 +247,21 @@ class PartnerPricingResolver
         return $this->catalogService->isProductOfferingBelowMinimum($offering) ? null : $offering;
     }
 
-    private function offlineProviderIsActive(): bool
+    /**
+     * Both columns, deliberately: checkout resolves its provider list through
+     * PaymentService::getActivePaymentProvidersFromDatabase(), which adds
+     * is_enabled_for_new_payments whenever $isNewPayment — and both checkout
+     * forms pass true. Checking only is_active would let an admin's one-click
+     * ToggleColumn leave Offline active but closed to new payments, and then a
+     * partner price would be quoted with every provider filtered away
+     * underneath it: an unhandled NoPaymentProvidersAvailableException, i.e. a
+     * 500 for the customer.
+     */
+    private function offlineProviderAcceptsNewPayments(): bool
     {
-        return $this->offlineActiveMemo ??= PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+        return $this->offlineUsableMemo ??= PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
             ->where('is_active', true)
+            ->where('is_enabled_for_new_payments', true)
             ->exists();
     }
 
