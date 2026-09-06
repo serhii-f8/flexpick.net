@@ -151,7 +151,7 @@ return [
 
     'default_currency' => 'USD',
 
-    'support_email' => 'support@saasykit.com',
+    'support_email' => env('SUPPORT_EMAIL', 'info@flexpick.net'),
 
     'email_color_tint' => '#6f27e5',  // used to add brand color to email templates (since it's not possible to use tailwind vars in emails)
 
