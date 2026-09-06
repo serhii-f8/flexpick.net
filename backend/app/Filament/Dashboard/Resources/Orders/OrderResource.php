@@ -53,6 +53,9 @@ class OrderResource extends Resource
 
                     return money($state, $record->currency->code);
                 })->label(__('Total Amount')),
+                TextColumn::make('partnerTenant.name')
+                    ->label(__('Sold Through'))
+                    ->placeholder('—'),
                 TextColumn::make('status')
                     ->label(__('Status'))
                     ->color(fn (Order $record, OrderStatusMapper $mapper): string => $mapper->mapColor($record->status))
@@ -102,6 +105,9 @@ class OrderResource extends Resource
 
                                                 return money($state, $record->currency->code);
                                             }),
+                                        TextEntry::make('partnerTenant.name')
+                                            ->label(__('Sold Through'))
+                                            ->visible(fn (Order $record): bool => $record->partner_tenant_id !== null),
                                         TextEntry::make('total_discount_amount')
                                             ->label(__('Total Discount Amount'))
                                             ->formatStateUsing(function (string $state, $record) {
