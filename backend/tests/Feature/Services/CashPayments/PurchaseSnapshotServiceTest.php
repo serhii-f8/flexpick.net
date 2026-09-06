@@ -3,6 +3,7 @@
 namespace Tests\Feature\Services\CashPayments;
 
 use App\Constants\PaymentProviderConstants;
+use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Models\Currency;
 use App\Models\OneTimeProduct;
@@ -56,7 +57,11 @@ class PurchaseSnapshotServiceTest extends FeatureTest
             'reseller_quota_keys' => array_keys($metadata),
             'metadata' => $metadata,
         ]);
-        $plan = Plan::factory()->create(['product_id' => $product->id, 'is_visible' => true]);
+        $plan = Plan::factory()->create([
+            'product_id' => $product->id,
+            'type' => PlanType::FLAT_RATE->value,
+            'is_visible' => true,
+        ]);
         PlanPrice::factory()->create([
             'plan_id' => $plan->id,
             'currency_id' => Currency::where('code', 'USD')->first()->id,

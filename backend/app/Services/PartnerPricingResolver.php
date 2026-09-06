@@ -10,6 +10,7 @@ use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\PaymentProviders\PaymentService;
 use Illuminate\Support\Collection;
 
 /**
@@ -29,10 +30,16 @@ use Illuminate\Support\Collection;
  *   - the offering exists and is_enabled,
  *   - the offering is still at or above the live admin floor (spec §5.5).
  *
- * Plus one operational precondition: the Offline payment provider must be
- * active. A partner price can only ever be charged in cash, so advertising
- * one while Offline is switched off would quote a price with no checkout
- * behind it. Failing closed here makes display and checkout degrade together.
+ * Plus two operational preconditions, both about the Offline payment
+ * provider being the only thing that can ever collect a partner price:
+ *   - the Offline provider must be active (a partner price with checkout
+ *     switched off would quote a price with no way to pay it), and
+ *   - for a plan offering specifically, Offline must actually support the
+ *     plan's type (today: flat-rate only — Offline cannot bill seat-based
+ *     or usage-based plans at all, partner or not).
+ * Failing closed here makes display and checkout degrade together — a plan
+ * this gate rejects shows base pricing and keeps every provider, exactly as
+ * if no partner offering existed.
  */
 class PartnerPricingResolver
 {
@@ -46,6 +53,9 @@ class PartnerPricingResolver
     private array $productOfferingMemo = [];
 
     private ?bool $offlineActiveMemo = null;
+
+    /** @var array<int, bool> keyed by plan id */
+    private array $offlineSupportsPlanMemo = [];
 
     public function __construct(
         private PartnerAttributionService $attributionService,
@@ -65,6 +75,7 @@ class PartnerPricingResolver
         $this->planOfferingMemo = [];
         $this->productOfferingMemo = [];
         $this->offlineActiveMemo = null;
+        $this->offlineSupportsPlanMemo = [];
     }
 
     public function resolvePartnerTenant(?User $user = null): ?Tenant
@@ -196,7 +207,7 @@ class PartnerPricingResolver
     {
         $tenant = $this->resolvePartnerTenant($user);
 
-        if ($tenant === null || ! $this->offlineProviderIsActive()) {
+        if ($tenant === null || ! $this->offlineProviderIsActive() || ! $this->offlineProviderSupportsPlan($plan)) {
             return null;
         }
 
@@ -237,6 +248,23 @@ class PartnerPricingResolver
         return $this->offlineActiveMemo ??= PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
             ->where('is_active', true)
             ->exists();
+    }
+
+    /**
+     * Resolved lazily via the container rather than constructor-injected,
+     * consistent with the rule that nothing reachable from
+     * SubscriptionService may constructor-inject this resolver — the same
+     * cycle applies in reverse here, since PaymentService is reachable from
+     * checkout/subscription code that this resolver is itself injected into.
+     *
+     * Asks the OfflineProvider instance itself rather than re-hardcoding
+     * PlanType::FLAT_RATE here, so the two checks cannot drift apart.
+     */
+    private function offlineProviderSupportsPlan(Plan $plan): bool
+    {
+        return $this->offlineSupportsPlanMemo[$plan->id] ??= app(PaymentService::class)
+            ->getPaymentProviderBySlug(PaymentProviderConstants::OFFLINE_SLUG)
+            ->supportsPlan($plan);
     }
 
     private function userKey(?User $user): int

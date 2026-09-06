@@ -3,6 +3,7 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\PaymentProviderConstants;
+use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Models\OneTimeProduct;
 use App\Models\OneTimeProductPrice;
@@ -53,6 +54,7 @@ class PartnerStorefrontPricingTest extends FeatureTest
         ]);
         $plan = Plan::factory()->create([
             'product_id' => $product->id,
+            'type' => PlanType::FLAT_RATE->value,
             'is_active' => true,
             'is_visible' => true,
         ]);

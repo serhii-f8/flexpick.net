@@ -4,9 +4,17 @@ namespace Tests\Feature\Livewire\Checkout;
 
 use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
+use App\Constants\SessionConstants;
 use App\Constants\SubscriptionStatus;
+use App\Dto\CartDto;
+use App\Dto\CartItemDto;
+use App\Dto\SubscriptionCheckoutDto;
+use App\Livewire\Checkout\ProductCheckoutForm;
 use App\Livewire\Checkout\SubscriptionCheckoutForm;
+use App\Models\OneTimeProduct;
+use App\Models\OneTimeProductPrice;
 use App\Models\PartnerPlanOffering;
+use App\Models\PartnerProductOffering;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Product;
@@ -16,6 +24,7 @@ use App\Models\User;
 use App\Services\CurrencyService;
 use App\Services\PartnerPricingResolver;
 use App\Services\PaymentProviders\PaymentService;
+use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 
 class PartnerPaymentProviderRestrictionTest extends FeatureTest
@@ -66,6 +75,24 @@ class PartnerPaymentProviderRestrictionTest extends FeatureTest
         ]);
 
         return $plan;
+    }
+
+    private function visibleProduct(int $basePrice = 4900): OneTimeProduct
+    {
+        $product = OneTimeProduct::factory()->create([
+            'is_active' => true,
+            'is_visible' => true,
+            'max_quantity' => 1,
+            'metadata' => ['audit_diagnostic_credits' => 1],
+            'reseller_quota_keys' => ['audit_diagnostic_credits'],
+        ]);
+        OneTimeProductPrice::create([
+            'one_time_product_id' => $product->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => $basePrice,
+        ]);
+
+        return $product;
     }
 
     private function attributedUser(Tenant $partnerTenant): User
@@ -139,5 +166,71 @@ class PartnerPaymentProviderRestrictionTest extends FeatureTest
         );
 
         $this->assertSame($this->slugs($all), $this->slugs($filtered));
+    }
+
+    /**
+     * The two static-helper tests above prove restrictToPartnerProviders()
+     * filters correctly in isolation, but not that SubscriptionCheckoutForm
+     * actually wires the right plan and buyer into it. Drive the real
+     * component end to end so a mistake in that wiring (e.g. passing the
+     * wrong plan, or calling usableProductOffering() instead) would fail.
+     */
+    public function test_the_subscription_checkout_component_offers_only_the_offline_provider_for_a_partner_priced_plan(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $plan = $this->flatRatePlan();
+        PartnerPlanOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $plan->id,
+            'price' => 7900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        app(PartnerPricingResolver::class)->flush();
+
+        $sessionDto = new SubscriptionCheckoutDto;
+        $sessionDto->planSlug = $plan->slug;
+
+        $this->actingAs($user);
+        $this->withSession([SessionConstants::SUBSCRIPTION_CHECKOUT_DTO => $sessionDto]);
+
+        $component = Livewire::test(SubscriptionCheckoutForm::class);
+
+        $this->assertSame(
+            [PaymentProviderConstants::OFFLINE_SLUG],
+            $this->slugs($component->viewData('paymentProviders')),
+        );
+    }
+
+    /** Same rationale as the subscription-side component test above, for ProductCheckoutForm. */
+    public function test_the_product_checkout_component_offers_only_the_offline_provider_for_a_partner_priced_product(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = $this->visibleProduct();
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $product->id,
+            'price' => 7900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        app(PartnerPricingResolver::class)->flush();
+
+        $cartItem = new CartItemDto;
+        $cartItem->productId = $product->id;
+        $cartDto = new CartDto;
+        $cartDto->items = [$cartItem];
+
+        $this->actingAs($user);
+        $this->withSession([SessionConstants::CART_DTO => $cartDto]);
+
+        $component = Livewire::test(ProductCheckoutForm::class);
+
+        $this->assertSame(
+            [PaymentProviderConstants::OFFLINE_SLUG],
+            $this->slugs($component->viewData('paymentProviders')),
+        );
     }
 }

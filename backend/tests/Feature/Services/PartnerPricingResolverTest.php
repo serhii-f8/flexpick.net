@@ -3,6 +3,7 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\PaymentProviderConstants;
+use App\Constants\PlanType;
 use App\Constants\SessionConstants;
 use App\Constants\SubscriptionStatus;
 use App\Models\OneTimeProduct;
@@ -60,7 +61,12 @@ class PartnerPricingResolverTest extends FeatureTest
             'metadata' => ['audit_diagnostic_credits' => 1],
             'reseller_quota_keys' => ['audit_diagnostic_credits'],
         ]);
-        $plan = Plan::factory()->create(['product_id' => $product->id, 'is_active' => true, 'is_visible' => true]);
+        $plan = Plan::factory()->create([
+            'product_id' => $product->id,
+            'type' => PlanType::FLAT_RATE->value,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
         $plan->prices()->create([
             'currency_id' => app(CurrencyService::class)->getCurrency()->id,
             'price' => $basePrice,
@@ -173,6 +179,41 @@ class PartnerPricingResolverTest extends FeatureTest
         $this->resolver()->flush();
 
         $this->assertNull($this->resolver()->planPrice($user, $plan));
+    }
+
+    public function test_a_seat_based_plan_yields_no_partner_price(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+
+        // Offline cannot bill a seat-based plan at all (OfflineProvider::supportsPlan()
+        // returns true only for PlanType::FLAT_RATE), so a partner offering on one
+        // must never surface a partner price — there would be no way to pay it.
+        $product = Product::factory()->create([
+            'metadata' => ['audit_diagnostic_credits' => 1],
+            'reseller_quota_keys' => ['audit_diagnostic_credits'],
+        ]);
+        $plan = Plan::factory()->create([
+            'product_id' => $product->id,
+            'type' => PlanType::SEAT_BASED->value,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        $plan->prices()->create([
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => 4900,
+        ]);
+        PartnerPlanOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $plan->id,
+            'price' => 7900,
+            'quota_overrides' => ['audit_diagnostic_credits' => 3],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        $this->resolver()->flush();
+
+        $this->assertNull($this->resolver()->planPrice($user, $plan));
+        $this->assertNull($this->resolver()->usablePlanOffering($user, $plan));
     }
 
     public function test_a_one_time_product_offering_resolves_the_same_way(): void
