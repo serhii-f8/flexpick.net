@@ -2,12 +2,15 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\DiscountConstants;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Dto\CartDto;
 use App\Dto\CartItemDto;
+use App\Models\Discount;
+use App\Models\DiscountCode;
 use App\Models\OneTimeProduct;
 use App\Models\OneTimeProductPrice;
 use App\Models\Order;
@@ -209,6 +212,57 @@ class PartnerCheckoutPricingTest extends FeatureTest
         $totals = app(CalculationService::class)->calculateCartTotals($cart, $user);
 
         $this->assertSame(11900, $totals->subtotal);
+    }
+
+    /**
+     * calculateCartTotals() computes the discount against the partner price
+     * rather than the base price. That is deliberate — a discount has to apply
+     * to what is actually charged — and it is the one semantic change this
+     * branch made to money arithmetic, so it gets its own test.
+     */
+    public function test_a_discount_code_applies_against_the_partner_price_not_the_base_price(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = $this->visibleProduct(basePrice: 4900);
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $product->id,
+            'price' => 7900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        app(PartnerPricingResolver::class)->flush();
+
+        $discount = Discount::create([
+            'name' => 'Partner pricing discount '.uniqid(),
+            'type' => DiscountConstants::TYPE_PERCENTAGE,
+            'amount' => 10,
+            'is_active' => true,
+            'max_redemptions' => -1,
+            'max_redemptions_per_user' => -1,
+            'is_enabled_for_all_one_time_products' => true,
+            'is_enabled_for_all_plans' => true,
+        ]);
+        $code = 'PARTNER10-'.uniqid();
+        DiscountCode::create([
+            'discount_id' => $discount->id,
+            'code' => $code,
+        ]);
+
+        $cart = new CartDto;
+        $item = new CartItemDto;
+        $item->productId = $product->id;
+        $item->quantity = 1;
+        $cart->items = [$item];
+        $cart->discountCode = $code;
+
+        $totals = app(CalculationService::class)->calculateCartTotals($cart, $user);
+
+        // 10% of the partner price (790), not 10% of the base price (490).
+        $this->assertSame(7900, $totals->subtotal);
+        $this->assertSame(790, $totals->discountAmount);
+        $this->assertSame(7110, $totals->amountDue);
     }
 
     public function test_order_totals_write_the_partner_price_onto_the_order(): void

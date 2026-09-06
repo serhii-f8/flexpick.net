@@ -50,12 +50,16 @@
             @endif
         @endif
 
-        @if($price->type === \App\Constants\PlanPriceType::USAGE_BASED_PER_UNIT->value)
+        {{-- $price is null when the plan has no price row in the store currency, and
+             plans.meter_id is nullable at the DB level (only the admin form enforces
+             the invariant) — both are dereferenced outside the @if($price !== null)
+             guard above, so both are null-safe. --}}
+        @if($price?->type === \App\Constants\PlanPriceType::USAGE_BASED_PER_UNIT->value)
             <div class="text-sm mt-2">
-                + @money($price->price_per_unit, $price->currency->code) / {{ __($plan->meter->name) }}
+                + @money($price->price_per_unit, $price->currency->code) / {{ __($plan->meter?->name) }}
             </div>
-        @elseif($price->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_GRADUATED->value
-                || $price->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_VOLUME->value)
+        @elseif($price?->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_GRADUATED->value
+                || $price?->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_VOLUME->value)
             <div class="mt-2">
                 @php $start = 0; $startingPhrase = __('From'); @endphp
                 @foreach($price->tiers as $tier)

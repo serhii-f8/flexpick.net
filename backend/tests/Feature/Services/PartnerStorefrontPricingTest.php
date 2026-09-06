@@ -19,6 +19,14 @@ use App\Services\CurrencyService;
 use App\Services\PartnerPricingResolver;
 use Tests\Feature\FeatureTest;
 
+/**
+ * Whole-suite coupling warning: several assertions here read the storefront's
+ * full plan/product collections, which include every row any earlier test class
+ * left behind — Tests\Feature\FeatureTest re-seeds once per suite run, not per
+ * class. Assertions must therefore be bound to data this class created (by id
+ * or by a unique slug), never to a collection count or to "the first plan".
+ * Anything phrased against the whole collection can pass for the wrong reason.
+ */
 class PartnerStorefrontPricingTest extends FeatureTest
 {
     protected function setUp(): void
