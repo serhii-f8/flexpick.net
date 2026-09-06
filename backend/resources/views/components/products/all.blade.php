@@ -1,55 +1,25 @@
 @inject('productService', 'App\Services\OneTimeProductService')
 
-<div {{ $attributes->merge(['class' => 'grid grid-cols-1 md:grid-cols-3 gap-6 md:max-w-6xl mx-4 p-8 mt-6 md:mx-auto']) }}>
+<div {{ $attributes->merge(['class' => 'fp-plan-grid']) }}>
     @foreach($products as $product)
         @php
             $price = $productService->getProductPrice($product);
+            $features = collect($product->features ?? [])->pluck('feature')->filter()->values()->all();
         @endphp
 
-        <div class="border border-primary-500 rounded-2xl p-8">
-
-            <x-heading.h4 class="text-center">
-                {{$product->name}}
-            </x-heading.h4>
-
-            <p class="text-center pt-3 text-xs">
-                {{$product->description}}
-            </p>
-
-            <div class="text-center mx-auto mt-6 text-base max-w-fit">
-                <ul class="flex flex-col gap-3 flex-wrap justify-center items-center">
-                    @if($product->features)
-                        @foreach($product->features as $feature)
-                            <x-features.li-item class="text-left">{{$feature['feature']}}</x-features.li-item>
-                        @endforeach
-                    @endif
-                </ul>
-            </div>
-
-            <div class="text-center mx-auto">
-                <p class="mt-6">
-                    <span class="ms-1 text-primary-500 text-2xl font-bold">@money($product->partner_price ?? $price->price, $price->currency->code)</span>
-                </p>
-
-                @if($product->partner_price !== null && $product->partner_tenant_name !== null)
-                    <p class="text-xs text-neutral-400">
-                        {{ __('Sold through :partner', ['partner' => $product->partner_tenant_name]) }}
-                    </p>
-                @endif
-
-                <x-button-link.primary href="{{route('buy.product', ['productSlug' => $product->slug])}}" class="mt-6 text-lg py-4! px-6">
-                    {{ __('Get :name Now', ['name' => $product->name]) }}
-                </x-button-link.primary>
-
-                @if (!empty($extraDescription))
-                    <div class="flex text-center items-center flex-col">
-                        <div>
-                            {{$extraDescription}}
-                        </div>
-                    </div>
-                @endif
-            </div>
-
-        </div>
+        <x-fp.plan-card
+            :name="$product->name"
+            :description="$product->description"
+            :price="money($product->partner_price ?? $price->price, $price->currency->code)"
+            :interval="__('one-off')"
+            :features="$features"
+            :partner="$product->partner_price !== null ? $product->partner_tenant_name : null"
+            :href="route('buy.product', ['productSlug' => $product->slug])"
+            :cta="__('Get :name', ['name' => $product->name])"
+        >
+            @if (!empty($extraDescription))
+                <p class="fp-plan-card-desc">{{ $extraDescription }}</p>
+            @endif
+        </x-fp.plan-card>
     @endforeach
 </div>

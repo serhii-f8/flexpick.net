@@ -2,36 +2,57 @@
     'buyRoute' => 'subscription.change-plan',
 ])
 
-<section class="bg-white dark:bg-gray-900 p-5 dark:text-white">
+@php
+    $intervals = array_keys($groupedPlans);
+    $activeInterval = $preselectedInterval ?: ($intervals[0] ?? '');
+    $currentPrice = isset($subscription) && $subscription !== null ? app(\App\Services\PlanService::class)->getPlanPrice($subscription->plan) : null;
+@endphp
 
-        @if(isset($subscription))
-            <div class="mx-auto max-w-(--breakpoint-md) text-center mb-8">
-                <h2 class="mb-4 text-xl tracking-tight text-gray-900 dark:text-white">{{ __('You are currently on the') }} <div class="badge badge-primary badge-outline font-bold text-xl p-3">{{ $subscription->plan->product->name  }}</div> {{__('plan.')}}</h2>
-            </div>
-        @endif
-
-        <div class="plan-switcher tabs tabs-box justify-center w-full bg-neutral-200  mb-4 dark:bg-gray-800 max-w-fit m-auto">
-            @foreach($groupedPlans as $interval => $plans)
-                <a class="tab dark:text-black {{$preselectedInterval == $interval ? 'tab-active': ''}}" data-target="plans-{{$interval}}" aria-selected="{{$preselectedInterval == $interval ? 'true' : 'false'}}">{{str($interval)->title()}}</a>
-            @endforeach
+<section class="fp-plan-picker">
+    @if(isset($subscription) && $subscription !== null)
+        <div class="fp-current-strip mb-6">
+            <span class="fp-mono-label">{{ __('Current plan') }}</span>
+            <strong>{{ $subscription->plan->product->name }}</strong>
+            @if ($currentPrice)
+                <span>@money($currentPrice->price, $currentPrice->currency->code) / {{ __($subscription->plan->interval->name) }}</span>
+            @endif
+            @if ($subscription->ends_at)
+                <span style="color: var(--fp-muted)">{{ __('Renews :date', ['date' => \Illuminate\Support\Carbon::parse($subscription->ends_at)->format(config('app.date_format', 'd/m/Y'))]) }}</span>
+            @endif
         </div>
+    @endif
 
-        @if($isGrouped)
+    @if($isGrouped)
+        <div x-data="{ interval: @js($activeInterval) }">
+            @if (count($intervals) > 1)
+                <div class="fp-pricing-switch">
+                    <div class="fp-switch" role="tablist" aria-label="{{ __('Billing interval') }}">
+                        @foreach($groupedPlans as $interval => $intervalPlans)
+                            <button
+                                type="button"
+                                role="tab"
+                                :aria-selected="interval === @js($interval) ? 'true' : 'false'"
+                                aria-controls="plans-{{ $interval }}"
+                                @click="interval = @js($interval)"
+                            >{{ str($interval)->title() }}</button>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             @foreach($groupedPlans as $interval => $plans)
-                <div class="plans-container plans-{{$interval}} {{$preselectedInterval == $interval ? '': 'hidden'}}  grid max-w-md gap-10 row-gap-5 lg:max-w-(--breakpoint-lg) sm:row-gap-10 lg:grid-cols-3 xl:max-w-(--breakpoint-lg) sm:mx-auto dark:text-white pt-5 pb-5">
+                <div id="plans-{{ $interval }}" role="tabpanel" class="fp-plan-grid" x-show="interval === @js($interval)" @if ($interval !== $activeInterval) x-cloak @endif>
                     @foreach($plans as $plan)
                         <x-filament.plans.one :plan="$plan" :subscription="$subscription" :buyRoute="$buyRoute" />
                     @endforeach
                 </div>
             @endforeach
-        @else
-
-            <div class="grid max-w-md gap-10 row-gap-5 lg:max-w-(--breakpoint-lg) sm:row-gap-10 lg:grid-cols-3 xl:max-w-(--breakpoint-lg) sm:mx-auto dark:text-white">
-                @foreach($plans as $plan)
-                        <x-filament.plans.one :plan="$plan" :subscription="$subscription" :featured="$featured == $plan->product->slug" :buyRoute="$buyRoute"/>
-                @endforeach
-            </div>
-        @endif
-
+        </div>
+    @else
+        <div class="fp-plan-grid">
+            @foreach($plans as $plan)
+                <x-filament.plans.one :plan="$plan" :subscription="$subscription" :buyRoute="$buyRoute"/>
+            @endforeach
+        </div>
+    @endif
 </section>
-

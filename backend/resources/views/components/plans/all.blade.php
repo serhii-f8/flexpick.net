@@ -1,65 +1,70 @@
-@if (count($groupedPlans) == 0)
-    <x-section.columns class="max-w-none md:max-w-6xl mt-6 justify-center md:flex-wrap!">
-    @foreach($plans as $plan)
-        <x-section.column class="md:basis-1/3! px-4!">
+@php
+    $intervals = array_keys($groupedPlans);
+    $activeInterval = $preselectedInterval ?: ($intervals[0] ?? '');
+@endphp
+
+@isset($partnerName)
+    <div class="fp-partner-banner">
+        <x-fp.status-dot color="primary" class="mt-1.5" />
+        <p class="m-0">
+            <strong>{{ __('Prices on this page are set by :partner.', ['partner' => $partnerName]) }}</strong>
+            {{ __('You buy through them and they stay your point of contact; the audits themselves are run by FlexPick.') }}
+        </p>
+    </div>
+@endisset
+
+@if (count($groupedPlans) === 0)
+    <div class="fp-plan-grid">
+        @foreach($plans as $plan)
             <x-plans.one :plan="$plan" />
-        </x-section.column>
-    @endforeach
-    </x-section.columns>
-@else
-    <x-tab-slider class="mt-6 md:max-w-6xl">
-        <x-slot name="tabNames">
-            @php
-                if (empty($preselectedInterval)) {
-                    $preselectedInterval = array_keys($groupedPlans)[0] ?? null;
-                }
-            @endphp
-            @foreach($groupedPlans as $interval => $intervalPlans)
-                <x-tab-slider.tab-name controls="pricing-{{$interval}}" active="{{ $preselectedInterval == $interval ? 'true' : 'false' }}">
-
-                    {{ ucfirst(__($intervalPlans[0]?->interval?->adverb)) }}
-
-                    @if(isset($intervalSavingPercentage[$interval]) && $intervalSavingPercentage[$interval] > 0)
-                        <x-pill class="text-primary-500 bg-primary-50 ml-">{{ __('Save ') . $intervalSavingPercentage[$interval] }} %</x-pill>
-                    @endif
-                </x-tab-slider.tab-name>
-
-            @endforeach
-        </x-slot>
-
-        @foreach($groupedPlans as $interval => $plans)
-            <x-tab-slider.tab-content id="pricing-{{$interval}}">
-                <x-section.columns class="max-w-none md:max-w-6xl mt-6 justify-center md:flex-wrap!">
-                    @foreach($plans as $plan)
-                        <x-section.column class="md:basis-1/3! px-4!">
-                            <x-plans.one :plan="$plan" />
-                        </x-section.column>
-                    @endforeach
-                </x-section.columns>
-            </x-tab-slider.tab-content>
         @endforeach
+    </div>
+@else
+    <div x-data="{ interval: @js($activeInterval) }">
+        @if (count($intervals) > 1)
+            <div class="fp-pricing-switch">
+                <div class="fp-switch" role="tablist" aria-label="{{ __('Billing interval') }}">
+                    @foreach($groupedPlans as $interval => $intervalPlans)
+                        <button
+                            type="button"
+                            role="tab"
+                            :aria-selected="interval === @js($interval) ? 'true' : 'false'"
+                            aria-controls="pricing-{{ $interval }}"
+                            @click="interval = @js($interval)"
+                        >
+                            {{ ucfirst(__($intervalPlans[0]?->interval?->adverb)) }}
+                            @if(isset($intervalSavingPercentage[$interval]) && $intervalSavingPercentage[$interval] > 0)
+                                <span class="fp-switch-saving">{{ __('save :percent%', ['percent' => $intervalSavingPercentage[$interval]]) }}</span>
+                            @endif
+                        </button>
+                    @endforeach
+                </div>
+            </div>
+        @endif
 
-    </x-tab-slider>
+        @foreach($groupedPlans as $interval => $intervalPlans)
+            <div id="pricing-{{ $interval }}" role="tabpanel" class="fp-plan-grid" x-show="interval === @js($interval)" @if ($interval !== $activeInterval) x-cloak @endif>
+                @foreach($intervalPlans as $plan)
+                    <x-plans.one :plan="$plan" />
+                @endforeach
+            </div>
+        @endforeach
+    </div>
 @endif
 
 @if (isset($defaultProduct))
-    <div class="mx-4">
-        <div class="max-w-none md:max-w-6xl border border-gray-200 rounded-2xl p-8 mt-6 mx-8 md:mx-auto">
-            <div class="text-center">
-                <x-heading.h3>{{ __('Start for FREE') }}</x-heading.h3>
-                <p class="mt-4">{{ __('Start now and upgrade as you go. No credit card required!') }}</p>
-                <ul class="flex flex-wrap md:flex-nowrap flex-row items-center justify-center gap-4 mt-4">
-                    @if($defaultProduct->features)
-                        @foreach($defaultProduct->features as $feature)
-                            <x-features.li-item class="text-left">{{$feature['feature']}}</x-features.li-item>
-                        @endforeach
-                    @endif
+    <div class="fp-panel mt-8 mx-auto max-w-3xl">
+        <div class="fp-panel-body text-center">
+            <h3 class="fp-pricing-section-title">{{ __('Start for free') }}</h3>
+            <p class="mt-2 text-sm" style="color: var(--fp-muted)">{{ __('Start now and upgrade as you go. No credit card required.') }}</p>
+            @if($defaultProduct->features)
+                <ul class="fp-plan-card-features mx-auto max-w-md border-0 pt-2">
+                    @foreach($defaultProduct->features as $feature)
+                        <li><span class="fp-check" aria-hidden="true">✓</span><span>{{$feature['feature']}}</span></li>
+                    @endforeach
                 </ul>
-
-                <x-button-link.primary href="{{route('plan.start')}}" class="mt-6 px-6! py-3!">
-                    {{ __('Start Now') }}
-                </x-button-link.primary>
-            </div>
+            @endif
+            <a href="{{route('plan.start')}}" class="fp-btn fp-btn-primary mt-5 w-auto px-8">{{ __('Start now') }}</a>
         </div>
     </div>
 @endif

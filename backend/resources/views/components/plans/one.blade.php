@@ -4,101 +4,55 @@
 
 @php
     $price = $planService->getPlanPrice($plan);
+    $effectivePrice = $price !== null ? ($plan->partner_price ?? $price->price) : null;
+    $intervalLabel = $plan->interval_count > 1
+        ? __('per :count :interval', ['count' => $plan->interval_count, 'interval' => __(str($plan->interval->name)->plural())])
+        : __('per :interval', ['interval' => __($plan->interval->name)]);
+    if ($plan->type === \App\Constants\PlanType::SEAT_BASED->value) {
+        $intervalLabel = __('per seat').' · '.$intervalLabel;
+    }
+    $features = collect($plan->product->features ?? [])->pluck('feature')->filter()->values()->all();
 @endphp
 
-<div {{$attributes->merge(['class' => 'relative px-5 py-10 flex flex-col gap-4 mx-auto text-center border-2 border-primary-500 rounded-2xl shadow-xl hover:shadow-2xl hover:-translate-y-2 transition'])}}>
-    @if ($plan->product->is_popular)
-    <div class="absolute border-0 top-0 -mt-3 left-1/2 transform -translate-x-1/2 bg-primary-500 text-primary-50 mx-auto rounded z-0 text-xs px-2 py-1">
-        {{ __('Most popular') }}
-    </div>
+<x-fp.plan-card
+    :name="$plan->product->name"
+    :price="$effectivePrice !== null ? money($effectivePrice, $price->currency->code) : null"
+    :interval="$effectivePrice !== null ? $intervalLabel : null"
+    :features="$features"
+    :popular="(bool) $plan->product->is_popular"
+    :partner="$plan->partner_price !== null ? $plan->partner_tenant_name : null"
+    :href="route('checkout.subscription', $plan->slug)"
+    :cta="__('Choose :plan', ['plan' => $plan->product->name])"
+>
+    @if($price !== null && $plan->type === \App\Constants\PlanType::SEAT_BASED->value && $price->type === \App\Constants\PlanPriceType::SEAT_BASED_WITH_INCLUDED_SEATS->value)
+        <p class="fp-plan-card-desc">{{ __('Includes :count seats, +:price/extra seat', ['count' => $price->included_seats, 'price' => money($price->extra_seat_price, $price->currency->code)]) }}</p>
+    @endif
+    @if(($price?->setup_fee ?? 0) > 0)
+        <p class="fp-plan-card-desc">+ @money($price->setup_fee, $price->currency->code) {{ __('setup fee') }}</p>
     @endif
 
-    <x-heading.h3>
-        {{ $plan->product->name }}
-    </x-heading.h3>
-
-    <div class="flex flex-col gap-1">
-        @if($price !== null)
-            @php
-                $effectivePrice = $plan->partner_price ?? $price->price;
-            @endphp
-            <div class="text-4xl">
-                @money($effectivePrice, $price->currency->code)
-            </div>
-            @if($plan->partner_price !== null && $plan->partner_tenant_name !== null)
-                <div class="text-xs text-neutral-400">
-                    {{ __('Sold through :partner', ['partner' => $plan->partner_tenant_name]) }}
-                </div>
-            @endif
-            <div class="text-neutral-400 text-sm">
-                @if($plan->type === \App\Constants\PlanType::SEAT_BASED->value && $price->type === \App\Constants\PlanPriceType::SEAT_BASED_WITH_INCLUDED_SEATS->value)
-                    / {{$plan->interval_count > 1 ? $plan->interval_count : '' }} {{ __($plan->interval->name) }}
-                    <div class="text-xs mt-1">
-                        {{ __('Includes :count seats, +:price/extra seat', ['count' => $price->included_seats, 'price' => money($price->extra_seat_price, $price->currency->code)]) }}
-                    </div>
-                @else
-                    @if($plan->type === \App\Constants\PlanType::SEAT_BASED->value)
-                        <span class="text-sm">{{__('Per seat')}}</span>
+    {{-- $price is null when the plan has no price row in the store currency, and
+         plans.meter_id is nullable at the DB level (only the admin form enforces
+         the invariant) — both are null-safe here. --}}
+    @if($price?->type === \App\Constants\PlanPriceType::USAGE_BASED_PER_UNIT->value)
+        <p class="fp-plan-card-desc">+ @money($price->price_per_unit, $price->currency->code) / {{ __($plan->meter?->name) }}</p>
+    @elseif($price?->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_GRADUATED->value
+            || $price?->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_VOLUME->value)
+        <div class="fp-plan-card-desc">
+            @php $start = 0; $startingPhrase = __('From'); @endphp
+            @foreach($price->tiers as $tier)
+                <p class="m-0 mt-1">
+                    {{ $startingPhrase }} {{ $start }}–{{ $tier[\App\Constants\PlanPriceTierConstants::UNTIL_UNIT] }} {{ __(strtolower(str()->plural($plan->meter->name))) }}:
+                    @money($tier[\App\Constants\PlanPriceTierConstants::PER_UNIT], $price->currency->code) / {{ __($plan->meter->name) }}
+                    @if ($tier[\App\Constants\PlanPriceTierConstants::FLAT_FEE] > 0)
+                        + @money($tier['flat_fee'], $price->currency->code)
                     @endif
-                    / {{$plan->interval_count > 1 ? $plan->interval_count : '' }} {{ __($plan->interval->name) }}
+                </p>
+                @php $start = intval($tier[\App\Constants\PlanPriceTierConstants::UNTIL_UNIT]) + 1; @endphp
+                @if($price->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_GRADUATED->value)
+                    @php $startingPhrase = __('Next'); @endphp
                 @endif
-            </div>
-            @if(($price->setup_fee ?? 0) > 0)
-                <div class="text-sm text-neutral-500 mt-1">
-                    + @money($price->setup_fee, $price->currency->code) {{ __('setup fee') }}
-                </div>
-            @endif
-        @endif
-
-        {{-- $price is null when the plan has no price row in the store currency, and
-             plans.meter_id is nullable at the DB level (only the admin form enforces
-             the invariant) — both are dereferenced outside the @if($price !== null)
-             guard above, so both are null-safe. --}}
-        @if($price?->type === \App\Constants\PlanPriceType::USAGE_BASED_PER_UNIT->value)
-            <div class="text-sm mt-2">
-                + @money($price->price_per_unit, $price->currency->code) / {{ __($plan->meter?->name) }}
-            </div>
-        @elseif($price?->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_GRADUATED->value
-                || $price?->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_VOLUME->value)
-            <div class="mt-2">
-                @php $start = 0; $startingPhrase = __('From'); @endphp
-                @foreach($price->tiers as $tier)
-                    <div class="flex justify-center items-center gap-4 mt-3">
-                        <span class="font-medium text-xs ">{{$startingPhrase}}</span>
-                        <span class="flex flex-col">
-                            <span class="text-xl">{{ $start }} - {{ $tier[\App\Constants\PlanPriceTierConstants::UNTIL_UNIT] }}</span>
-                            <span class="text-neutral-400 text-xs">{{ __(strtolower(str()->plural($plan->meter->name))) }}</span>
-                        </span>
-                        →
-                        <span class="flex flex-col">
-                            <span class=" text-sm">@money($tier[\App\Constants\PlanPriceTierConstants::PER_UNIT], $price->currency->code) / {{ __($plan->meter->name) }}</span>
-                            @if ($tier[\App\Constants\PlanPriceTierConstants::FLAT_FEE] > 0)
-                            <span class="text-neutral-400 text-xs">+ @money($tier['flat_fee'], $price->currency->code)</span>
-                            @endif
-                        </span>
-                    </div>
-                    @php $start = intval($tier[\App\Constants\PlanPriceTierConstants::UNTIL_UNIT]) + 1; @endphp
-
-                    @if($price->type === \App\Constants\PlanPriceType::USAGE_BASED_TIERED_GRADUATED->value)
-                        @php $startingPhrase = __('Next'); @endphp
-                    @endif
-                @endforeach
-            </div>
-        @endif
-
-    </div>
-
-    <div class="py-4">
-        <ul class="flex flex-col items-center gap-4">
-            @if($plan->product->features)
-                @foreach($plan->product->features as $feature)
-                    <x-features.li-item>{{$feature['feature']}}</x-features.li-item>
-                @endforeach
-            @endif
-        </ul>
-    </div>
-
-    <x-button-link.primary href="{{route('checkout.subscription', $plan->slug)}}">
-        {{ __('Buy') }} {{ $plan->product->name }}
-    </x-button-link.primary>
-</div>
+            @endforeach
+        </div>
+    @endif
+</x-fp.plan-card>

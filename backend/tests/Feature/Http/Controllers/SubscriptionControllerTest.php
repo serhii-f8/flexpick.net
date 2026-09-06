@@ -43,5 +43,9 @@ class SubscriptionControllerTest extends FeatureTest
         ]));
 
         $response->assertStatus(200);
+        $response->assertSee(__('Switch to :plan', ['plan' => $newPlan->product->name]));
+        $response->assertSee(__('Confirm switch to :plan', ['plan' => $newPlan->product->name]));
+        $response->assertDontSee('apprenticeship');
+        $response->assertDontSee(__('Update Subscription'));
     }
 }
