@@ -42,8 +42,8 @@
             @php $start = 0; $startingPhrase = __('From'); @endphp
             @foreach($price->tiers as $tier)
                 <p class="m-0 mt-1">
-                    {{ $startingPhrase }} {{ $start }}–{{ $tier[\App\Constants\PlanPriceTierConstants::UNTIL_UNIT] }} {{ __(strtolower(str()->plural($plan->meter->name))) }}:
-                    @money($tier[\App\Constants\PlanPriceTierConstants::PER_UNIT], $price->currency->code) / {{ __($plan->meter->name) }}
+                    {{ $startingPhrase }} {{ $start }}–{{ $tier[\App\Constants\PlanPriceTierConstants::UNTIL_UNIT] }} {{ __(strtolower(str()->plural($plan->meter?->name ?? ''))) }}:
+                    @money($tier[\App\Constants\PlanPriceTierConstants::PER_UNIT], $price->currency->code) / {{ __($plan->meter?->name) }}
                     @if ($tier[\App\Constants\PlanPriceTierConstants::FLAT_FEE] > 0)
                         + @money($tier['flat_fee'], $price->currency->code)
                     @endif

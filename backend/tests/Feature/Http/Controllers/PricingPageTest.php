@@ -3,11 +3,14 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\PaymentProviderConstants;
+use App\Constants\PlanPriceTierConstants;
+use App\Constants\PlanPriceType;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Models\PartnerPlanOffering;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
+use App\Models\PlanPrice;
 use App\Models\Product;
 use App\Models\Subscription;
 use App\Services\CurrencyService;
@@ -93,5 +96,44 @@ class PricingPageTest extends FeatureTest
 
         $response->assertSee(__('Prices on this page are set by :partner.', ['partner' => $partnerTenant->name]));
         $response->assertSee(__('Sold through :partner', ['partner' => $partnerTenant->name]));
+    }
+
+    /**
+     * plans.meter_id is nullable at the DB level and only the admin form enforces
+     * "usage-based plans must have a meter". The pricing card, though, branches on
+     * the PlanPrice type rather than the Plan type, so a plan carrying a tiered
+     * usage-based *price* with no meter reaches the meter name and used to fatal
+     * the whole public page. Guarded at plans/one.blade.php:38,45,46.
+     */
+    public function test_the_pricing_page_survives_a_tiered_usage_based_plan_with_no_meter(): void
+    {
+        $user = $this->createUser();
+        $product = Product::factory()->create(['name' => 'Meterless '.uniqid()]);
+        $plan = Plan::factory()->create([
+            'product_id' => $product->id,
+            'name' => 'Meterless Tiered '.uniqid(),
+            'type' => PlanType::USAGE_BASED->value,
+            'meter_id' => null,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        PlanPrice::factory()->create([
+            'plan_id' => $plan->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'type' => PlanPriceType::USAGE_BASED_TIERED_VOLUME->value,
+            'tiers' => [[
+                PlanPriceTierConstants::UNTIL_UNIT => 7331,
+                PlanPriceTierConstants::PER_UNIT => 25,
+                PlanPriceTierConstants::FLAT_FEE => 0,
+            ]],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('pricing'));
+
+        $response->assertStatus(200);
+        // The card renders the product name, and the tier line proves we actually
+        // reached the meter-name branch rather than merely not crashing.
+        $response->assertSee($product->name);
+        $response->assertSee('0–7331');
     }
 }
