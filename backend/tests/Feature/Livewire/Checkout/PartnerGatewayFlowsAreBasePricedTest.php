@@ -9,6 +9,7 @@ use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
 use App\Dto\SubscriptionCheckoutDto;
 use App\Livewire\Checkout\ConvertLocalSubscriptionCheckoutForm;
+use App\Livewire\Checkout\SubscriptionTotals;
 use App\Models\PartnerPlanOffering;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
@@ -19,6 +20,7 @@ use App\Models\User;
 use App\Services\CalculationService;
 use App\Services\CurrencyService;
 use App\Services\PartnerPricingResolver;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 
@@ -148,5 +150,40 @@ class PartnerGatewayFlowsAreBasePricedTest extends FeatureTest
 
         $response->assertOk();
         $this->assertSame(4900, $response->viewData('totals')->subtotal);
+    }
+
+    /**
+     * The base-price opt-out decides which price the page quotes, so it must
+     * not be reachable from the browser. Livewire refuses a client update to a
+     * #[Locked] property; without the attribute this set() would succeed and
+     * the next recompute would quote the partner price against a gateway that
+     * charges base.
+     */
+    public function test_the_partner_pricing_opt_out_cannot_be_flipped_from_the_browser(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $plan = $this->partnerPricedPlan($partnerTenant);
+        $customerTenant = $this->createTenant();
+        $user = $this->attributedUser($partnerTenant, $customerTenant);
+
+        $sessionDto = new SubscriptionCheckoutDto;
+        $sessionDto->planSlug = $plan->slug;
+
+        $this->actingAs($user);
+        $this->withSession([SessionConstants::SUBSCRIPTION_CHECKOUT_DTO => $sessionDto]);
+
+        $totals = Livewire::test(SubscriptionTotals::class, [
+            'totals' => app(CalculationService::class)->calculatePlanTotals($user, $plan->slug, allowPartnerPricing: false),
+            'plan' => $plan,
+            'page' => 'http://localhost/checkout/convert-local-subscription',
+            'canAddDiscount' => true,
+            'isTrailSkipped' => false,
+            'allowPartnerPricing' => false,
+        ]);
+
+        $this->assertFalse($totals->get('allowPartnerPricing'), 'Arrangement failure: expected the component to mount opted out.');
+
+        $this->expectException(CannotUpdateLockedPropertyException::class);
+        $totals->set('allowPartnerPricing', true);
     }
 }

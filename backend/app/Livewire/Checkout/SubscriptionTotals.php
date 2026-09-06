@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Services\CalculationService;
 use App\Services\DiscountService;
 use App\Services\SessionService;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -56,7 +57,13 @@ class SubscriptionTotals extends Component
      * name. Without it, applying or removing a discount code on a base-priced
      * flow would recompute the totals with partner pricing switched back on and
      * flip the displayed price mid-checkout.
+     *
+     * Locked because it decides which price the page quotes: it is set once at
+     * mount from the parent view and read by add()/remove(), never bound to
+     * input. Unlocked, a viewer of a base-priced gateway flow could flip it and
+     * make the page quote the partner price while the gateway charges base.
      */
+    #[Locked]
     public bool $allowPartnerPricing = true;
 
     private DiscountService $discountService;
