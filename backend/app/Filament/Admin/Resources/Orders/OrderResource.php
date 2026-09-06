@@ -7,7 +7,9 @@ use App\Filament\Admin\Resources\Orders\Pages\ListOrders;
 use App\Filament\Admin\Resources\Orders\Pages\ViewOrder;
 use App\Filament\Admin\Resources\Tenants\Pages\EditTenant;
 use App\Mapper\OrderStatusMapper;
+use App\Models\Currency;
 use App\Models\Order;
+use App\Services\CashPayments\OrderApprovalService;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
@@ -42,6 +44,10 @@ class OrderResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('tenant.name')->label(__('Tenant'))->searchable(),
+                TextColumn::make('partnerTenant.name')
+                    ->label(__('Sold Through'))
+                    ->placeholder('—')
+                    ->searchable(),
                 TextColumn::make('status')
                     ->badge()
                     ->label(__('Status'))
@@ -168,6 +174,78 @@ class OrderResource extends Resource
                                         TextEntry::make('created_at')->dateTime(config('app.datetime_format'))->label(__('Created At')),
                                         TextEntry::make('updated_at')->dateTime(config('app.datetime_format'))->label(__('Updated At')),
                                     ])->columns(3),
+                                Section::make(__('Partner Sale'))
+                                    ->description(__('Reseller pricing and margin for this order.'))
+                                    ->visible(fn (Order $record): bool => $record->partner_tenant_id !== null)
+                                    ->schema([
+                                        TextEntry::make('partnerTenant.name')->label(__('Partner')),
+                                        TextEntry::make('base_price_snapshot')
+                                            ->label(__('Base Price'))
+                                            ->getStateUsing(fn (Order $record): string => $record->base_price_snapshot === null
+                                                ? '—'
+                                                : money((int) $record->base_price_snapshot, self::currencyCode($record))),
+                                        TextEntry::make('partner_price')
+                                            ->label(__('Partner Price'))
+                                            ->getStateUsing(fn (Order $record, OrderApprovalService $service): string => money(
+                                                $service->amountDue($record),
+                                                self::currencyCode($record),
+                                            )),
+                                        TextEntry::make('partner_margin')
+                                            ->label(__('Margin'))
+                                            ->getStateUsing(function (Order $record, OrderApprovalService $service): string {
+                                                if ($record->base_price_snapshot === null) {
+                                                    return '—';
+                                                }
+
+                                                return money(
+                                                    $service->amountDue($record) - (int) $record->base_price_snapshot,
+                                                    self::currencyCode($record),
+                                                );
+                                            }),
+                                        TextEntry::make('quota_snapshot')
+                                            ->label(__('Quotas Sold'))
+                                            ->getStateUsing(function (Order $record): string {
+                                                $quotas = (array) ($record->quota_snapshot ?? []);
+
+                                                if ($quotas === []) {
+                                                    return '—';
+                                                }
+
+                                                return collect($quotas)
+                                                    ->map(fn ($value, string $key): string => $key.': '.$value)
+                                                    ->implode(', ');
+                                            }),
+                                    ])->columns(3),
+                                Section::make(__('Approval & Attribution History'))
+                                    ->description(__('Who approved this order, and how the customer was attributed.'))
+                                    ->visible(fn (Order $record): bool => $record->approval !== null || $record->partner_tenant_id !== null)
+                                    ->schema([
+                                        TextEntry::make('approval.decision')
+                                            ->label(__('Decision'))
+                                            ->placeholder('—')
+                                            ->badge(),
+                                        TextEntry::make('approval.actor_type')
+                                            ->label(__('Decided By'))
+                                            ->placeholder('—'),
+                                        TextEntry::make('approval.actorUser.email')
+                                            ->label(__('Acting User'))
+                                            ->placeholder(__('System')),
+                                        TextEntry::make('approval.decided_at')
+                                            ->label(__('Decided At'))
+                                            ->placeholder('—')
+                                            ->dateTime(config('app.datetime_format')),
+                                        TextEntry::make('approval.note')
+                                            ->label(__('Internal Note'))
+                                            ->placeholder('—')
+                                            ->columnSpanFull(),
+                                        TextEntry::make('user.partner_attribution_source')
+                                            ->label(__('Attribution Source'))
+                                            ->placeholder('—'),
+                                        TextEntry::make('user.partner_attributed_at')
+                                            ->label(__('Attributed At'))
+                                            ->placeholder('—')
+                                            ->dateTime(config('app.datetime_format')),
+                                    ])->columns(3),
                                 Section::make(__('Order Items'))
                                     ->description(__('View details about order items.'))
                                     ->schema(
@@ -181,6 +259,21 @@ class OrderResource extends Resource
 
             ]);
 
+    }
+
+    /**
+     * Order::currency() is untyped (BelongsTo without generics), so PHPStan
+     * resolves $order->currency as a bare Model and can't see ->code. The
+     * pre-existing call sites in this file already trip that and are frozen
+     * in phpstan-baseline.neon; this annotated accessor keeps the new
+     * partner-reporting fields from growing that count.
+     */
+    private static function currencyCode(Order $order): string
+    {
+        /** @var Currency $currency */
+        $currency = $order->currency;
+
+        return $currency->code;
     }
 
     public static function orderItems(Order $order): array
