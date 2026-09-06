@@ -98,7 +98,6 @@ class CalculationService
             // infinite recursion when the container builds this service. The same
             // problem, with the same fix, already exists at SubscriptionService.php:85
             // for PurchaseSnapshotService.
-            $allowPartnerPricing = true; // TEMP: simulate pre-fix behaviour
             $partnerPrice = $allowPartnerPricing
                 ? app(PartnerPricingResolver::class)->planPrice($user, $plan)
                 : null;
