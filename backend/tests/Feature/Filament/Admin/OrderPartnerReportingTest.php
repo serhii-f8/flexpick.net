@@ -75,6 +75,51 @@ class OrderPartnerReportingTest extends FeatureTest
             ->assertSeeHtmlInOrder(['Attribution Source', 'link']);
     }
 
+    public function test_the_admin_view_page_shows_a_pending_partner_order_with_no_approval_row_yet(): void
+    {
+        $partnerTenant = $this->createTenant();
+        $customerTenant = $this->createTenant();
+
+        $customer = $this->createUser($customerTenant, [], [
+            'partner_tenant_id' => $partnerTenant->id,
+        ]);
+
+        // No OrderApproval row is created — this is the realistic state for
+        // a partner cash order still awaiting an approve/reject decision.
+        $order = Order::factory()->create([
+            'user_id' => $customer->id,
+            'tenant_id' => $customerTenant->id,
+            'partner_tenant_id' => $partnerTenant->id,
+            'status' => OrderStatus::PENDING->value,
+            'is_local' => true,
+            'total_amount' => 6600,
+            'total_amount_after_discount' => 6600,
+            'base_price_snapshot' => 4400,
+        ]);
+
+        $this->actingAs($this->createAdminUser());
+
+        // The page must not error on the null approval relation. The Partner
+        // Sale section is gated on partner_tenant_id alone, so it must still
+        // render with real pricing; the Approval & Attribution History
+        // section is gated on (approval !== null || partner_tenant_id !==
+        // null), so it must still render too, but with its approval-specific
+        // fields as placeholders rather than the approval note/actor that a
+        // decided order would show.
+        Livewire::test(ViewOrder::class, ['record' => $order->uuid])
+            ->assertSuccessful()
+            ->assertSee('Partner Sale')
+            ->assertSee(money(4400, $order->currency->code))   // base price
+            ->assertSee(money(2200, $order->currency->code))   // margin: 6600 - 4400
+            ->assertSee('Approval & Attribution History')
+            // Pair the "Decided By" label with the placeholder em dash, in
+            // DOM order, so this can only pass because the null approval
+            // relation genuinely fell through to the placeholder — not
+            // because "—" happens to occur elsewhere on the page.
+            ->assertSeeHtmlInOrder(['Decided By', '—'])
+            ->assertDontSee('Cash received in person.');
+    }
+
     public function test_a_direct_order_renders_without_partner_fields(): void
     {
         $customerTenant = $this->createTenant();
@@ -92,8 +137,24 @@ class OrderPartnerReportingTest extends FeatureTest
 
         $this->actingAs($this->createAdminUser());
 
-        // The page must not blow up on a null partner — this is the majority case.
+        // The page must not blow up on a null partner — this is the majority
+        // case — and, per spec, the two partner-reporting sections must be
+        // fully gated off rather than merely empty. A bare assertSuccessful()
+        // cannot tell a working ->visible() gate from a broken one: this
+        // order's base_price_snapshot (4900) is non-null and amountDue()
+        // resolves fine, so an inverted or deleted gate would still render
+        // successfully, just with real money values leaking through. Assert
+        // the section headings and their exclusive entry labels are absent —
+        // confirmed (see task-8-report.md) to be absent from this page's
+        // ambient markup, so their absence can only be explained by a
+        // correctly-closed gate.
         Livewire::test(ViewOrder::class, ['record' => $order->uuid])
-            ->assertSuccessful();
+            ->assertSuccessful()
+            ->assertDontSee('Partner Sale')
+            ->assertDontSee('Approval & Attribution History')
+            ->assertDontSee('Base Price')
+            ->assertDontSee('Margin')
+            ->assertDontSee('Attribution Source')
+            ->assertDontSee('Partner');
     }
 }
