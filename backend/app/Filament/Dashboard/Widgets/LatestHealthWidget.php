@@ -26,7 +26,7 @@ class LatestHealthWidget extends Widget
 
     protected static ?int $sort = 0;
 
-    protected int|string|array $columnSpan = ['default' => 'full', 'xl' => 2];
+    protected int|string|array $columnSpan = ['default' => 1, 'md' => 2, 'xl' => 2];
 
     public static function canView(): bool
     {

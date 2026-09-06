@@ -17,7 +17,7 @@ class PlanUsageWidget extends Widget
 
     protected static ?int $sort = 0;
 
-    protected int|string|array $columnSpan = ['default' => 'full', 'xl' => 1];
+    protected int|string|array $columnSpan = ['default' => 1, 'md' => 2, 'xl' => 1];
 
     public static function canView(): bool
     {

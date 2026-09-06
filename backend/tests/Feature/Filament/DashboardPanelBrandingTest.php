@@ -14,6 +14,8 @@ class DashboardPanelBrandingTest extends FeatureTest
 
         $this->assertSame('FlexPick', $panel->getBrandName());
         $this->assertSame(ThemeMode::Dark, $panel->getDefaultThemeMode());
-        $this->assertStringContainsString('flexpick-wordmark.svg', (string) $panel->getBrandLogo());
+        // The light theme gets ink-text lettering; the dark theme keeps the cream wordmark.
+        $this->assertStringContainsString('flexpick-wordmark-dark-text.svg', (string) $panel->getBrandLogo());
+        $this->assertStringContainsString('flexpick-wordmark.svg', (string) $panel->getDarkModeBrandLogo());
     }
 }
