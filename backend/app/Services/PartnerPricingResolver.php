@@ -24,8 +24,9 @@ use Illuminate\Support\Collection;
  * drift would be a customer quoted one price and charged another.
  *
  * "Usable" means all four of:
- *   - the buyer resolves to a partner tenant (attributed user, or an
- *     anonymous visitor carrying an active referral code in session),
+ *   - the buyer resolves to a partner tenant — an authenticated user through
+ *     users.partner_tenant_id and only that, or an anonymous visitor through
+ *     an active referral code in session,
  *   - that tenant's Partner Plan is currently active (spec §7.5),
  *   - the offering exists and is_enabled,
  *   - the offering is still at or above the live admin floor (spec §5.5).
@@ -179,11 +180,26 @@ class PartnerPricingResolver
         return $products;
     }
 
+    /**
+     * The session referral code is a fallback for anonymous visitors only.
+     *
+     * An authenticated user's answer is users.partner_tenant_id and nothing
+     * else, even when it is null. Attribution happens at exactly two places —
+     * UserService (registration) and AttributePartnerOnLogin (login); there is
+     * no checkout attribution, and PartnerAttributionSource::ORDER and ::LINK
+     * are declared but never dispatched. So an already-logged-in direct
+     * customer who clicks a partner referral link mid-session has no login
+     * event coming to attribute them: falling back to the session code would
+     * start quoting them marked-up, cash-only prices indefinitely, and a
+     * purchase would stamp orders.partner_tenant_id while users.partner_tenant_id
+     * stayed null — leaving the admin's Attribution Source and Attributed At
+     * columns rendering "—" for that order.
+     */
     private function computePartnerTenant(?User $user): ?Tenant
     {
-        $tenant = $user !== null && $user->partner_tenant_id !== null
-            ? $this->attributedTenant($user)
-            : $this->tenantFromPendingCode();
+        $tenant = $user === null
+            ? $this->tenantFromPendingCode()
+            : $this->attributedTenant($user);
 
         if ($tenant === null) {
             return null;

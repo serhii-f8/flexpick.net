@@ -150,6 +150,41 @@ class PartnerPricingResolverTest extends FeatureTest
         $this->assertSame(7900, $this->resolver()->planPrice(null, $plan));
     }
 
+    /**
+     * Spec §4.3 lists checkout as an attribution point, but no such code
+     * exists: ->attribute() is called from UserService (registration) and
+     * AttributePartnerOnLogin (login) only, and PartnerAttributionSource::ORDER
+     * and ::LINK are never dispatched. So a logged-in direct customer who
+     * follows a partner link mid-session would never be attributed — falling
+     * back to the session code would quote them marked-up, cash-only prices
+     * forever, and stamp orders.partner_tenant_id on a user row that stays
+     * null. users.partner_tenant_id is the whole answer for an authenticated
+     * buyer.
+     */
+    public function test_a_logged_in_unattributed_user_ignores_a_session_referral_code(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        [$plan] = $this->sellablePlan($partnerTenant);
+        $user = $this->createUser();
+
+        $link = PartnerReferralLink::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'is_active' => true,
+        ]);
+
+        session([SessionConstants::PARTNER_REFERRAL_CODE => $link->code]);
+        $this->resolver()->flush();
+
+        // The same code does still price an anonymous visitor.
+        $this->assertSame(7900, $this->resolver()->planPrice(null, $plan));
+
+        $this->assertNull($this->resolver()->planPrice($user, $plan));
+        $this->assertNull($this->resolver()->resolvePartnerTenant($user));
+
+        session()->forget(SessionConstants::PARTNER_REFERRAL_CODE);
+        $this->resolver()->flush();
+    }
+
     public function test_a_disabled_offering_yields_no_partner_price(): void
     {
         $partnerTenant = $this->activePartnerTenant();
