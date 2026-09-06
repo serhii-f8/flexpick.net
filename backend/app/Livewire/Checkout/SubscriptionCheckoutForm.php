@@ -10,6 +10,7 @@ use App\Services\CalculationService;
 use App\Services\CheckoutService;
 use App\Services\DiscountService;
 use App\Services\LoginService;
+use App\Services\PartnerPricingResolver;
 use App\Services\PaymentProviders\PaymentService;
 use App\Services\PlanService;
 use App\Services\SessionService;
@@ -171,12 +172,21 @@ class SubscriptionCheckoutForm extends CheckoutForm
         $planPrice = $this->calculationService->getPlanPrice($plan);
         $shouldSupportSetupFees = ! empty($planPrice->setup_fee);
 
-        $this->paymentProviders = $paymentService->getActivePaymentProvidersForPlan(
-            $plan,
-            $shouldSupportSkippingTrial,
-            true,
-            $planPrice->type === PlanPriceType::SEAT_BASED_WITH_INCLUDED_SEATS->value,
-            $shouldSupportSetupFees,
+        $this->paymentProviders = self::restrictToPartnerProviders(
+            $paymentService->getActivePaymentProvidersForPlan(
+                $plan,
+                $shouldSupportSkippingTrial,
+                true,
+                $planPrice->type === PlanPriceType::SEAT_BASED_WITH_INCLUDED_SEATS->value,
+                $shouldSupportSetupFees,
+            ),
+            // Resolved lazily via the container rather than constructor-injected:
+            // PartnerPricingResolver -> PartnerCapabilityService -> SubscriptionService
+            // -> CalculationService is a real cycle (SubscriptionService already
+            // depends on CalculationService), so constructor injection here causes
+            // infinite recursion when the container builds this service. Same fix
+            // as documented at CalculationService.php:85.
+            app(PartnerPricingResolver::class)->usablePlanOffering(auth()->user(), $plan),
         );
 
         if (empty($this->paymentProviders)) {

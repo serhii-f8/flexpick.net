@@ -2,11 +2,13 @@
 
 namespace App\Livewire\Checkout;
 
+use App\Constants\PaymentProviderConstants;
 use App\Exceptions\LoginException;
 use App\Exceptions\NoPaymentProvidersAvailableException;
 use App\Models\User;
 use App\Services\LoginService;
 use App\Services\OneTimePasswordService;
+use App\Services\PaymentProviders\PaymentProviderInterface;
 use App\Services\PaymentProviders\PaymentService;
 use App\Services\UserService;
 use App\Validator\LoginValidator;
@@ -307,5 +309,26 @@ class CheckoutForm extends Component
         }
 
         return false;
+    }
+
+    /**
+     * A partner price is only ever payable in cash (spec §1, §8.1), so when a
+     * usable offering is driving the price, Offline is the only provider we
+     * may present. The resolver has already confirmed the Offline row is
+     * active before returning an offering, so this never empties the list.
+     *
+     * @param  array<int, PaymentProviderInterface>  $providers
+     * @return array<int, PaymentProviderInterface>
+     */
+    public static function restrictToPartnerProviders(array $providers, ?object $usableOffering): array
+    {
+        if ($usableOffering === null) {
+            return $providers;
+        }
+
+        return array_values(array_filter(
+            $providers,
+            fn ($provider): bool => $provider->getSlug() === PaymentProviderConstants::OFFLINE_SLUG,
+        ));
     }
 }

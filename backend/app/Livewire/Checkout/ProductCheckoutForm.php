@@ -10,6 +10,7 @@ use App\Services\CheckoutService;
 use App\Services\DiscountService;
 use App\Services\LoginService;
 use App\Services\OneTimeProductService;
+use App\Services\PartnerPricingResolver;
 use App\Services\PaymentProviders\PaymentService;
 use App\Services\SessionService;
 use App\Services\UserService;
@@ -155,7 +156,19 @@ class ProductCheckoutForm extends CheckoutForm
             return $this->paymentProviders;
         }
 
-        $this->paymentProviders = $paymentService->getActivePaymentProvidersForOneTimePurchase($requireQuantitySupport, true);
+        $cartDto = $this->sessionService->getCartDto();
+        $product = $this->productService->getOneTimeProductById($cartDto->items[0]->productId);
+
+        $this->paymentProviders = self::restrictToPartnerProviders(
+            $paymentService->getActivePaymentProvidersForOneTimePurchase($requireQuantitySupport, true),
+            // Resolved lazily via the container rather than constructor-injected:
+            // PartnerPricingResolver -> PartnerCapabilityService -> SubscriptionService
+            // -> CalculationService is a real cycle (SubscriptionService already
+            // depends on CalculationService), so constructor injection here causes
+            // infinite recursion when the container builds this service. Same fix
+            // as documented at CalculationService.php:85.
+            app(PartnerPricingResolver::class)->usableProductOffering(auth()->user(), $product),
+        );
 
         if (empty($this->paymentProviders)) {
             logger()->error('No payment providers available');
