@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './colors.css';
+@import './flexpick-brand.css';
 @import './styles.css';
 @plugin "daisyui" {
     themes: false;

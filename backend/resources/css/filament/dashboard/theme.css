@@ -1,9 +1,8 @@
 @import '../../../../vendor/filament/filament/resources/css/theme.css';
 @import '../../colors.css';
+@import '../../flexpick-brand.css';
 
-@plugin "daisyui" {
-    themes: false;
-}
+@plugin "daisyui" { themes: false; }
 @import '../../flexpick-daisyui.css';
 
 @source '../../../../app/Filament';
@@ -12,3 +11,139 @@
 @source '../../../../resources/views/components';
 @source '../../../../app/Livewire';
 @source '../../../../vendor/**/*.blade.php';
+
+/* ------------------------------------------------------------------------
+   FlexPick skin for the customer panel.
+
+   The palette (warm gray ramp, gold primary, coral/amber/sage semantics) is
+   registered on the panel itself, so Filament's own components already
+   render on-brand. The rules below only add what colours cannot: the Syne
+   headings, mono column heads, hairline surfaces and the sticky topbar.
+   They are unlayered on purpose so they win over Filament's layered
+   defaults without specificity games.
+   ------------------------------------------------------------------------ */
+
+/* DaisyUI paints :root with its base colour; the panel owns its canvas. */
+html.fi { background: var(--color-gray-50); }
+html.fi.dark { background: var(--color-gray-950); }
+
+/* Headings carry the brand voice. */
+.fi-header-heading,
+.fi-section-header-heading,
+.fi-modal-heading,
+.fi-simple-header-heading {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+}
+
+.fi-header-heading { font-weight: 700; }
+.fi-section-header-heading { font-weight: 700; letter-spacing: -0.01em; }
+
+/* Column heads and sidebar group labels: the mono caption voice. */
+.fi-ta-header-cell,
+.fi-ta-header-cell-sort-btn,
+.fi-sidebar-group-label,
+.fi-in-entry-label,
+.fi-fo-field-label-content {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.fi-ta-header-cell,
+.fi-sidebar-group-label {
+    color: var(--color-gray-500);
+}
+
+.fi-in-entry-label,
+.fi-fo-field-label-content {
+    color: var(--color-gray-500);
+}
+
+.dark .fi-in-entry-label,
+.dark .fi-fo-field-label-content,
+.dark .fi-ta-header-cell,
+.dark .fi-sidebar-group-label {
+    color: var(--color-gray-400);
+}
+
+.fi-ta-header-cell-sort-icon { --tw-opacity: 0.6; }
+
+/* Surfaces: hairline borders, 10px radius, no drop shadows. */
+.fi-section:not(.fi-section-not-contained):not(.fi-aside),
+.fi-section.fi-aside > .fi-section-content-ctn,
+.fi-ta-ctn,
+.fi-wi-stats-overview-stat,
+.fi-wi-widget > .fi-section {
+    border-radius: 10px;
+    box-shadow: none;
+}
+
+.dark .fi-section:not(.fi-section-not-contained):not(.fi-aside),
+.dark .fi-section.fi-aside > .fi-section-content-ctn,
+.dark .fi-ta-ctn,
+.dark .fi-wi-stats-overview-stat {
+    background: var(--fp-fill);
+    --tw-ring-color: var(--fp-line);
+}
+
+.fi-ta-table thead { background: transparent; }
+
+.dark .fi-ta-row:hover { background: var(--fp-fill-hover); }
+
+/* Topbar and sidebar: translucent ink, hairline edge. */
+.fi-topbar {
+    box-shadow: none;
+    --tw-ring-color: var(--fp-line);
+    backdrop-filter: blur(14px);
+}
+
+.dark .fi-topbar { background: rgba(11, 10, 9, 0.72); }
+
+html.fi:not(.dark) .fi-topbar { background: rgba(255, 255, 255, 0.8); }
+
+.dark .fi-sidebar { background: transparent; }
+
+.dark .fi-sidebar.fi-sidebar-open { --tw-ring-color: var(--fp-line); }
+
+@media (max-width: 1023px) {
+    .dark .fi-sidebar { background: #0f0d0b; }
+}
+
+.fi-sidebar-item-label { font-weight: 500; }
+
+/* Buttons: brand gold pressed into ink, with the landing's hover lift. */
+.fi-btn.fi-color-primary {
+    color: #0b0a09;
+    transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fi-btn.fi-color-primary:hover {
+    box-shadow: 0 8px 24px rgba(212, 168, 83, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fi-btn.fi-color-primary { transition: none; }
+}
+
+/* Badges: quieter, squarer. */
+.fi-badge { border-radius: 6px; font-weight: 500; }
+
+/* Inputs: the landing's faint-fill fields. */
+.dark .fi-input-wrp {
+    background: rgba(255, 255, 255, 0.04);
+    --tw-ring-color: var(--fp-line-strong);
+}
+
+/* Focus ring in gold, matching the public site. */
+.fi-btn:focus-visible,
+.fi-link:focus-visible,
+.fi-sidebar-item-btn:focus-visible {
+    outline: 2px solid rgba(212, 168, 83, 0.7);
+    outline-offset: 2px;
+}
+
+/* Page header spacing tightens a little; the brand runs dense. */
+.fi-header-subheading { font-size: 0.9375rem; }

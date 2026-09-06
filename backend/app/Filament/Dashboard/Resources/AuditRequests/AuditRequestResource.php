@@ -44,6 +44,11 @@ class AuditRequestResource extends Resource
         return __('Audits');
     }
 
+    public static function getNavigationLabel(): string
+    {
+        return __('Audit history');
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()

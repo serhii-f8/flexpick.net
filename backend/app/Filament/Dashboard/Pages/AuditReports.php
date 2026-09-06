@@ -136,14 +136,19 @@ class AuditReports extends Page
         return AuditTier::DIAGNOSTIC;
     }
 
+    public static function getNavigationLabel(): string
+    {
+        return __('Run an audit');
+    }
+
     public function getHeading(): string|Htmlable
     {
-        return __('Audit Reports');
+        return __('Run an audit');
     }
 
     public function getTitle(): string|Htmlable
     {
-        return __('Audit Reports');
+        return __('Run an audit');
     }
 
     public static function shouldRegisterNavigation(): bool

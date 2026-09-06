@@ -22,6 +22,7 @@ use Filament\Navigation\NavigationGroup;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Width;
 use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -43,12 +44,36 @@ class DashboardPanelProvider extends PanelProvider
             ->path('dashboard')
             ->colors([
                 'primary' => Color::hex('#d4a853'),
+                // Warm neutrals so Filament's own chrome (sidebar, topbar,
+                // sections, tables) sits on the landing page's ink rather
+                // than a cool slate. 950 is the landing background, 900 its
+                // surface tint, 50 the light-mode paper.
+                'gray' => [
+                    50 => '#f8f6f1',
+                    100 => '#f0ece4',
+                    200 => '#e5dfd3',
+                    300 => '#cfc7b8',
+                    400 => '#a49b8c',
+                    500 => '#7d7466',
+                    600 => '#5b5347',
+                    700 => '#3a332a',
+                    800 => '#221d17',
+                    900 => '#15120e',
+                    950 => '#0b0a09',
+                ],
+                'danger' => Color::hex('#e2694a'),
+                'warning' => Color::hex('#c98a3b'),
+                'success' => Color::hex('#8fb573'),
+                'info' => Color::hex('#7fb7d6'),
             ])
             ->brandName('FlexPick')
-            ->brandLogo(asset('images/flexpick-wordmark.svg'))
+            ->brandLogo(asset('images/flexpick-wordmark-dark-text.svg'))
+            ->darkModeBrandLogo(asset('images/flexpick-wordmark.svg'))
             ->brandLogoHeight('1.75rem')
             ->defaultThemeMode(ThemeMode::Dark)
             ->font('DM Sans')
+            ->sidebarCollapsibleOnDesktop()
+            ->maxContentWidth(Width::SevenExtraLarge)
             ->userMenuItems([
                 Action::make('admin-panel')
                     ->label(__('Admin Panel'))
@@ -105,7 +130,7 @@ class DashboardPanelProvider extends PanelProvider
                 UpdateUserLastSeenAt::class,
             ])
             ->renderHook('panels::head.start', function () {
-                return view('components.layouts.partials.analytics');
+                return view('components.layouts.partials.analytics')->render().view('filament.partials.brand-fonts')->render();
             })
             ->navigationGroups([
                 // Keyed by the exact label each resource declares
@@ -125,6 +150,9 @@ class DashboardPanelProvider extends PanelProvider
                 // have their own.
                 'Audits' => NavigationGroup::make()
                     ->label(__('Audits')),
+                'Billing' => NavigationGroup::make()
+                    ->label(__('Billing'))
+                    ->collapsed(),
                 'Team Management' => NavigationGroup::make()
                     ->label(__('Team Management'))
                     ->collapsed(),

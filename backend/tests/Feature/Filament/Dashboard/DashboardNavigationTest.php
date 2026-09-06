@@ -3,6 +3,8 @@
 namespace Tests\Feature\Filament\Dashboard;
 
 use App\Constants\TenancyPermissionConstants;
+use App\Filament\Dashboard\Pages\AuditReports;
+use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Filament\Dashboard\Resources\Orders\OrderResource;
 use App\Filament\Dashboard\Resources\Subscriptions\SubscriptionResource;
 use App\Filament\Dashboard\Resources\Transactions\TransactionResource;
@@ -75,5 +77,22 @@ class DashboardNavigationTest extends FeatureTest
         $this->assertFalse(OrderResource::canAccess());
         $this->assertFalse(SubscriptionResource::canAccess());
         $this->assertFalse(TransactionResource::canAccess());
+    }
+
+    public function test_the_audit_nav_items_use_task_names_instead_of_two_labels_that_both_mean_audits(): void
+    {
+        $this->assertSame('Run an audit', AuditReports::getNavigationLabel());
+        $this->assertSame('Audit history', AuditRequestResource::getNavigationLabel());
+    }
+
+    public function test_billing_resources_sit_together_in_a_billing_group_below_audits(): void
+    {
+        $this->assertSame('Billing', OrderResource::getNavigationGroup());
+        $this->assertSame('Billing', SubscriptionResource::getNavigationGroup());
+        $this->assertSame('Billing', TransactionResource::getNavigationGroup());
+
+        $groups = array_keys(Filament::getPanel('dashboard')->getNavigationGroups());
+
+        $this->assertSame(['Audits', 'Billing', 'Team Management', 'Referrals'], $groups);
     }
 }
