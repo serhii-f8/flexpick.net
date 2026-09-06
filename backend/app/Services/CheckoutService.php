@@ -65,6 +65,12 @@ class CheckoutService
                 quantity: $quantity,
                 tenant: $tenant,
                 localSubscription: true);
+        } elseif (($buyer = auth()->user()) !== null) {
+            // Same reasoning as initSubscriptionCheckout() above, with the
+            // local rule applied: an abandoned paid checkout can have frozen
+            // the partner price on this very row, and the trial flow converts
+            // through a gateway, so it is repriced to base rather than trusted.
+            $subscription = $this->subscriptionService->syncPlanPurchaseForBuyer($subscription, $buyer, localSubscription: true);
         }
 
         $plan = $subscription->plan;

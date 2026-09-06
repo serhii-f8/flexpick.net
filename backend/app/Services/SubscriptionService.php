@@ -171,13 +171,20 @@ class SubscriptionService
      * Re-derive an existing NEW subscription's frozen price and snapshot for
      * the buyer standing at checkout right now.
      *
-     * CheckoutService::initSubscriptionCheckout() reuses a NEW subscription
-     * rather than always creating one, and that row can predate the buyer's
-     * partner attribution, the partner configuring the offering, or the
-     * partner disabling it again. Nothing else re-derives it, so without this
-     * the reuse path is the one way a stale price reaches a cash order.
+     * Both CheckoutService::initSubscriptionCheckout() and
+     * initLocalSubscriptionCheckout() reuse a NEW subscription rather than
+     * always creating one, and that row can predate the buyer's partner
+     * attribution, the partner configuring the offering, or the partner
+     * disabling it again. Nothing else re-derives it, so without this the
+     * reuse path is the one way a stale price reaches a cash order.
+     *
+     * $localSubscription mirrors create()'s parameter of the same name and
+     * carries the same rule: the local (free-trial) row is converted through
+     * a gateway, which by Decision 2 may never see a partner price, so it is
+     * repriced to base. The snapshot is still re-derived either way — it
+     * records who sold the subscription, which stays true at base price.
      */
-    public function syncPlanPurchaseForBuyer(Subscription $subscription, User $user): Subscription
+    public function syncPlanPurchaseForBuyer(Subscription $subscription, User $user, bool $localSubscription = false): Subscription
     {
         /** @var Plan $plan */
         $plan = $subscription->plan;
@@ -186,7 +193,9 @@ class SubscriptionService
         $snapshot = app(PurchaseSnapshotService::class)->forPlan($user, $plan);
 
         $subscription->fill([
-            'price' => $this->planPriceForBuyer($plan, $user),
+            'price' => $localSubscription
+                ? (int) $this->calculationService->getPlanPrice($plan)->price
+                : $this->planPriceForBuyer($plan, $user),
             'partner_tenant_id' => $snapshot['partner_tenant_id'],
             'base_price_snapshot' => $snapshot['base_price_snapshot'],
             'quota_snapshot' => $snapshot['quota_snapshot'],

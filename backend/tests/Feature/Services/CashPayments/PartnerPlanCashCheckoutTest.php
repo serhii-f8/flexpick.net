@@ -249,4 +249,42 @@ class PartnerPlanCashCheckoutTest extends FeatureTest
         $this->assertSame(4900, (int) $reused->fresh()->price);
         $this->assertNull($reused->fresh()->partner_tenant_id);
     }
+
+    /**
+     * The local (free-trial) flow reuses a NEW subscription through the same
+     * findNewByPlanSlugAndTenant() lookup as the paid flow, so it can adopt a
+     * row an abandoned paid checkout already froze at the partner price.
+     *
+     * A local subscription is converted through a gateway, and by Decision 2 a
+     * gateway may never see a partner price — so the reused row must be reset
+     * to base, exactly as create(localSubscription: true) would have built it.
+     */
+    public function test_the_local_flow_reprices_a_reused_partner_priced_subscription_to_base(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $plan = $this->flatRatePlan(basePrice: 4900);
+        $this->offering($partnerTenant, $plan, price: 7900);
+
+        $customerTenant = $this->createTenant();
+        $user = $this->attributedUser($partnerTenant, $customerTenant);
+        $this->actingAs($user);
+
+        // An abandoned paid checkout freezes the partner price on a NEW row.
+        $paid = app(CheckoutService::class)->initSubscriptionCheckout(
+            $plan->slug,
+            $customerTenant->uuid,
+        );
+        $this->assertSame(7900, (int) $paid->fresh()->price, 'Arrangement failure: expected the paid flow to freeze the partner price.');
+
+        // The same buyer then starts the free-trial flow for the same plan.
+        $reused = app(CheckoutService::class)->initLocalSubscriptionCheckout(
+            $plan->slug,
+            $customerTenant->uuid,
+        );
+
+        $this->assertSame($paid->id, $reused->id, 'Arrangement failure: expected the NEW subscription to be reused.');
+        $this->assertSame(4900, (int) $reused->fresh()->price);
+        // The snapshot still records who sold it — only the price is base.
+        $this->assertSame($partnerTenant->id, $reused->fresh()->partner_tenant_id);
+    }
 }
