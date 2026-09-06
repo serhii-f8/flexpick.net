@@ -297,3 +297,180 @@ html.fi:not(.dark) .fi-topbar { background: rgba(255, 255, 255, 0.8); }
     border-radius: 8px;
     border: 1px solid var(--fp-line);
 }
+
+/* ------------------------------------------------------------------------
+   Audit view: results panel and timeline
+   ------------------------------------------------------------------------ */
+
+.fp-results { display: flex; flex-direction: column; gap: 1.25rem; }
+
+.fp-results-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.fp-results-summary {
+    max-width: 60ch;
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    color: var(--color-gray-700);
+}
+
+.dark .fp-results-summary { color: var(--color-gray-300); }
+
+.fp-results-meters {
+    display: grid;
+    gap: 0.875rem 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--fp-line);
+}
+
+.fp-results-foot {
+    display: grid;
+    gap: 1.25rem 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--fp-line);
+}
+
+.fp-fix-first {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    counter-reset: fix;
+    font-size: 0.875rem;
+    color: var(--color-gray-700);
+}
+
+.dark .fp-fix-first { color: var(--color-gray-300); }
+
+.fp-fix-first > li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    counter-increment: fix;
+}
+
+.fp-fix-first > li::before {
+    content: counter(fix);
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--fp-gold);
+}
+
+.fp-effort {
+    margin-inline-start: auto;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-gray-500);
+}
+
+.fp-timeline { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.fp-timeline-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+}
+
+.fp-timeline-hint {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--color-gray-600);
+}
+
+.dark .fp-timeline-hint { color: var(--color-gray-400); }
+
+.fp-timeline-hint-blocked {
+    padding: 0.625rem 0.75rem;
+    border-radius: 8px;
+    border-inline-start: 2px solid var(--fp-gold);
+    background: rgba(212, 168, 83, 0.06);
+    color: var(--color-gray-800);
+}
+
+.dark .fp-timeline-hint-blocked { color: var(--color-gray-200); }
+
+.fp-timeline-failure {
+    font-size: 0.875rem;
+    color: var(--fp-band-critical);
+}
+
+.fp-timeline-steps {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--fp-line);
+}
+
+.fp-timeline-step {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.375rem 0;
+    font-size: 0.875rem;
+}
+
+.fp-timeline-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: 0.4375rem;
+    top: 1.375rem;
+    height: calc(100% - 0.75rem);
+    width: 1px;
+    background: var(--fp-line-strong);
+}
+
+.fp-timeline-marker {
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 50%;
+    border: 1.5px solid var(--fp-line-strong);
+    background: transparent;
+    z-index: 1;
+}
+
+.fp-timeline-step-done .fp-timeline-marker {
+    border-color: var(--fp-gold);
+    background: var(--fp-gold);
+}
+
+.fp-timeline-step-current .fp-timeline-marker {
+    border-color: var(--fp-gold);
+    box-shadow: 0 0 0 3px rgba(212, 168, 83, 0.25);
+}
+
+.fp-timeline-step-failed .fp-timeline-marker {
+    border-color: var(--fp-band-critical);
+    background: var(--fp-band-critical);
+}
+
+.fp-timeline-step-todo,
+.fp-timeline-step-skipped { color: var(--color-gray-500); }
+
+.fp-timeline-label { color: inherit; }
+
+.fp-timeline-step-done .fp-timeline-label,
+.fp-timeline-step-current .fp-timeline-label { color: var(--color-gray-950); }
+
+.dark .fp-timeline-step-done .fp-timeline-label,
+.dark .fp-timeline-step-current .fp-timeline-label { color: white; }
+
+.fp-timeline-when {
+    min-width: 0;
+    justify-self: end;
+    text-align: end;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    color: var(--color-gray-500);
+}

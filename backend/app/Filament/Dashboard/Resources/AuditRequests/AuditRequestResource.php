@@ -9,11 +9,15 @@ use App\Filament\Dashboard\Resources\AuditRequests\Pages\ViewAuditRequest;
 use App\Mapper\AuditRequestStatusMapper;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\AuditReportService;
+use App\Support\RepoName;
+use App\Support\ScoreBand;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -89,7 +93,9 @@ class AuditRequestResource extends Resource
             ->columns([
                 TextColumn::make('repo_url')
                     ->label(__('Repository'))
-                    ->limit(50)
+                    ->formatStateUsing(fn (string $state): string => RepoName::short($state))
+                    ->tooltip(fn (AuditRequest $record): ?string => $record->repo_url)
+                    ->extraAttributes(['class' => 'fp-repo'])
                     ->placeholder(__('No repository'))
                     ->searchable(),
                 TextColumn::make('tier')
@@ -103,9 +109,10 @@ class AuditRequestResource extends Resource
                     ->formatStateUsing(fn (string $state, AuditRequestStatusMapper $mapper): string => $mapper->mapForDisplay($state)),
                 TextColumn::make('score')
                     ->label(__('Score'))
-                    ->state(fn (AuditRequest $record): string => (string) data_get($record->report?->payload, 'scores.overall', '—')),
+                    ->view('filament.dashboard.partials.score-cell'),
                 TextColumn::make('source')
-                    ->label(__('Source')),
+                    ->label(__('Source'))
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->label(__('Submitted'))
                     ->dateTime(config('app.datetime_format'))
@@ -115,6 +122,7 @@ class AuditRequestResource extends Resource
                     ->dateTime(config('app.datetime_format'))
                     ->placeholder('—'),
             ])
+            ->recordUrl(fn (AuditRequest $record): string => static::getUrl('view', ['record' => $record]))
             ->filters([
                 SelectFilter::make('status')
                     ->multiple()
@@ -134,65 +142,129 @@ class AuditRequestResource extends Resource
                             ->when($data['submitted_until'] ?? null, fn (Builder $query, string $date): Builder => $query->whereDate('created_at', '<=', $date));
                     }),
             ])
+            ->emptyStateHeading(__('No audits yet'))
+            ->emptyStateDescription(__('Every audit you run shows up here with its status and score.'))
+            ->emptyStateIcon('heroicon-o-document-magnifying-glass')
             ->defaultSort('created_at', 'desc');
     }
 
+    /**
+     * The result leads: the score panel is what the customer came for, the
+     * timeline tells them where a pending audit stands, and the request
+     * details sit last because they already know what they submitted.
+     */
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make(__('Project'))->schema([
-                TextEntry::make('repo_url')
-                    ->label(__('Repository'))
-                    ->url(fn (AuditRequest $record): ?string => $record->repo_url, shouldOpenInNewTab: true)
-                    ->placeholder(__('No repository')),
-                TextEntry::make('name')->label(__('Submitted by')),
-                TextEntry::make('email'),
-                TextEntry::make('source'),
-                TextEntry::make('message')->placeholder('—'),
+            Grid::make(['default' => 1, 'lg' => 3])->columnSpanFull()->schema([
+                Section::make(__('Results'))
+                    ->columnSpan(['default' => 1, 'lg' => 2])
+                    ->visible(fn (AuditRequest $record): bool => static::hasVisibleResults($record))
+                    ->schema([
+                        ViewEntry::make('results')
+                            ->hiddenLabel()
+                            ->view('filament.dashboard.partials.audit-results')
+                            ->viewData(fn (AuditRequest $record): array => static::resultsViewData($record)),
+                    ]),
+                Section::make(__('Status'))
+                    ->columnSpan(['default' => 1, 'lg' => fn (AuditRequest $record): int => static::hasVisibleResults($record) ? 1 : 3])
+                    ->schema([
+                        ViewEntry::make('timeline')
+                            ->hiddenLabel()
+                            ->view('filament.dashboard.partials.audit-timeline')
+                            ->viewData(fn (AuditRequest $record): array => static::timelineViewData($record)),
+                    ]),
             ]),
-            Section::make(__('Status & timeline'))->schema([
-                TextEntry::make('status')
-                    ->badge()
-                    ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))
-                    ->formatStateUsing(fn (string $state, AuditRequestStatusMapper $mapper): string => $mapper->mapForDisplay($state)),
-                TextEntry::make('status_description')
-                    ->label('')
-                    ->state(fn (AuditRequest $record): string => static::statusDescription($record)),
-                TextEntry::make('failure_reason')
-                    ->label(__('Failure reason'))
-                    ->color('danger')
-                    ->visible(fn (AuditRequest $record): bool => $record->failure_reason !== null),
-                TextEntry::make('created_at')->label(__('Submitted'))->dateTime(config('app.datetime_format')),
-                TextEntry::make('email_verified_at')->label(__('Email verified'))->dateTime(config('app.datetime_format'))->placeholder('—'),
-                TextEntry::make('report.created_at')->label(__('Completed'))->dateTime(config('app.datetime_format'))->placeholder('—'),
-            ]),
-            Section::make(__('Results'))
-                ->visible(fn (AuditRequest $record): bool => $record->report !== null && $record->status !== AuditRequestStatus::EXPERT_REVIEW->value)
+            Section::make(__('Request details'))
+                ->collapsible()
+                ->columnSpanFull()
+                ->columns(['default' => 1, 'md' => 2])
                 ->schema([
-                    TextEntry::make('overall_score')
-                        ->label(__('Overall score'))
-                        ->state(fn (AuditRequest $record): string => (string) data_get($record->report?->payload, 'scores.overall', '—')),
-                    ViewEntry::make('category_scores')
-                        ->label(__('Category scores'))
-                        ->view('filament.dashboard.partials.category-scores')
-                        ->viewData(fn (AuditRequest $record): array => [
-                            'scores' => data_get($record->report?->payload, 'scores', []),
-                        ]),
-                    TextEntry::make('risks_summary')
-                        ->label(__('Risks'))
-                        ->state(function (AuditRequest $record): string {
-                            $risks = collect(data_get($record->report?->payload, 'risks', []));
-
-                            if ($risks->isEmpty()) {
-                                return __('None found');
-                            }
-
-                            return $risks->countBy('impact')
-                                ->map(fn (int $count, string $impact) => $count.' '.__($impact))
-                                ->implode(' · ');
-                        }),
+                    TextEntry::make('repo_url')
+                        ->label(__('Repository'))
+                        ->url(fn (AuditRequest $record): ?string => $record->repo_url, shouldOpenInNewTab: true)
+                        ->extraAttributes(['class' => 'fp-repo'])
+                        ->placeholder(__('No repository')),
+                    TextEntry::make('branch')
+                        ->label(__('Branch'))
+                        ->placeholder(__('Default branch')),
+                    TextEntry::make('name')->label(__('Submitted by')),
+                    TextEntry::make('email')->label(__('Report goes to')),
+                    TextEntry::make('message')
+                        ->label(__('Your note'))
+                        ->columnSpanFull()
+                        ->placeholder('—'),
                 ]),
         ]);
+    }
+
+    public static function hasVisibleResults(AuditRequest $record): bool
+    {
+        return $record->report !== null
+            && is_int(data_get($record->report->payload, 'scores.overall'))
+            && ! $record->isHeldForExpertReview();
+    }
+
+    /** @return array<string, mixed> */
+    public static function resultsViewData(AuditRequest $record): array
+    {
+        $payload = $record->report?->payload ?? [];
+        $scores = collect(data_get($payload, 'scores', []));
+        $overall = $scores->get('overall');
+
+        return [
+            'overall' => is_int($overall) ? $overall : null,
+            'band' => is_int($overall) ? ScoreBand::fromScore($overall) : null,
+            'summary' => data_get($payload, 'summary'),
+            'categories' => $scores->except('overall')
+                ->filter(fn ($value): bool => is_int($value))
+                ->mapWithKeys(fn (int $value, string $key): array => [__(ucfirst(str_replace('_', ' ', $key))) => $value]),
+            'risks' => collect(data_get($payload, 'risks', []))->countBy('impact')->only(['high', 'medium', 'low']),
+            'fixFirst' => collect(data_get($payload, 'fix_first_plan', []))->take(3),
+            'reportUrl' => $record->report !== null ? app(AuditReportService::class)->signedUrl($record->report) : null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function timelineViewData(AuditRequest $record): array
+    {
+        $mapper = app(AuditRequestStatusMapper::class);
+        $status = $record->status;
+
+        $failed = $status === AuditRequestStatus::FAILED->value;
+        $verified = $record->email_verified_at !== null;
+        $delivered = in_array($status, [
+            AuditRequestStatus::REPORT_READY->value,
+            AuditRequestStatus::SENT->value,
+            AuditRequestStatus::HANDLED->value,
+        ], true);
+        $analyzed = $delivered || $record->report !== null || $record->isHeldForExpertReview();
+        $analyzing = $status === AuditRequestStatus::ANALYZING->value;
+
+        $steps = [
+            ['label' => __('Submitted'), 'at' => $record->created_at, 'state' => 'done'],
+            ['label' => __('Email verified'), 'at' => $record->email_verified_at, 'state' => $verified ? 'done' : ($failed ? 'skipped' : 'current')],
+            ['label' => __('Analyzed'), 'at' => $analyzed ? $record->report?->created_at : null, 'state' => $analyzed ? 'done' : ($failed ? 'failed' : ($verified ? 'current' : 'todo'))],
+            ['label' => __('Report sent'), 'at' => $delivered ? $record->report?->created_at : null, 'state' => $delivered ? 'done' : ($failed ? 'skipped' : ($analyzed ? 'current' : 'todo'))],
+        ];
+
+        if ($analyzing) {
+            $steps[2]['state'] = 'current';
+        }
+
+        return [
+            'steps' => $steps,
+            'statusLabel' => $mapper->mapForDisplay($status),
+            'statusColor' => $mapper->mapColor($status),
+            'statusHint' => static::statusDescription($record),
+            'failureReason' => $record->failure_reason,
+            'blocked' => in_array($status, [
+                AuditRequestStatus::NEEDS_FOLLOWUP->value,
+                AuditRequestStatus::AWAITING_ACCESS->value,
+                AuditRequestStatus::AWAITING_PAYMENT->value,
+                AuditRequestStatus::PENDING_VERIFICATION->value,
+            ], true),
+        ];
     }
 
     public static function statusDescription(AuditRequest $record): string

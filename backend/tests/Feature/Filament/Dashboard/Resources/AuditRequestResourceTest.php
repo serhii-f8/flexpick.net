@@ -5,12 +5,15 @@ namespace Tests\Feature\Filament\Dashboard\Resources;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
+use App\Filament\Dashboard\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Tables\Columns\Column;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 
 class AuditRequestResourceTest extends FeatureTest
@@ -121,7 +124,7 @@ class AuditRequestResourceTest extends FeatureTest
             ->assertSuccessful();
 
         $response->assertSee('55'); // overall score from AuditReportFactory payload
-        $response->assertSee(__('View online'));
+        $response->assertSee(__('Open report'));
         $response->assertSee(__('Download PDF'));
     }
 
@@ -140,7 +143,7 @@ class AuditRequestResourceTest extends FeatureTest
         $response = $this->get(AuditRequestResource::getUrl('view', ['record' => $audit->uuid], true, 'dashboard', tenant: $tenant))
             ->assertSuccessful();
 
-        $response->assertDontSee(__('View online'));
+        $response->assertDontSee(__('Open report'));
         $response->assertDontSee(__('Download PDF'));
         $response->assertDontSee(__('Overall score'));
         $response->assertDontSee(__('Category scores'));
@@ -225,5 +228,74 @@ class AuditRequestResourceTest extends FeatureTest
         $tenant->users()->attach($user);
 
         return $tenant;
+    }
+
+    public function test_list_shows_short_repository_names_and_tucks_the_source_column_away(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $audit = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/short-list-name',
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+        AuditReport::factory()->create(['audit_request_id' => $audit->id, 'user_id' => $user->id]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::test(ListAuditRequests::class)
+            ->assertSee('acme/short-list-name')
+            ->assertTableColumnFormattedStateSet('repo_url', 'acme/short-list-name', $audit)
+            ->assertTableColumnExists('source', fn (Column $column): bool => $column->isToggledHiddenByDefault())
+            ->assertSee('fp-band-watch');
+    }
+
+    public function test_view_is_titled_by_the_repository_and_leads_with_the_result(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $audit = AuditRequest::factory()->verified()->create([
+            'user_id' => $user->id,
+            'repo_url' => 'https://github.com/acme/view-title',
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+        AuditReport::factory()->create(['audit_request_id' => $audit->id, 'user_id' => $user->id]);
+
+        $this->actingAs($user);
+
+        $html = $this->get(AuditRequestResource::getUrl('view', ['record' => $audit->uuid], true, 'dashboard', tenant: $tenant))
+            ->assertSuccessful()
+            ->assertSee('acme/view-title')
+            ->assertDontSee(__('View Audit'))
+            ->assertSee('Fixture summary.')
+            ->assertSee(__('needs work'))
+            ->assertSee(__('Report sent'))
+            ->getContent();
+
+        $this->assertLessThan(
+            strpos($html, __('Submitted by')),
+            strpos($html, 'Fixture summary.'),
+            'The result should render above the request details.'
+        );
+    }
+
+    public function test_view_tells_a_pending_user_what_happens_next(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $audit = AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
+        ]);
+
+        $this->actingAs($user);
+
+        $this->get(AuditRequestResource::getUrl('view', ['record' => $audit->uuid], true, 'dashboard', tenant: $tenant))
+            ->assertSuccessful()
+            ->assertSee(__('Waiting for email confirmation.'))
+            ->assertSee(__('Report sent'))
+            ->assertDontSee('role="meter"', false);
     }
 }
