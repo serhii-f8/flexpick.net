@@ -169,6 +169,7 @@ class ConvertLocalSubscriptionCheckoutFormTest extends FeatureTest
             'slug' => $planSlug,
             'is_active' => true,
             'type' => PlanType::USAGE_BASED->value,
+            'is_visible' => false, // this Plan exists only to exercise checkout logic by slug; it must not surface on the real storefront pricing page for other test classes that render it in full (see PartnerStorefrontPricingTest).
         ]);
 
         PlanPrice::create([
@@ -227,6 +228,7 @@ class ConvertLocalSubscriptionCheckoutFormTest extends FeatureTest
             'slug' => $planSlug,
             'is_active' => true,
             'type' => PlanType::USAGE_BASED->value,
+            'is_visible' => false, // this Plan exists only to exercise checkout logic by slug; it must not surface on the real storefront pricing page for other test classes that render it in full (see PartnerStorefrontPricingTest).
             'has_trial' => true,
             'trial_interval_count' => 7,
             'trial_interval_id' => Interval::where('slug', 'day')->first()->id,
@@ -295,6 +297,7 @@ class ConvertLocalSubscriptionCheckoutFormTest extends FeatureTest
             'slug' => $planSlug,
             'is_active' => true,
             'type' => PlanType::USAGE_BASED->value,
+            'is_visible' => false, // this Plan exists only to exercise checkout logic by slug; it must not surface on the real storefront pricing page for other test classes that render it in full (see PartnerStorefrontPricingTest).
             'has_trial' => true,
             'trial_interval_count' => 7,
             'trial_interval_id' => Interval::where('slug', 'day')->first()->id,
@@ -358,6 +361,7 @@ class ConvertLocalSubscriptionCheckoutFormTest extends FeatureTest
             'slug' => $planSlug,
             'is_active' => true,
             'type' => PlanType::USAGE_BASED->value,
+            'is_visible' => false, // this Plan exists only to exercise checkout logic by slug; it must not surface on the real storefront pricing page for other test classes that render it in full (see PartnerStorefrontPricingTest).
             'has_trial' => true,
             'trial_interval_count' => 7,
             'trial_interval_id' => Interval::where('slug', 'day')->first()->id,

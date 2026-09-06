@@ -49,6 +49,7 @@ class SubscriptionUsageServiceTest extends FeatureTest
             'slug' => 'plan-slug-12',
             'is_active' => true,
             'type' => PlanType::USAGE_BASED->value,
+            'is_visible' => false, // this Plan exists only to exercise checkout logic by slug; it must not surface on the real storefront pricing page for other test classes that render it in full (see PartnerStorefrontPricingTest).
         ]);
 
         PlanPrice::create([
