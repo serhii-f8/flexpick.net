@@ -17,6 +17,7 @@ use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\UserSubscriptionTrial;
 use App\Services\CurrencyService;
 use App\Services\PartnerCatalogService;
 use App\Services\PartnerPricingResolver;
@@ -93,6 +94,23 @@ class PartnerPricingResolverTest extends FeatureTest
             'partner_tenant_id' => $partnerTenant->id,
             'partner_attributed_at' => now(),
             'partner_attribution_source' => 'registration',
+        ]);
+    }
+
+    /** Burn this buyer's one allowed trial, the way a past trial subscription would. */
+    private function recordConsumedTrial(User $user, Plan $plan): void
+    {
+        $pastSubscription = Subscription::factory()->create([
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+            'tenant_id' => $this->createTenant()->id,
+            'status' => SubscriptionStatus::INACTIVE->value,
+        ]);
+
+        UserSubscriptionTrial::create([
+            'user_id' => $user->id,
+            'subscription_id' => $pastSubscription->id,
+            'trial_ends_at' => now()->subDay(),
         ]);
     }
 
@@ -215,6 +233,52 @@ class PartnerPricingResolverTest extends FeatureTest
         PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
             ->update(['is_enabled_for_new_payments' => true]);
         $this->resolver()->flush();
+    }
+
+    /**
+     * A plan with a trial makes SubscriptionCheckoutForm pass
+     * $shouldSupportSkippingTrial = true as soon as the buyer has used up their
+     * trial allowance, and OfflineProvider::supportsSkippingTrial() is hard
+     * false — so Offline is not on the provider list at all. Quoting a partner
+     * price to that buyer would 500 them on an unhandled
+     * NoPaymentProvidersAvailableException, so the offering must not be usable.
+     */
+    public function test_a_trial_plan_yields_no_partner_price_to_a_buyer_who_cannot_have_a_trial(): void
+    {
+        config()->set('app.limit_user_trials.enabled', true);
+        config()->set('app.limit_user_trials.max_count', 1);
+
+        $partnerTenant = $this->activePartnerTenant();
+        [$plan] = $this->sellablePlan($partnerTenant);
+        $plan->update(['has_trial' => true]);
+
+        $eligible = $this->attributedUser($partnerTenant);
+        $exhausted = $this->attributedUser($partnerTenant);
+        $this->recordConsumedTrial($exhausted, $plan);
+        $this->resolver()->flush();
+
+        // The plan itself is still partner-priced — only this buyer is not.
+        $this->assertSame(7900, $this->resolver()->planPrice($eligible, $plan));
+
+        $this->assertNull($this->resolver()->planPrice($exhausted, $plan));
+        $this->assertNull($this->resolver()->usablePlanOffering($exhausted, $plan));
+    }
+
+    /** The same buyer keeps the partner price on a plan that has no trial to skip. */
+    public function test_a_buyer_who_cannot_have_a_trial_still_gets_the_partner_price_on_a_plan_without_one(): void
+    {
+        config()->set('app.limit_user_trials.enabled', true);
+        config()->set('app.limit_user_trials.max_count', 1);
+
+        $partnerTenant = $this->activePartnerTenant();
+        [$plan] = $this->sellablePlan($partnerTenant);
+
+        $exhausted = $this->attributedUser($partnerTenant);
+        $this->recordConsumedTrial($exhausted, $plan);
+        $this->resolver()->flush();
+
+        $this->assertFalse($plan->has_trial, 'Arrangement failure: this plan must have no trial.');
+        $this->assertSame(7900, $this->resolver()->planPrice($exhausted, $plan));
     }
 
     public function test_a_seat_based_plan_yields_no_partner_price(): void

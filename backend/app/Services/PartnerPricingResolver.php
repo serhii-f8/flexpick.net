@@ -215,6 +215,10 @@ class PartnerPricingResolver
             return null;
         }
 
+        if (! $this->offlineCanBillTrialPlanFor($user, $plan)) {
+            return null;
+        }
+
         $offering = PartnerPlanOffering::where('tenant_id', $tenant->id)
             ->where('plan_id', $plan->id)
             ->where('is_enabled', true)
@@ -257,6 +261,33 @@ class PartnerPricingResolver
      * underneath it: an unhandled NoPaymentProvidersAvailableException, i.e. a
      * 500 for the customer.
      */
+    /**
+     * The only buyer-dependent Offline precondition.
+     *
+     * As soon as a buyer has used up their trial allowance, the subscription
+     * checkout asks PaymentService for a provider that can *skip* the plan's
+     * trial ($shouldSupportSkippingTrial), and OfflineProvider::supportsSkippingTrial()
+     * is hard false — so Offline is not on the list at all. An offering that
+     * survived to here would quote a partner price into a list
+     * restrictToPartnerProviders() is about to empty: the same unhandled
+     * NoPaymentProvidersAvailableException 500 as the gate below. Failing
+     * closed makes display and checkout degrade together (spec Decision 5):
+     * such a buyer simply sees base pricing and keeps every provider.
+     *
+     * The eligibility rule itself belongs to SubscriptionService and is reused
+     * rather than reimplemented. Resolved lazily via the container for the
+     * usual reason — SubscriptionService -> CalculationService ->
+     * PartnerPricingResolver is a real cycle.
+     */
+    private function offlineCanBillTrialPlanFor(?User $user, Plan $plan): bool
+    {
+        if (! $plan->has_trial) {
+            return true;
+        }
+
+        return app(SubscriptionService::class)->canUserHaveSubscriptionTrial($user);
+    }
+
     private function offlineProviderAcceptsNewPayments(): bool
     {
         return $this->offlineUsableMemo ??= PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
