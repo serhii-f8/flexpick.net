@@ -3,9 +3,14 @@
 namespace Tests\Feature\Filament\Dashboard;
 
 use App\Filament\Dashboard\Pages\Dashboard;
+use App\Filament\Dashboard\Widgets\LatestHealthWidget;
+use App\Filament\Dashboard\Widgets\PlanUsageWidget;
+use App\Filament\Dashboard\Widgets\ReferralLinkWidget;
+use App\Filament\Dashboard\Widgets\ReferralStatsWidget;
 use App\Models\Tenant;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Widgets\AccountWidget;
 use Tests\Feature\FeatureTest;
 
 class DashboardPageTest extends FeatureTest
@@ -23,7 +28,7 @@ class DashboardPageTest extends FeatureTest
 
         $this->get(Dashboard::getUrl(tenant: $tenant))
             ->assertSuccessful()
-            ->assertSee(__('Run audit'));
+            ->assertSee(__('Run an audit'));
     }
 
     /**
@@ -43,7 +48,7 @@ class DashboardPageTest extends FeatureTest
 
         $this->get(Dashboard::getUrl(tenant: $tenant))
             ->assertSuccessful()
-            ->assertSee(__('Run audit'));
+            ->assertSee(__('Run an audit'));
     }
 
     public function test_run_audit_header_action_hidden_without_entitlement_or_a_buyable_tier(): void
@@ -62,5 +67,29 @@ class DashboardPageTest extends FeatureTest
         $this->get(Dashboard::getUrl(tenant: $tenant))
             ->assertSuccessful()
             ->assertDontSee(__('Run audit'));
+    }
+
+    public function test_the_home_page_leads_with_health_and_credits_not_the_account_card(): void
+    {
+        config(['audit.free_reports_limit' => 3, 'app.referral.enabled' => true]);
+        $user = User::factory()->create();
+        $tenant = Tenant::factory()->create();
+        $tenant->users()->attach($user);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $widgets = array_values((new Dashboard)->getVisibleWidgets());
+
+        $this->assertNotContains(AccountWidget::class, $widgets);
+        $this->assertNotContains(ReferralStatsWidget::class, $widgets);
+
+        $this->assertSame(
+            [LatestHealthWidget::class, PlanUsageWidget::class],
+            array_slice($widgets, 0, 2),
+            'Health and credits lead the home page.'
+        );
+        $this->assertSame(ReferralLinkWidget::class, end($widgets), 'Referrals close the page.');
     }
 }

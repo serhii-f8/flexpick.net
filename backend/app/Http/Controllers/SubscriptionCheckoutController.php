@@ -68,11 +68,15 @@ class SubscriptionCheckoutController extends Controller
 
         $this->sessionService->saveSubscriptionCheckoutDto($checkoutDto);
 
+        // Same base-pricing rule as ConvertLocalSubscriptionCheckoutForm, which
+        // renders inside this view: the conversion is collected by a gateway,
+        // so it must not quote a partner price.
         $totals = $this->calculationService->calculatePlanTotals(
             auth()->user(),
             $planSlug,
             $checkoutDto?->discountCode,
             $checkoutDto->quantity,
+            allowPartnerPricing: false,
         );
 
         return view('checkout.convert-local-subscription', [

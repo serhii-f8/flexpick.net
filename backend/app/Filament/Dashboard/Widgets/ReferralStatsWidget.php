@@ -8,6 +8,12 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class ReferralStatsWidget extends BaseWidget
 {
+    /**
+     * Rendered on the Referrals page only. On the home page the counts fold
+     * into ReferralLinkWidget so referrals take one quiet row, not four.
+     */
+    protected static bool $isDiscovered = false;
+
     protected ?string $pollingInterval = null;
 
     protected function getStats(): array

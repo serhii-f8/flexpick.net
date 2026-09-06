@@ -6,6 +6,8 @@ use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Mapper\AuditRequestStatusMapper;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Support\RepoName;
+use App\Support\ScoreBand;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -13,7 +15,7 @@ use Filament\Widgets\TableWidget;
 
 class RecentAuditsWidget extends TableWidget
 {
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -35,7 +37,9 @@ class RecentAuditsWidget extends TableWidget
             ->columns([
                 TextColumn::make('repo_url')
                     ->label(__('Repository'))
-                    ->limit(50)
+                    ->formatStateUsing(fn (string $state): string => RepoName::short($state))
+                    ->tooltip(fn (AuditRequest $record): ?string => $record->repo_url)
+                    ->extraAttributes(['class' => 'fp-repo'])
                     ->placeholder(__('No repository')),
                 TextColumn::make('status')
                     ->badge()
@@ -43,8 +47,12 @@ class RecentAuditsWidget extends TableWidget
                     ->formatStateUsing(fn (string $state, AuditRequestStatusMapper $mapper): string => $mapper->mapForDisplay($state)),
                 TextColumn::make('score')
                     ->label(__('Score'))
-                    ->badge()
-                    ->color('gray')
+                    ->weight('semibold')
+                    ->color(function (AuditRequest $record): ?string {
+                        $score = data_get($record->report?->payload, 'scores.overall');
+
+                        return is_int($score) ? ScoreBand::fromScore($score)->filamentColor() : null;
+                    })
                     ->state(function (AuditRequest $record) use ($previousScores): string {
                         $score = data_get($record->report?->payload, 'scores.overall');
 

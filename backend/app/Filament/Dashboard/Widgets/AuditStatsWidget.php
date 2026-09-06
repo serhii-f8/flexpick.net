@@ -13,7 +13,9 @@ class AuditStatsWidget extends BaseWidget
 {
     protected ?string $pollingInterval = null;
 
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 2;
+
+    protected int|string|array $columnSpan = 'full';
 
     public static function statusBuckets(): array
     {
@@ -33,6 +35,15 @@ class AuditStatsWidget extends BaseWidget
             'completed' => [AuditRequestStatus::REPORT_READY->value, AuditRequestStatus::SENT->value, AuditRequestStatus::HANDLED->value],
             'failed' => [AuditRequestStatus::FAILED->value],
         ];
+    }
+
+    /**
+     * As many columns as there are stats, so a single non-zero bucket reads
+     * as a full-width status strip instead of a lonely third-width card.
+     */
+    protected function getColumns(): int
+    {
+        return max(1, min(4, count($this->getCachedStats())));
     }
 
     protected function getStats(): array

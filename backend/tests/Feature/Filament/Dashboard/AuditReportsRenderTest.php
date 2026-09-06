@@ -117,7 +117,7 @@ class AuditReportsRenderTest extends FeatureTest
 
         Livewire::test(AuditReports::class)
             ->assertOk()
-            ->assertSee('text-emerald-500', false)
+            ->assertSee('fp-trend-up', false)
             ->assertSee('60 → 75', false);
     }
 

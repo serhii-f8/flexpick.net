@@ -25,7 +25,7 @@ class ScoreChartBuilderTest extends TestCase
         $this->assertCount(2, $points);
         $this->assertNull($points[0]->delta);
         $this->assertSame(15, $points[1]->delta);
-        $this->assertSame('text-emerald-500', $points[1]->colorClass);
+        $this->assertSame('fp-trend-up', $points[1]->colorClass);
         $this->assertSame('60 → 75 (+15) on Aug 20, 2026', $points[1]->tooltip);
     }
 
@@ -37,7 +37,7 @@ class ScoreChartBuilderTest extends TestCase
         $points = (new ScoreChartBuilder)->build($scores, $dates);
 
         $this->assertSame(-10, $points[1]->delta);
-        $this->assertSame('text-rose-500', $points[1]->colorClass);
+        $this->assertSame('fp-trend-down', $points[1]->colorClass);
     }
 
     public function test_an_unchanged_score_gets_the_neutral_color(): void
@@ -48,7 +48,7 @@ class ScoreChartBuilderTest extends TestCase
         $points = (new ScoreChartBuilder)->build($scores, $dates);
 
         $this->assertSame(0, $points[1]->delta);
-        $this->assertSame('text-gray-400', $points[1]->colorClass);
+        $this->assertSame('fp-trend-flat', $points[1]->colorClass);
     }
 
     /**

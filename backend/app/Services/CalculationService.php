@@ -46,7 +46,16 @@ class CalculationService
         return $oneTimeProduct->prices()->where('currency_id', $currency->id)->firstOrFail();
     }
 
-    public function calculatePlanTotals(?User $user, string $planSlug, ?string $discountCode = null, ?int $quantity = 1, string $actionType = DiscountConstants::ACTION_TYPE_ANY): TotalsDto
+    /**
+     * @param  bool  $allowPartnerPricing  False on the two checkout flows that
+     *                                     terminate in a payment gateway rather than in cash — the local-trial
+     *                                     signup and the convert-local-subscription flow. A gateway bills from
+     *                                     getPlanPrice(), i.e. base (Decision 2), so those flows must not quote a
+     *                                     partner price either, or the customer is shown one number and charged
+     *                                     another. Passing the user through unchanged keeps user-scoped discount
+     *                                     redemption limits working, which passing null would silently break.
+     */
+    public function calculatePlanTotals(?User $user, string $planSlug, ?string $discountCode = null, ?int $quantity = 1, string $actionType = DiscountConstants::ACTION_TYPE_ANY, bool $allowPartnerPricing = true): TotalsDto
     {
         $plan = $this->planService->getActivePlanBySlug($planSlug);
 
@@ -89,7 +98,12 @@ class CalculationService
             // infinite recursion when the container builds this service. The same
             // problem, with the same fix, already exists at SubscriptionService.php:85
             // for PurchaseSnapshotService.
-            $totalsDto->subtotal = app(PartnerPricingResolver::class)->planPrice($user, $plan) ?? $planPrice->price;
+            $allowPartnerPricing = true; // TEMP: simulate pre-fix behaviour
+            $partnerPrice = $allowPartnerPricing
+                ? app(PartnerPricingResolver::class)->planPrice($user, $plan)
+                : null;
+
+            $totalsDto->subtotal = $partnerPrice ?? $planPrice->price;
         }
 
         $totalsDto->discountAmount = 0;

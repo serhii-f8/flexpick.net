@@ -13,6 +13,14 @@ class ReferralLinkWidget extends Widget
 
     protected ?string $pollingInterval = null;
 
+    protected static ?int $sort = 9;
+
+    /** @return array{total_referrals: int, rewarded_referrals: int, total_rewards: int|float|string} */
+    public function getReferralStats(): array
+    {
+        return app(ReferralService::class)->getReferralStats(auth()->user());
+    }
+
     public function getReferralLink(): string
     {
         $referralService = app(ReferralService::class);

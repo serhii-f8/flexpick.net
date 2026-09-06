@@ -14,7 +14,7 @@
             </x-section.column>
 
             <x-section.column>
-                @include('livewire.checkout.partials.plan-details', ['isTrialSkipped' => true])
+                @include('livewire.checkout.partials.plan-details', ['isTrialSkipped' => true, 'allowPartnerPricing' => false])
             </x-section.column>
 
         </x-section.columns>

@@ -165,4 +165,16 @@ class PlanUsageWidgetTest extends FeatureTest
 
         return $tenant;
     }
+
+    public function test_a_subscribed_tenant_gets_a_direct_change_plan_link(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(5);
+
+        $this->actAsTenantUser($user, $tenant);
+
+        Livewire::test(PlanUsageWidget::class)
+            ->assertSee(__('Credits this month'))
+            ->assertSee(__('Change plan'))
+            ->assertSeeHtml('/change-plan');
+    }
 }

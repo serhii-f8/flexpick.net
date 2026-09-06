@@ -2,6 +2,7 @@
 
 namespace App\Filament\Dashboard\Widgets;
 
+use App\Filament\Dashboard\Resources\Subscriptions\SubscriptionResource;
 use App\Models\Subscription;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\TierQuota;
@@ -16,7 +17,7 @@ class PlanUsageWidget extends Widget
 
     protected static ?int $sort = 0;
 
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = ['default' => 'full', 'xl' => 1];
 
     public static function canView(): bool
     {
@@ -43,10 +44,9 @@ class PlanUsageWidget extends Widget
         $quotas = $entitlements->quotas($user, $tenant);
         $metered = collect($quotas)->reject(fn (TierQuota $quota): bool => $quota->isLifetime);
 
-        $colors = ['bg-primary-500', 'bg-secondary-500', 'bg-warning-500'];
         $bars = [];
 
-        foreach ($metered->values() as $index => $quota) {
+        foreach ($metered->values() as $quota) {
             // Hidden entirely at zero: a plan without credits for a tier
             // should not advertise them.
             if ($quota->limit < 1) {
@@ -57,7 +57,6 @@ class PlanUsageWidget extends Widget
                 'label' => $quota->label,
                 'used' => $quota->used,
                 'total' => $quota->limit,
-                'color' => $colors[$index % count($colors)],
             ];
         }
 
@@ -74,7 +73,6 @@ class PlanUsageWidget extends Widget
                     'label' => __('Free audits'),
                     'used' => $free->used,
                     'total' => $free->limit,
-                    'color' => 'bg-primary-500',
                 ];
             }
         }
@@ -83,6 +81,9 @@ class PlanUsageWidget extends Widget
             'planName' => $subscription?->plan?->name ?? __('Free'),
             'renewsAt' => $subscription?->ends_at ? Carbon::parse($subscription->ends_at) : null,
             'bars' => $bars,
+            'changePlanUrl' => $subscription !== null && app(SubscriptionService::class)->canChangeSubscriptionPlan($subscription)
+                ? SubscriptionResource::getUrl('change-plan', ['record' => $subscription->uuid])
+                : null,
             // Show it when there is no paid allowance at all (a free user
             // who hasn't burned their runs yet still needs the conversion
             // surface), or when everything -- free and paid alike -- is

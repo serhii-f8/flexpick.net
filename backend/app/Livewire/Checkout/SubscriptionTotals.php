@@ -51,6 +51,14 @@ class SubscriptionTotals extends Component
 
     public bool $canAddDiscount = true;
 
+    /**
+     * Mirrors CalculationService::calculatePlanTotals()'s parameter of the same
+     * name. Without it, applying or removing a discount code on a base-priced
+     * flow would recompute the totals with partner pricing switched back on and
+     * flip the displayed price mid-checkout.
+     */
+    public bool $allowPartnerPricing = true;
+
     private DiscountService $discountService;
 
     private CalculationService $calculationService;
@@ -67,9 +75,10 @@ class SubscriptionTotals extends Component
         $this->sessionService = $sessionService;
     }
 
-    public function mount(TotalsDto $totals, Plan $plan, $page, bool $canAddDiscount = true, bool $isTrailSkipped = false)
+    public function mount(TotalsDto $totals, Plan $plan, $page, bool $canAddDiscount = true, bool $isTrailSkipped = false, bool $allowPartnerPricing = true)
     {
         $this->page = $page;
+        $this->allowPartnerPricing = $allowPartnerPricing;
         $this->planSlug = $plan->slug;
         $this->planHasTrial = $plan->has_trial;
         $this->isTrailSkipped = $isTrailSkipped;
@@ -177,6 +186,7 @@ class SubscriptionTotals extends Component
             $this->planSlug,
             $subscriptionCheckoutDto->discountCode,
             $subscriptionCheckoutDto->quantity,
+            allowPartnerPricing: $this->allowPartnerPricing,
         );
 
         $this->subtotal = $totals->subtotal;

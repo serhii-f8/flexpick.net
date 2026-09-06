@@ -11,7 +11,7 @@
             @endguest
 
             <x-section.column>
-                @include('livewire.checkout.partials.plan-details', ['canAddDiscount' => false])
+                @include('livewire.checkout.partials.plan-details', ['canAddDiscount' => false, 'allowPartnerPricing' => false])
             </x-section.column>
 
         </x-section.columns>

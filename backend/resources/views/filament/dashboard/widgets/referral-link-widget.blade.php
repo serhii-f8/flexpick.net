@@ -1,6 +1,7 @@
-<x-filament-widgets::widget>
+<x-filament-widgets::widget class="fi-wi-referral-link">
     <x-filament::section>
-        <div class="space-y-2" x-data="{
+        @php($stats = $this->getReferralStats())
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" x-data="{
             referralLink: '{{ $this->getReferralLink() }}',
             copyToClipboard() {
                 const input = this.$refs.referralInput;
@@ -23,41 +24,41 @@
             },
             showNotification() {
                 new FilamentNotification()
-                    .title('{{ __('Success!') }}')
+                    .title('{{ __('Copied') }}')
                     .success()
                     .body('{{ __('Referral link copied to clipboard') }}')
                     .send();
             }
         }">
-            <div>
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ __('Your Referral Link') }}
-                </label>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ __('Share this link with your friends to earn rewards when they sign up') }}
+            <div class="min-w-0 flex-1">
+                <x-fp.label>{{ __('Your referral link') }}</x-fp.label>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                    {{ __('Share it and earn rewards when someone signs up.') }}
                 </p>
+                <div class="mt-3 flex gap-2">
+                    <x-filament::input.wrapper class="flex-1">
+                        <x-filament::input type="text" x-model="referralLink" readonly x-ref="referralInput" class="font-mono text-xs" />
+                    </x-filament::input.wrapper>
+                    <x-filament::button type="button" color="gray" x-on:click="copyToClipboard()" icon="heroicon-o-clipboard">
+                        {{ __('Copy') }}
+                    </x-filament::button>
+                </div>
             </div>
 
-            <div class="flex gap-2">
-                <input
-                    type="text"
-                    x-model="referralLink"
-                    readonly
-                    x-ref="referralInput"
-                    class="flex-1 block w-full rounded-lg border border-gray-200 px-3 focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:text-sm"
-                />
-                <x-filament::button
-                    type="button"
-                    color="primary"
-                    x-on:click="copyToClipboard()"
-                >
-                    <x-filament::icon
-                        icon="heroicon-o-clipboard"
-                        class="h-5 w-5"
-                    />
-                    {{ __('Copy') }}
-                </x-filament::button>
-            </div>
+            <dl class="flex gap-8 text-sm">
+                <div>
+                    <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Referred') }}</dt>
+                    <dd class="text-xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ $stats['total_referrals'] }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Rewarded') }}</dt>
+                    <dd class="text-xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ $stats['rewarded_referrals'] }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Rewards') }}</dt>
+                    <dd class="text-xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ $stats['total_rewards'] }}</dd>
+                </div>
+            </dl>
         </div>
     </x-filament::section>
 </x-filament-widgets::widget>

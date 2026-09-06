@@ -44,11 +44,17 @@ class LocalSubscriptionCheckoutForm extends CheckoutForm
 
         $plan = $this->planService->getActivePlanBySlug($planSlug);
 
+        // Base-priced: this is the free-trial signup, and the subscription it
+        // creates is converted through a payment gateway later
+        // (ConvertLocalSubscriptionCheckoutForm), which may never see or quote
+        // a partner price. SubscriptionService::create() keeps the same rule
+        // for the row it persists.
         $totals = $this->calculationService->calculatePlanTotals(
             auth()->user(),
             $planSlug,
             $subscriptionCheckoutDto?->discountCode,
             $subscriptionCheckoutDto->quantity,
+            allowPartnerPricing: false,
         );
 
         return view('livewire.checkout.local-subscription-checkout-form', [

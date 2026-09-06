@@ -3,6 +3,7 @@
         $canAddDiscount = $canAddDiscount ?? true;
         $isTrialSkipped = $isTrialSkipped ?? false;
         $isTenantPickerEnabled = $isTenantPickerEnabled ?? true;
+        $allowPartnerPricing = $allowPartnerPricing ?? true;
     @endphp
     <x-heading.h2 class="text-cream-100 text-xl!">
         {{ __('Plan details') }}
@@ -65,7 +66,7 @@
             </ul>
         </div>
 
-        <livewire:checkout.subscription-totals :totals="$totals" :plan="$plan" page="{{request()->fullUrl()}}" can-add-discount="{{$canAddDiscount}}" is-trail-skipped="{{$isTrialSkipped}}"/>
+        <livewire:checkout.subscription-totals :totals="$totals" :plan="$plan" page="{{request()->fullUrl()}}" can-add-discount="{{$canAddDiscount}}" is-trail-skipped="{{$isTrialSkipped}}" :allow-partner-pricing="$allowPartnerPricing"/>
 
     </div>
 </div>

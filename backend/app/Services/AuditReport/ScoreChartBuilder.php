@@ -29,9 +29,11 @@ class ScoreChartBuilder
 
         foreach ($scores->values() as $i => $score) {
             $delta = $previous !== null ? $score - $previous : null;
+            // Brand trend classes (see resources/css/flexpick-brand.css):
+            // gold for improvement, coral for regression, muted for flat.
             $colorClass = $delta === null || $delta === 0
-                ? 'text-gray-400'
-                : ($delta > 0 ? 'text-emerald-500' : 'text-rose-500');
+                ? 'fp-trend-flat'
+                : ($delta > 0 ? 'fp-trend-up' : 'fp-trend-down');
 
             $date = $dates->get($i);
             $tooltip = $previous !== null

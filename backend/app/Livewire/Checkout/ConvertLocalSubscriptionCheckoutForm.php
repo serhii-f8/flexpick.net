@@ -55,6 +55,7 @@ class ConvertLocalSubscriptionCheckoutForm extends CheckoutForm
             $planSlug,
             $subscriptionCheckoutDto?->discountCode,
             $subscriptionCheckoutDto->quantity,
+            allowPartnerPricing: false,
         );
 
         return view('livewire.checkout.convert-local-subscription-checkout-form', [
@@ -154,6 +155,16 @@ class ConvertLocalSubscriptionCheckoutForm extends CheckoutForm
         return redirect()->route('checkout.subscription.success');
     }
 
+    /**
+     * Deliberately not wrapped in restrictToPartnerProviders(): this flow
+     * converts a local subscription into a gateway-managed one, and a gateway
+     * bills from getPlanPrice(), i.e. the base price (Decision 2). Offline is
+     * excluded here anyway — $shouldSupportSkippingTrial is unconditionally
+     * true and OfflineProvider::supportsSkippingTrial() is hard false — so
+     * restricting to Offline would empty the list and 500. The flow is
+     * base-priced instead, which is why render() passes
+     * allowPartnerPricing: false.
+     */
     protected function getPaymentProviders(PaymentService $paymentService)
     {
         if (count($this->paymentProviders) > 0) {

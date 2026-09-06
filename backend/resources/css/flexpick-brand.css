@@ -155,3 +155,58 @@ html.fi:not(.dark) {
 }
 
 .fp-panel-body { padding: 1.25rem 1.125rem; }
+
+/* Score trend (sparkline strokes, delta text). */
+.fp-trend-up { color: var(--fp-gold); }
+.fp-trend-down { color: var(--fp-band-critical); }
+.fp-trend-flat { color: #8a8175; }
+
+.fp-sparkline { display: block; width: 100%; height: 2.75rem; }
+.fp-sparkline-grid { color: var(--fp-line-strong); }
+
+.fp-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+}
+
+/* Risk mix: dot + count, mono. */
+.fp-risk-mix {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+}
+
+.fp-risk-mix > span { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+/* Usage meter (credits): gold fill, no band colouring. */
+.fp-usage-track {
+    height: 6px;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--fp-track);
+}
+
+.fp-usage-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--fp-gold);
+    transition: width 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.fp-usage-fill.fp-usage-exhausted { background: var(--fp-band-critical); }
+
+/* Repository name: mono, the way it appears in a terminal. */
+.fp-repo {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+}
