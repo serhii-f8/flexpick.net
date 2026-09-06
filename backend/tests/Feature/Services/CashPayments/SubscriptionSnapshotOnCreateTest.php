@@ -110,5 +110,9 @@ class SubscriptionSnapshotOnCreateTest extends FeatureTest
 
         $this->assertSame($partnerTenant->id, $subscription->partner_tenant_id);
         $this->assertSame(['audit_deep_ai_credits' => 5], $subscription->quota_snapshot);
+        // The persisted price is what the cash order is billed from
+        // (CashSubscriptionService::createPendingOrder), so it — not just the
+        // displayed totals — has to be the partner's price.
+        $this->assertSame(7900, (int) $subscription->price);
     }
 }

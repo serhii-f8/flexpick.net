@@ -35,6 +35,12 @@ class CheckoutService
                 quantity: $quantity,
                 tenant: $tenant,
             );
+        } elseif (($buyer = auth()->user()) !== null) {
+            // A reused NEW subscription can predate this buyer's partner
+            // attribution — or the partner's offering — so its frozen price
+            // and snapshot are re-derived here rather than trusted. Price is
+            // never carried forward from an earlier request (Decision 9).
+            $subscription = $this->subscriptionService->syncPlanPurchaseForBuyer($subscription, $buyer);
         }
 
         $plan = $subscription->plan;

@@ -61,12 +61,22 @@ class SubscriptionService
             $this->deleteAllNewSubscriptions($userId, $tenant);
 
             $planPrice = $this->calculationService->getPlanPrice($plan);
+            $user = User::findOrFail($userId);
+
+            // Only a subscription that can actually be collected in cash may
+            // carry a partner price. A local subscription is the free-trial /
+            // admin-comped path, and it is converted to a real payment through
+            // a gateway (ConvertLocalSubscriptionCheckoutForm), which by
+            // Decision 2 may never see a partner price — so it stays at base.
+            $price = $localSubscription
+                ? (int) $planPrice->price
+                : $this->planPriceForBuyer($plan, $user);
 
             $subscriptionAttributes = [
                 'uuid' => (string) Str::uuid(),
                 'user_id' => $userId,
                 'plan_id' => $plan->id,
-                'price' => $planPrice->price,
+                'price' => $price,
                 'currency_id' => $planPrice->currency_id,
                 'status' => SubscriptionStatus::NEW->value,
                 'interval_id' => $plan->interval_id,
@@ -82,7 +92,7 @@ class SubscriptionService
             // Resolved through the container rather than constructor-injected:
             // PurchaseSnapshotService -> PartnerCapabilityService ->
             // SubscriptionService is a container cycle.
-            $snapshot = app(PurchaseSnapshotService::class)->forPlan(User::findOrFail($userId), $plan);
+            $snapshot = app(PurchaseSnapshotService::class)->forPlan($user, $plan);
 
             $subscriptionAttributes['partner_tenant_id'] = $snapshot['partner_tenant_id'];
             $subscriptionAttributes['base_price_snapshot'] = $snapshot['base_price_snapshot'];
@@ -110,7 +120,6 @@ class SubscriptionService
                     $subscriptionAttributes['trial_ends_at'] = $endDate;
                 }
 
-                $user = User::find($userId);
                 if ($this->shouldUserVerifyPhoneNumberForTrial($user)) {
                     $subscriptionAttributes['status'] = SubscriptionStatus::PENDING_USER_VERIFICATION->value;
                 } else {
@@ -130,6 +139,60 @@ class SubscriptionService
         });
 
         return $newSubscription;
+    }
+
+    /**
+     * The flat price this buyer must actually be charged for a plan.
+     *
+     * CalculationService::getPlanPrice() is contractually the *base* price —
+     * all five gateway providers create gateway-side products and prices from
+     * it, so it must never be partner-substituted (Decision 2). That makes
+     * this the write side's own responsibility: without it the subscription
+     * row keeps the base price while the storefront and the checkout totals
+     * show the partner's, and CashSubscriptionService::createPendingOrder()
+     * then bills the base price and reports a zero margin.
+     *
+     * Only the flat price is substituted. Partner pricing is flat-rate-only
+     * (PartnerPricingResolver enforces it), so for seat-based and usage-based
+     * plans the resolver returns null and the base price stands untouched,
+     * along with every other field taken from the PlanPrice row.
+     *
+     * Resolved lazily via the container rather than constructor-injected:
+     * PartnerPricingResolver -> PartnerCapabilityService -> SubscriptionService
+     * is a real container cycle. Same idiom as PurchaseSnapshotService above.
+     */
+    public function planPriceForBuyer(Plan $plan, User $user): int
+    {
+        return app(PartnerPricingResolver::class)->planPrice($user, $plan)
+            ?? (int) $this->calculationService->getPlanPrice($plan)->price;
+    }
+
+    /**
+     * Re-derive an existing NEW subscription's frozen price and snapshot for
+     * the buyer standing at checkout right now.
+     *
+     * CheckoutService::initSubscriptionCheckout() reuses a NEW subscription
+     * rather than always creating one, and that row can predate the buyer's
+     * partner attribution, the partner configuring the offering, or the
+     * partner disabling it again. Nothing else re-derives it, so without this
+     * the reuse path is the one way a stale price reaches a cash order.
+     */
+    public function syncPlanPurchaseForBuyer(Subscription $subscription, User $user): Subscription
+    {
+        /** @var Plan $plan */
+        $plan = $subscription->plan;
+
+        // Same lazy-resolution reason as planPriceForBuyer() above.
+        $snapshot = app(PurchaseSnapshotService::class)->forPlan($user, $plan);
+
+        $subscription->fill([
+            'price' => $this->planPriceForBuyer($plan, $user),
+            'partner_tenant_id' => $snapshot['partner_tenant_id'],
+            'base_price_snapshot' => $snapshot['base_price_snapshot'],
+            'quota_snapshot' => $snapshot['quota_snapshot'],
+        ])->save();
+
+        return $subscription;
     }
 
     public function shouldUserVerifyPhoneNumberForTrial(User $user): bool
