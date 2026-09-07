@@ -42,9 +42,15 @@ use Illuminate\Support\Collection;
  *   - for a plan with a trial, this buyer must still be eligible for one —
  *     a returning customer who has used up their trials makes checkout ask
  *     for a provider that can skip the trial, which Offline cannot do.
- * Failing closed here makes display and checkout degrade together — a plan
- * this gate rejects shows base pricing and keeps every provider, exactly as
- * if no partner offering existed.
+ * Failing closed here makes display and checkout degrade together: for a
+ * non-attributed buyer, a plan this gate rejects simply shows base pricing
+ * and keeps every provider, exactly as if no partner offering existed. For
+ * an attributed buyer this is no longer the whole story — purchasablePlans()/
+ * purchasableProducts() (2026-09-07, catalog restriction) reuse this exact
+ * gate to decide what a purchasing surface offers at all, so for them a plan
+ * or product this gate rejects disappears from the catalog entirely and is
+ * rejected server-side at checkout, rather than falling back to base pricing
+ * (that fallback, base §8.2, was reversed by the catalog-restriction spec).
  */
 class PartnerPricingResolver
 {
