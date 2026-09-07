@@ -110,15 +110,19 @@ class PartnerOrderResource extends Resource
 
     /**
      * The model policy gates on PERMISSION_VIEW_ORDERS against the buyer's
-     * own tenant -- a permission a partner never holds there. getEloquentQuery()
-     * has already scoped $record to this partner's referred customers by the
-     * time a route resolves it, and canAccess() already gates the resource
-     * itself, so there is nothing left for the policy to add here. Same
-     * pattern as ExpertReviewResource::canView().
+     * own tenant -- a permission a partner never holds there, so the default
+     * policy-backed canView() would 403 a partner viewing their own referred
+     * order. Re-derive from canAccess() instead of hardcoding true: this
+     * resource's authorization model is scoped by tenant, not by individual
+     * order attributes, so canAccess() (tenant is an active partner + holds
+     * PERMISSION_MANAGE_PARTNER_ORDERS) is the correct per-call check here --
+     * it re-checks on every call rather than assuming getEloquentQuery()'s
+     * scoping alone is enough, the same defense-in-depth rationale behind
+     * ExpertReviewResource::canView() re-deriving canViewAny().
      */
     public static function canView($record): bool
     {
-        return true;
+        return self::canAccess();
     }
 
     public static function table(Table $table): Table
