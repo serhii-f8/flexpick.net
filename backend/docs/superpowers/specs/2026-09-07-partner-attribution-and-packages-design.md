@@ -89,10 +89,13 @@ client cannot forge or alter it, only delete it. Attributes: lifetime
 
 The session-based partner code is gone. `PartnerAttributionService`
 replaces `rememberPendingCode()` / `pendingCode()` / `clearPendingCode()`
-with `cookieCode(Request|null): ?string` (reads and validates the cookie)
-and `queueCookieFor(Tenant $tenant, User $user)`; the pending-code
-consumers (`attribute()`, `PartnerPricingResolver::tenantFromPendingCode()`)
-read the cookie instead.
+with `cookieCode(?Request): ?string` (reads and validates the cookie),
+`hasPartnerCookie(?Request): bool`, `queueCookie(string $code)`,
+`refreshCookieFromDatabase(User)` and `codeForTenant(Tenant): ?string`; the
+pending-code consumers (`attribute()`, the resolver's cookie lookup) read the
+cookie instead. All three middleware steps are skipped while the admin
+Referral Settings switch (`app.referral.enabled`) is off; that switch is the
+single on/off for partner links too.
 
 ### 3.4 Database is the source of truth after registration
 
@@ -126,7 +129,8 @@ When `ReferralService::trackReferral()` is called with a code that resolves
 to a partner tenant (§3.2), the `Referral` row is still created (so the
 partner's My Referrals table lists the referred user and the stats widget
 counts them) but reward processing is skipped: `processReward()` returns
-early for a referral whose code resolves to a partner tenant, and the
+early when the referred user carries `partner_tenant_id` (durable, unlike
+re-resolving the code after the partner may have lapsed), and the
 `Referral` stays at `verified`/`paid` without ever reaching `rewarded`.
 Partners are paid through their margin, not through coupons. Non-partner
 referrals keep the existing reward behaviour. **Consistent with base §4.4.**
@@ -197,9 +201,14 @@ figure of its own). Each entry:
     'price' => 23275,                   // FlexPick package price, cents
     'discount_percent' => 5,
     'partner_unit_price' => 10000,      // suggested partner selling price per report
-    'description' => 'CTOs, product owners, and business leaders who want to evaluate team efficiency and basic code health.',
+    'is_popular' => false,
 ],
 ```
+
+A sibling `package_tiers` block, keyed `diagnostic` / `deep_ai` / `expert`,
+holds each tier's display `name`, `plural`, `credit_key`, and `headline` (the
+best-use-case sentence from the table). The seeder writes the headline as
+every package's product description, so it is not repeated per package.
 
 The full table, prices in cents:
 
