@@ -136,7 +136,7 @@ class PartnerOrderResource extends Resource
                     ->getStateUsing(fn (Order $record): string => self::itemName($record)),
                 TextColumn::make('payment')
                     ->label(__('Payment'))
-                    ->getStateUsing(fn (Order $record): string => $record->is_local ? __('Cash') : ($record->paymentProvider?->name ?? '—')),
+                    ->getStateUsing(fn (Order $record): string => $record->is_local ? __('Cash') : (optional($record->paymentProvider)->name ?? '—')),
                 TextColumn::make('base_price_snapshot')
                     ->label(__('Base price'))
                     ->getStateUsing(fn (Order $record): string => self::ownsCashOrder($record) && $record->base_price_snapshot !== null
@@ -189,7 +189,7 @@ class PartnerOrderResource extends Resource
                     TextEntry::make('user.email')->label(__('Customer')),
                     TextEntry::make('type')->label(__('Type'))->badge(),
                     TextEntry::make('payment')->label(__('Payment'))
-                        ->getStateUsing(fn (Order $record): string => $record->is_local ? __('Cash') : ($record->paymentProvider?->name ?? '—')),
+                        ->getStateUsing(fn (Order $record): string => $record->is_local ? __('Cash') : (optional($record->paymentProvider)->name ?? '—')),
                     TextEntry::make('base_price_snapshot')->label(__('Base price'))
                         ->getStateUsing(fn (Order $record): string => self::ownsCashOrder($record) && $record->base_price_snapshot !== null ? self::formatMoney((int) $record->base_price_snapshot) : '—'),
                     TextEntry::make('total_amount')->label(__('Your price'))
@@ -207,9 +207,13 @@ class PartnerOrderResource extends Resource
 
     private static function itemName(Order $record): string
     {
-        $product = $record->items()->first()?->oneTimeProduct?->name;
+        // optional() rather than ?-> throughout: Larastan resolves a relation's
+        // magic property (e.g. ->oneTimeProduct, ->plan) via ->, but not via a
+        // nullsafe fetch, on every hop of the chain -- not just the last one.
+        $oneTimeProductName = optional($record->items()->first())->oneTimeProduct?->name;
+        $planProductName = optional(optional($record->subscription)->plan)->product?->name;
 
-        return $product ?? $record->subscription?->plan?->product?->name ?? '—';
+        return $oneTimeProductName ?? $planProductName ?? '—';
     }
 
     private static function ownsCashOrder(Order $record): bool

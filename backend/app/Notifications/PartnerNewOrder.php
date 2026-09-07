@@ -32,10 +32,12 @@ class PartnerNewOrder extends Notification
     /** @return array<string, mixed> */
     public function toDatabase(object $notifiable): array
     {
-        $currency = $this->order->currency?->code ?? config('app.default_currency');
+        // optional() rather than ?->: Larastan resolves a relation's magic
+        // property (->currency, ->user) via ->, but not via a nullsafe fetch.
+        $currency = optional($this->order->currency)->code ?? config('app.default_currency');
 
         return FilamentNotification::make()
-            ->title(__('New order from :customer', ['customer' => $this->order->user?->email ?? __('a customer')]))
+            ->title(__('New order from :customer', ['customer' => optional($this->order->user)->email ?? __('a customer')]))
             ->body(__(':amount, :method. Approve it once you have the cash.', [
                 'amount' => money($this->amountDue, $currency),
                 'method' => $this->order->is_local ? __('cash') : __('card'),

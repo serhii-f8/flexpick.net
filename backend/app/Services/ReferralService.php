@@ -191,8 +191,10 @@ class ReferralService
     {
         // A partner's referral is paid through their margin, never a coupon
         // (spec §3.6). The Referral row stays so My Referrals lists the
-        // customer; it simply never reaches `rewarded`.
-        if ($referral->referredUser?->partner_tenant_id !== null) {
+        // customer; it simply never reaches `rewarded`. optional() rather
+        // than ?->: Larastan resolves a relation's magic property via ->,
+        // but not via a nullsafe fetch.
+        if (optional($referral->referredUser)->partner_tenant_id !== null) {
             return;
         }
 
