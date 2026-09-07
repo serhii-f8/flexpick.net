@@ -30,6 +30,7 @@ class UserService
         }
 
         $this->partnerAttributionService->attribute($user, PartnerAttributionSource::REGISTRATION);
+        $this->partnerAttributionService->refreshCookieFromDatabase($user);
 
         if ($dispatchRegisterEvent) {
             event(new Registered($user));

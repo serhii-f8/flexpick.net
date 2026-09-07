@@ -3,14 +3,14 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\PartnerAttributionSource;
-use App\Constants\SessionConstants;
 use App\Constants\SubscriptionStatus;
-use App\Models\PartnerReferralLink;
 use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\ReferralService;
 use App\Services\UserService;
+use Illuminate\Support\Facades\Cookie;
 use Tests\Feature\FeatureTest;
 
 class UserServiceTest extends FeatureTest
@@ -48,7 +48,7 @@ class UserServiceTest extends FeatureTest
         $this->assertNotEquals('password', $user->password);
     }
 
-    public function test_creating_a_user_attributes_a_pending_partner_code(): void
+    public function test_creating_a_user_attributes_the_cookie_partner_and_reissues_the_cookie(): void
     {
         $partnerTenant = $this->createTenant();
         $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
@@ -59,8 +59,9 @@ class UserServiceTest extends FeatureTest
             'status' => SubscriptionStatus::ACTIVE->value,
             'ends_at' => now()->addDays(30),
         ]);
-        PartnerReferralLink::factory()->create(['tenant_id' => $partnerTenant->id, 'code' => 'SIGNUPCODE']);
-        session([SessionConstants::PARTNER_REFERRAL_CODE => 'SIGNUPCODE']);
+        $member = $this->createUser($partnerTenant);
+        $code = app(ReferralService::class)->getOrCreateReferralCode($member)->code;
+        $this->app['request']->cookies->set(config('partner.cookie_name'), $code);
 
         $user = app(UserService::class)->createUser([
             'name' => 'Jane Doe',
@@ -70,5 +71,6 @@ class UserServiceTest extends FeatureTest
 
         $this->assertTrue($user->partnerTenant->is($partnerTenant));
         $this->assertSame(PartnerAttributionSource::REGISTRATION->value, $user->partner_attribution_source);
+        $this->assertSame($code, Cookie::queued(config('partner.cookie_name'))?->getValue());
     }
 }

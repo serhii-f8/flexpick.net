@@ -4,13 +4,11 @@ namespace Tests\Feature\Services;
 
 use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
-use App\Constants\SessionConstants;
 use App\Constants\SubscriptionStatus;
 use App\Models\OneTimeProduct;
 use App\Models\OneTimeProductPrice;
 use App\Models\PartnerPlanOffering;
 use App\Models\PartnerProductOffering;
-use App\Models\PartnerReferralLink;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Product;
@@ -21,6 +19,7 @@ use App\Models\UserSubscriptionTrial;
 use App\Services\CurrencyService;
 use App\Services\PartnerCatalogService;
 use App\Services\PartnerPricingResolver;
+use App\Services\ReferralService;
 use Tests\Feature\FeatureTest;
 
 class PartnerPricingResolverTest extends FeatureTest
@@ -97,6 +96,16 @@ class PartnerPricingResolverTest extends FeatureTest
         ]);
     }
 
+    /** A personal code, held by a member of $partnerTenant, planted in the request cookie. */
+    private function plantPartnerCookie(Tenant $partnerTenant): string
+    {
+        $member = $this->createUser($partnerTenant);
+        $code = app(ReferralService::class)->getOrCreateReferralCode($member)->code;
+        $this->app['request']->cookies->set(config('partner.cookie_name'), $code);
+
+        return $code;
+    }
+
     /** Burn this buyer's one allowed trial, the way a past trial subscription would. */
     private function recordConsumedTrial(User $user, Plan $plan): void
     {
@@ -134,17 +143,12 @@ class PartnerPricingResolverTest extends FeatureTest
         $this->assertNull($this->resolver()->resolvePartnerTenant($user));
     }
 
-    public function test_an_anonymous_visitor_with_a_session_code_gets_the_partner_price(): void
+    public function test_an_anonymous_visitor_with_a_partner_cookie_gets_the_partner_price(): void
     {
         $partnerTenant = $this->activePartnerTenant();
         [$plan] = $this->sellablePlan($partnerTenant);
 
-        $link = PartnerReferralLink::factory()->create([
-            'tenant_id' => $partnerTenant->id,
-            'is_active' => true,
-        ]);
-
-        session([SessionConstants::PARTNER_REFERRAL_CODE => $link->code]);
+        $this->plantPartnerCookie($partnerTenant);
         $this->resolver()->flush();
 
         $this->assertSame(7900, $this->resolver()->planPrice(null, $plan));
@@ -159,20 +163,15 @@ class PartnerPricingResolverTest extends FeatureTest
      * back to the session code would quote them marked-up, cash-only prices
      * forever, and stamp orders.partner_tenant_id on a user row that stays
      * null. users.partner_tenant_id is the whole answer for an authenticated
-     * buyer.
+     * buyer; the cookie prices anonymous visitors only.
      */
-    public function test_a_logged_in_unattributed_user_ignores_a_session_referral_code(): void
+    public function test_a_logged_in_unattributed_user_ignores_the_partner_cookie(): void
     {
         $partnerTenant = $this->activePartnerTenant();
         [$plan] = $this->sellablePlan($partnerTenant);
         $user = $this->createUser();
 
-        $link = PartnerReferralLink::factory()->create([
-            'tenant_id' => $partnerTenant->id,
-            'is_active' => true,
-        ]);
-
-        session([SessionConstants::PARTNER_REFERRAL_CODE => $link->code]);
+        $this->plantPartnerCookie($partnerTenant);
         $this->resolver()->flush();
 
         // The same code does still price an anonymous visitor.
@@ -181,7 +180,7 @@ class PartnerPricingResolverTest extends FeatureTest
         $this->assertNull($this->resolver()->planPrice($user, $plan));
         $this->assertNull($this->resolver()->resolvePartnerTenant($user));
 
-        session()->forget(SessionConstants::PARTNER_REFERRAL_CODE);
+        $this->app['request']->cookies->remove(config('partner.cookie_name'));
         $this->resolver()->flush();
     }
 

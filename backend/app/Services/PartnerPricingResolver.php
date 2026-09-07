@@ -26,7 +26,7 @@ use Illuminate\Support\Collection;
  * "Usable" means all four of:
  *   - the buyer resolves to a partner tenant — an authenticated user through
  *     users.partner_tenant_id and only that, or an anonymous visitor through
- *     an active referral code in session,
+ *     the fp_rc cookie,
  *   - that tenant's Partner Plan is currently active (spec §7.5),
  *   - the offering exists and is_enabled,
  *   - the offering is still at or above the live admin floor (spec §5.5).
@@ -181,24 +181,18 @@ class PartnerPricingResolver
     }
 
     /**
-     * The session referral code is a fallback for anonymous visitors only.
+     * The cookie is a fallback for anonymous visitors only.
      *
      * An authenticated user's answer is users.partner_tenant_id and nothing
      * else, even when it is null. Attribution happens at exactly two places —
-     * UserService (registration) and AttributePartnerOnLogin (login); there is
-     * no checkout attribution, and PartnerAttributionSource::ORDER and ::LINK
-     * are declared but never dispatched. So an already-logged-in direct
-     * customer who clicks a partner referral link mid-session has no login
-     * event coming to attribute them: falling back to the session code would
-     * start quoting them marked-up, cash-only prices indefinitely, and a
-     * purchase would stamp orders.partner_tenant_id while users.partner_tenant_id
-     * stayed null — leaving the admin's Attribution Source and Attributed At
-     * columns rendering "—" for that order.
+     * UserService (registration) and AttributePartnerOnLogin (login) — and both
+     * re-issue the cookie from that row afterwards, so for a signed-in user the
+     * cookie can never say anything the database does not (spec §3.4, §3.5).
      */
     private function computePartnerTenant(?User $user): ?Tenant
     {
         $tenant = $user === null
-            ? $this->tenantFromPendingCode()
+            ? $this->tenantFromCookie()
             : $this->attributedTenant($user);
 
         if ($tenant === null) {
@@ -216,9 +210,9 @@ class PartnerPricingResolver
         return $tenant;
     }
 
-    private function tenantFromPendingCode(): ?Tenant
+    private function tenantFromCookie(): ?Tenant
     {
-        $code = $this->attributionService->pendingCode();
+        $code = $this->attributionService->cookieCode();
 
         return $code === null ? null : $this->attributionService->resolveTenantForCode($code);
     }
