@@ -93,6 +93,6 @@ class DashboardNavigationTest extends FeatureTest
 
         $groups = array_keys(Filament::getPanel('dashboard')->getNavigationGroups());
 
-        $this->assertSame(['Audits', 'Billing', 'Team Management', 'Referrals'], $groups);
+        $this->assertSame(['Audits', 'Billing', 'Partner', 'Team Management'], $groups);
     }
 }

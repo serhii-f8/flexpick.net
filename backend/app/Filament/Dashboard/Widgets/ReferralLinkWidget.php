@@ -2,6 +2,7 @@
 
 namespace App\Filament\Dashboard\Widgets;
 
+use App\Filament\Dashboard\Resources\Referrals\ReferralResource;
 use App\Services\ReferralService;
 use Filament\Widgets\Widget;
 
@@ -14,6 +15,8 @@ class ReferralLinkWidget extends Widget
     protected ?string $pollingInterval = null;
 
     protected static ?int $sort = 9;
+
+    protected static bool $isLazy = false;
 
     /** @return array{total_referrals: int, rewarded_referrals: int, total_rewards: int|float|string} */
     public function getReferralStats(): array
@@ -30,6 +33,6 @@ class ReferralLinkWidget extends Widget
 
     public static function canView(): bool
     {
-        return app(ReferralService::class)->isEnabled();
+        return ReferralResource::canAccess();
     }
 }

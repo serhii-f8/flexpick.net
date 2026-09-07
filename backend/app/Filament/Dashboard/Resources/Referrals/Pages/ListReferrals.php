@@ -21,6 +21,6 @@ class ListReferrals extends ListRecords
 
     public function getTitle(): string
     {
-        return __('My Referrals');
+        return __('Referrals');
     }
 }

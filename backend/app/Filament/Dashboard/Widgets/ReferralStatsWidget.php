@@ -2,6 +2,7 @@
 
 namespace App\Filament\Dashboard\Widgets;
 
+use App\Filament\Dashboard\Resources\Referrals\ReferralResource;
 use App\Services\ReferralService;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -36,6 +37,6 @@ class ReferralStatsWidget extends BaseWidget
 
     public static function canView(): bool
     {
-        return app(ReferralService::class)->isEnabled();
+        return ReferralResource::canAccess();
     }
 }

@@ -5,6 +5,8 @@ namespace App\Filament\Dashboard\Resources\ReferralRewards;
 use App\Constants\ReferralConstants;
 use App\Filament\Dashboard\Resources\ReferralRewards\Pages\ListReferralRewards;
 use App\Models\ReferralReward;
+use App\Services\PartnerCapabilityService;
+use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -18,6 +20,12 @@ class ReferralRewardResource extends Resource
     protected static ?string $model = ReferralReward::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-gift';
+
+    // Directory scan discovers Order/Subscription/Transaction resources (all
+    // sort-less, so -1) before this one alphabetically; give this an explicit
+    // sort so it renders last in the shared Billing group rather than between
+    // Orders and Subscriptions.
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {
@@ -103,7 +111,8 @@ class ReferralRewardResource extends Resource
 
     public static function canAccess(): bool
     {
-        return config('app.referral.enabled', false);
+        return config('app.referral.enabled', false)
+            && ! app(PartnerCapabilityService::class)->userCanAccessPartnerArea(Filament::getTenant(), auth()->user());
     }
 
     public static function getNavigationLabel(): string
@@ -123,6 +132,6 @@ class ReferralRewardResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('Referrals');
+        return __('Billing');
     }
 }

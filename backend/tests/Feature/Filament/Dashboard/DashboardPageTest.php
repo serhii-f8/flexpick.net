@@ -84,12 +84,16 @@ class DashboardPageTest extends FeatureTest
 
         $this->assertNotContains(AccountWidget::class, $widgets);
         $this->assertNotContains(ReferralStatsWidget::class, $widgets);
+        // Task 7: the referral link/stats widgets now delegate canView() to
+        // ReferralResource::canAccess(), which is gated to active-partner
+        // tenants (PartnerCapabilityService::userCanAccessPartnerArea()).
+        // This tenant is plain, so it no longer sees them at all.
+        $this->assertNotContains(ReferralLinkWidget::class, $widgets);
 
         $this->assertSame(
             [LatestHealthWidget::class, PlanUsageWidget::class],
             array_slice($widgets, 0, 2),
             'Health and credits lead the home page.'
         );
-        $this->assertSame(ReferralLinkWidget::class, end($widgets), 'Referrals close the page.');
     }
 }

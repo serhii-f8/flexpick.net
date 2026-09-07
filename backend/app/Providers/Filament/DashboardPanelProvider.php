@@ -152,11 +152,10 @@ class DashboardPanelProvider extends PanelProvider
                 'Billing' => NavigationGroup::make()
                     ->label(__('Billing'))
                     ->collapsed(),
+                'Partner' => NavigationGroup::make()
+                    ->label(__('Partner')),
                 'Team Management' => NavigationGroup::make()
                     ->label(__('Team Management'))
-                    ->collapsed(),
-                'Referrals' => NavigationGroup::make()
-                    ->label(__('Referrals'))
                     ->collapsed(),
             ])
             ->renderHook(

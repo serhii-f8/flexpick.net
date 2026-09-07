@@ -6,6 +6,7 @@ use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Support\Collection;
 
 class PartnerCapabilityService
@@ -41,6 +42,15 @@ class PartnerCapabilityService
 
                 return $product !== null && (bool) data_get($product->metadata, self::RESELLER_METADATA_KEY, false);
             });
+    }
+
+    /**
+     * The one gate every item in the dashboard's Partner group shares
+     * (spec §4). Resources add their own tenancy permission on top.
+     */
+    public function userCanAccessPartnerArea(?Tenant $tenant, ?User $user): bool
+    {
+        return $tenant !== null && $user !== null && $this->tenantIsActivePartner($tenant);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament\Dashboard;
 
+use App\Constants\SubscriptionStatus;
 use App\Constants\TenancyPermissionConstants;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Filament\Dashboard\Pages\Dashboard;
@@ -13,6 +14,9 @@ use App\Filament\Dashboard\Resources\ReferralRewards\ReferralRewardResource;
 use App\Filament\Dashboard\Resources\Referrals\ReferralResource;
 use App\Filament\Dashboard\Resources\Subscriptions\SubscriptionResource;
 use App\Filament\Dashboard\Resources\Transactions\TransactionResource;
+use App\Models\Plan;
+use App\Models\Product;
+use App\Models\Subscription;
 use App\Models\Tenant;
 use Filament\Facades\Filament;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -90,9 +94,10 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $this->assertSame(['Dashboard'], $navigation[''] ?? []);
         $this->assertSame(['Run an audit', 'Audit history'], $navigation['Audits'] ?? []);
-        $this->assertSame(['Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
+        $this->assertSame(['Orders', 'Subscriptions', 'Payments', 'My Rewards'], $navigation['Billing'] ?? []);
+        $this->assertArrayNotHasKey('Referrals', $navigation);
+        $this->assertArrayNotHasKey('Partner', $navigation);
         $this->assertSame(['Users', 'Invitations'], $navigation['Team Management'] ?? []);
-        $this->assertSame(['My Rewards', 'My Referrals'], $navigation['Referrals'] ?? []);
     }
 
     /**
@@ -112,7 +117,6 @@ class DashboardMenuItemsTest extends FeatureTest
             'Users' => [Users::class],
             'Invitations' => [InvitationResource::class],
             'My Rewards' => [ReferralRewardResource::class],
-            'My Referrals' => [ReferralResource::class],
         ];
     }
 
@@ -162,5 +166,46 @@ class DashboardMenuItemsTest extends FeatureTest
         // the boundary shows up as 404 rather than 403. Either way the page
         // must not render, which is what this asserts.
         $this->get(OrderResource::getUrl(tenant: $foreignTenant))->assertNotFound();
+    }
+
+    /** Same permissions as fullyPermittedUserAndTenant(), on a tenant with an active Partner plan. */
+    private function partnerUserAndTenant(): array
+    {
+        [$user, $tenant] = $this->fullyPermittedUserAndTenant();
+
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => Plan::factory()->create(['product_id' => $product->id])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        foreach ([
+            TenancyPermissionConstants::PERMISSION_MANAGE_PARTNER_ORDERS,
+            TenancyPermissionConstants::PERMISSION_MANAGE_RESELLER_CATALOG,
+        ] as $permission) {
+            $user->tenants()->where('tenant_id', $tenant->id)->first()->pivot->givePermissionTo($permission);
+        }
+
+        return [$user, $tenant];
+    }
+
+    public function test_a_partner_sees_the_partner_group_and_no_rewards(): void
+    {
+        $this->partnerUserAndTenant();
+
+        $navigation = $this->renderedNavigation();
+
+        $this->assertSame(['Referrals'], $navigation['Partner'] ?? []);
+        $this->assertSame(['Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
+    }
+
+    public function test_the_referrals_page_loads_for_a_partner(): void
+    {
+        [, $tenant] = $this->partnerUserAndTenant();
+
+        $this->get(ReferralResource::getUrl(tenant: $tenant))->assertSuccessful();
+        $this->get(ReferralResource::getUrl(tenant: $tenant))->assertSee(__('Customers who sign up through this link buy at your prices.'));
     }
 }

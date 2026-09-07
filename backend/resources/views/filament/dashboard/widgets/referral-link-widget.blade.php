@@ -33,7 +33,7 @@
             <div class="min-w-0 flex-1">
                 <x-fp.label>{{ __('Your referral link') }}</x-fp.label>
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    {{ __('Share it and earn rewards when someone signs up.') }}
+                    {{ __('Customers who sign up through this link buy at your prices.') }}
                 </p>
                 <div class="mt-3 flex gap-2">
                     <x-filament::input.wrapper class="flex-1">

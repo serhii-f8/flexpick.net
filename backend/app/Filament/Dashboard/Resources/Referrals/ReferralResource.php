@@ -5,6 +5,8 @@ namespace App\Filament\Dashboard\Resources\Referrals;
 use App\Constants\ReferralConstants;
 use App\Filament\Dashboard\Resources\Referrals\Pages\ListReferrals;
 use App\Models\Referral;
+use App\Services\PartnerCapabilityService;
+use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -18,6 +20,8 @@ class ReferralResource extends Resource
     protected static ?string $model = Referral::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
+
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {
@@ -77,12 +81,13 @@ class ReferralResource extends Resource
 
     public static function canAccess(): bool
     {
-        return config('app.referral.enabled', false);
+        return config('app.referral.enabled', false)
+            && app(PartnerCapabilityService::class)->userCanAccessPartnerArea(Filament::getTenant(), auth()->user());
     }
 
     public static function getNavigationLabel(): string
     {
-        return __('My Referrals');
+        return __('Referrals');
     }
 
     public static function getPluralModelLabel(): string
@@ -102,6 +107,6 @@ class ReferralResource extends Resource
 
     public static function getNavigationGroup(): ?string
     {
-        return __('Referrals');
+        return __('Partner');
     }
 }
