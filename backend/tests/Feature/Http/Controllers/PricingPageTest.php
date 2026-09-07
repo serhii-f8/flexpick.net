@@ -278,6 +278,52 @@ class PricingPageTest extends FeatureTest
         $response->assertSee(__('Nothing available yet — check back soon.'));
     }
 
+    /**
+     * Regression for Finding 5 of the final whole-branch review: Task 3's
+     * empty-state `@if ($plans->isEmpty())` wrapper in
+     * resources/views/components/plans/all.blade.php originally spanned the
+     * entire file, including the pre-existing `@if (isset($defaultProduct))`
+     * "Start for free" CTA at the end -- so a customer with zero purchasable
+     * plans but a configured default free product lost that CTA entirely.
+     * This can happen to ANY customer, attributed or not; reusing the
+     * attributed-with-nothing-enabled setup here is just the most reliable
+     * way to force $plans to empty regardless of what else exists in the
+     * shared test database.
+     */
+    public function test_a_customer_with_zero_purchasable_plans_still_sees_the_default_product_cta(): void
+    {
+        $partnerTenant = $this->createTenant();
+        $partnerProduct = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        Subscription::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => Plan::factory()->create(['product_id' => $partnerProduct->id])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $unconfiguredProduct = Product::factory()->create(['name' => 'Unconfigured Product For Default Test']);
+        $unconfiguredPlan = Plan::factory()->create([
+            'product_id' => $unconfiguredProduct->id,
+            'type' => PlanType::FLAT_RATE->value,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        $unconfiguredPlan->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 4900]);
+
+        Product::factory()->create(['is_default' => true]);
+
+        $customer = $this->createUser(null, [], [
+            'partner_tenant_id' => $partnerTenant->id,
+            'partner_attributed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($customer)->get(route('pricing'));
+
+        $response->assertSee(__('Nothing available yet — check back soon.'));
+        $response->assertSee(__('Start for free'));
+        $response->assertSee(__('Start now'));
+    }
+
     public function test_an_attributed_customer_sees_only_the_partners_enabled_products(): void
     {
         $partnerTenant = $this->createTenant();

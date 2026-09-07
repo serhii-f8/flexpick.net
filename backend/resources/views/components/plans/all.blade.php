@@ -66,6 +66,7 @@
         @endforeach
     </div>
 @endif
+@endif
 
 @if (isset($defaultProduct))
     <div class="fp-panel mt-8 mx-auto max-w-3xl">
@@ -82,5 +83,4 @@
             <a href="{{route('plan.start')}}" class="fp-btn fp-btn-primary mt-5 w-auto px-8">{{ __('Start now') }}</a>
         </div>
     </div>
-@endif
 @endif
