@@ -76,8 +76,18 @@ class PartnerOrderResource extends Resource
 
         return parent::getEloquentQuery()
             ->where(function (Builder $query) use ($tenantId): void {
+                // The second arm is bounded by attribution time: whereHas
+                // compiles to a correlated whereExists subquery against
+                // `users`, so `orders.created_at` here still refers to the
+                // outer query's row (same pattern as
+                // AuditCostReporter::totals()'s whereColumn inside
+                // whereExists). Without the bound, a buyer's attribution
+                // today would retroactively expose every order they ever
+                // placed, long before the partner ever referred them.
                 $query->where('orders.partner_tenant_id', $tenantId)
-                    ->orWhereHas('user', fn (Builder $user) => $user->where('users.partner_tenant_id', $tenantId));
+                    ->orWhereHas('user', fn (Builder $user) => $user
+                        ->where('users.partner_tenant_id', $tenantId)
+                        ->whereColumn('users.partner_attributed_at', '<=', 'orders.created_at'));
             })
             ->with(['user', 'currency', 'paymentProvider', 'partnerTenant']);
     }

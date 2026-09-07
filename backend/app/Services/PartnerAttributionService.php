@@ -88,6 +88,18 @@ class PartnerAttributionService
     }
 
     /**
+     * Actively clears the fp_rc cookie -- on logout, and whenever the
+     * database says a user has no partner (spec §3.4). Leaving a stale
+     * cookie in place is how a later, unrelated login on the same browser
+     * gets silently attributed to whoever the previous session's cookie
+     * pointed to.
+     */
+    public function forgetCookie(): void
+    {
+        Cookie::queue(Cookie::forget($this->cookieName()));
+    }
+
+    /**
      * Set-once. The conditional UPDATE is the race guard: two requests can
      * both read partner_tenant_id as null, but only one WHERE-null update
      * lands, and the loser leaves the row alone.
@@ -129,8 +141,9 @@ class PartnerAttributionService
 
     /**
      * After registration and every login: the database is the truth, so the
-     * cookie is rewritten from it (spec §3.4). A user with no partner keeps
-     * whatever cookie they have — there is nothing better to say.
+     * cookie is rewritten from it (spec §3.4). A user with no partner has
+     * the cookie actively cleared -- a stale cookie left in place would
+     * mis-attribute this same browser's next, unrelated login.
      */
     public function refreshCookieFromDatabase(User $user): void
     {
@@ -138,6 +151,8 @@ class PartnerAttributionService
         $tenant = $user->partnerTenant;
 
         if ($tenant === null) {
+            $this->forgetCookie();
+
             return;
         }
 

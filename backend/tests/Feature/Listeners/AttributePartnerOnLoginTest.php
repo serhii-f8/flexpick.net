@@ -61,13 +61,26 @@ class AttributePartnerOnLoginTest extends FeatureTest
         $this->assertTrue(app(PartnerAttributionService::class)->resolveTenantForCode($queued->getValue())->is($tenant));
     }
 
-    public function test_login_of_a_direct_customer_queues_no_cookie(): void
+    /**
+     * A direct customer's login clears any stray cookie rather than leaving
+     * it alone: refreshCookieFromDatabase() now actively forgets the cookie
+     * for a user with no partner, closing the mis-attribution window where a
+     * stale cookie from a previous session on the same browser survives.
+     */
+    public function test_login_of_a_direct_customer_forgets_any_stray_cookie(): void
     {
+        // A code that no longer resolves (e.g. the partner's plan lapsed
+        // since the cookie was set) so attribute() is a no-op and the only
+        // thing left to prove is that refreshCookieFromDatabase() clears it.
+        $this->app['request']->cookies->set(config('partner.cookie_name'), 'REF-NOTAPARTNER0');
         $user = User::factory()->create();
 
         event(new Login('web', $user, false));
 
         $this->assertNull($user->fresh()->partner_tenant_id);
-        $this->assertNull(Cookie::queued(config('partner.cookie_name')));
+        $queued = Cookie::queued(config('partner.cookie_name'));
+        $this->assertNotNull($queued);
+        $this->assertTrue($queued->getExpiresTime() < now()->getTimestamp());
+        $this->assertEmpty($queued->getValue());
     }
 }

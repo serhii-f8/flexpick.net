@@ -8,6 +8,7 @@ use App\Filament\Dashboard\Resources\Orders\Pages\ListOrders;
 use App\Filament\Dashboard\Resources\Orders\Pages\ViewOrder;
 use App\Mapper\OrderStatusMapper;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Services\TenantPermissionService;
 use Filament\Actions\ViewAction;
 use Filament\Facades\Filament;
@@ -52,6 +53,18 @@ class OrderResource extends Resource
                 })->label(__('Total Amount')),
                 TextColumn::make('partnerTenant.name')
                     ->label(__('Sold Through'))
+                    // A column's ->visible() hides it table-wide, not per
+                    // row, so the "was this actually sold through the
+                    // partner" gate has to live in the state itself:
+                    // partner_tenant_id is now stamped on every order by an
+                    // attributed buyer (Task 12), not only partner-priced
+                    // ones, so a bare relation lookup would claim an
+                    // ordinary Stripe purchase was "Sold Through" the
+                    // partner. Matches ownsCashOrder()'s convention that a
+                    // genuine partner sale is always a cash/is_local order.
+                    ->getStateUsing(fn (Order $record): ?string => $record->partner_tenant_id !== null && $record->is_local
+                        ? self::partnerTenantName($record)
+                        : null)
                     ->placeholder('—'),
                 TextColumn::make('status')
                     ->label(__('Status'))
@@ -104,7 +117,7 @@ class OrderResource extends Resource
                                             }),
                                         TextEntry::make('partnerTenant.name')
                                             ->label(__('Sold Through'))
-                                            ->visible(fn (Order $record): bool => $record->partner_tenant_id !== null),
+                                            ->visible(fn (Order $record): bool => $record->partner_tenant_id !== null && $record->is_local),
                                         TextEntry::make('total_discount_amount')
                                             ->label(__('Total Discount Amount'))
                                             ->formatStateUsing(function (string $state, $record) {
@@ -158,6 +171,19 @@ class OrderResource extends Resource
 
             ]);
 
+    }
+
+    /**
+     * Order::partnerTenant() is untyped (BelongsTo without generics), so
+     * PHPStan resolves $order->partnerTenant as a bare Model and can't see
+     * ->name -- same rationale as the admin OrderResource's currencyCode().
+     */
+    private static function partnerTenantName(Order $order): ?string
+    {
+        /** @var Tenant|null $tenant */
+        $tenant = $order->partnerTenant;
+
+        return $tenant?->name;
     }
 
     public static function orderItems(Order $order): array

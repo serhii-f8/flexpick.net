@@ -188,4 +188,48 @@ class TrackReferralCodeTest extends FeatureTest
         $this->get('/login?rc[]=x')->assertSessionMissing(SessionConstants::REFERRAL_CODE);
         $this->get('/login?rc='.str_repeat('a', 65))->assertSessionMissing(SessionConstants::REFERRAL_CODE);
     }
+
+    /**
+     * Cookie-stuffing vector: a third party embeds
+     * <img src="https://flexpick.net/?rc=CODE"> on an unrelated page. The
+     * browser sends that as a subresource request (Sec-Fetch-Dest: image),
+     * never as a document navigation, so the set-once/first-touch-wins
+     * cookie must not be planted by it. The session write is untouched --
+     * it also feeds the personal-referral-reward system.
+     */
+    public function test_a_subresource_request_does_not_set_the_attribution_cookie(): void
+    {
+        $this->withExceptionHandling();
+        config(['app.referral.enabled' => true]);
+        $code = $this->partnerCode();
+
+        $response = $this->get('/login?rc='.$code, ['Sec-Fetch-Dest' => 'image']);
+
+        $response->assertSessionHas(SessionConstants::REFERRAL_CODE, $code);
+        $response->assertCookieMissing(config('partner.cookie_name'));
+    }
+
+    public function test_a_document_navigation_still_sets_the_attribution_cookie(): void
+    {
+        $this->withExceptionHandling();
+        config(['app.referral.enabled' => true]);
+        $code = $this->partnerCode();
+
+        $response = $this->get('/login?rc='.$code, ['Sec-Fetch-Dest' => 'document']);
+
+        $response->assertSessionHas(SessionConstants::REFERRAL_CODE, $code);
+        $response->assertCookie(config('partner.cookie_name'), $code);
+    }
+
+    public function test_an_ajax_request_without_sec_fetch_dest_does_not_set_the_attribution_cookie(): void
+    {
+        $this->withExceptionHandling();
+        config(['app.referral.enabled' => true]);
+        $code = $this->partnerCode();
+
+        $response = $this->get('/login?rc='.$code, ['X-Requested-With' => 'XMLHttpRequest']);
+
+        $response->assertSessionHas(SessionConstants::REFERRAL_CODE, $code);
+        $response->assertCookieMissing(config('partner.cookie_name'));
+    }
 }

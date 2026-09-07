@@ -176,7 +176,7 @@ class OrderResource extends Resource
                                     ])->columns(3),
                                 Section::make(__('Partner Sale'))
                                     ->description(__('Reseller pricing and margin for this order.'))
-                                    ->visible(fn (Order $record): bool => $record->partner_tenant_id !== null)
+                                    ->visible(fn (Order $record): bool => $record->partner_tenant_id !== null && $record->is_local)
                                     ->schema([
                                         TextEntry::make('partnerTenant.name')->label(__('Partner')),
                                         TextEntry::make('base_price_snapshot')

@@ -241,12 +241,31 @@ class PartnerAttributionServiceTest extends FeatureTest
         $this->assertNotSame($strayCode, $queued->getValue());
     }
 
-    public function test_refresh_cookie_leaves_an_unattributed_user_alone(): void
+    /**
+     * A stale cookie left in place for an unattributed user is exactly how a
+     * later, unrelated login on the same browser gets mis-attributed to
+     * whoever the previous session's cookie pointed to -- so this must
+     * actively clear it, not leave it as-is.
+     */
+    public function test_refresh_cookie_forgets_the_cookie_for_an_unattributed_user(): void
     {
         $user = User::factory()->create();
 
         $this->service()->refreshCookieFromDatabase($user);
 
-        $this->assertNull(Cookie::queued(config('partner.cookie_name')));
+        $queued = Cookie::queued(config('partner.cookie_name'));
+        $this->assertNotNull($queued);
+        $this->assertTrue($queued->getExpiresTime() < now()->getTimestamp());
+        $this->assertEmpty($queued->getValue());
+    }
+
+    public function test_forget_cookie_queues_an_expired_cookie(): void
+    {
+        $this->service()->forgetCookie();
+
+        $queued = Cookie::queued(config('partner.cookie_name'));
+        $this->assertNotNull($queued);
+        $this->assertTrue($queued->getExpiresTime() < now()->getTimestamp());
+        $this->assertEmpty($queued->getValue());
     }
 }

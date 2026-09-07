@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Services\CurrencyService;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Feature\FeatureTest;
 
 class PartnerPricingSettingsTest extends FeatureTest
@@ -152,6 +153,68 @@ class PartnerPricingSettingsTest extends FeatureTest
         $offering = PartnerProductOffering::where('tenant_id', $tenant->id)->where('one_time_product_id', $product->id)->firstOrFail();
         $this->assertSame(10000, $offering->price);
         $this->assertFalse($offering->is_enabled);
+    }
+
+    /**
+     * canAccess() is only checked once, by the page, at load time. Without a
+     * mount()-time re-check, a table rendered while access was still valid
+     * would happily go on serving set-price actions after the partner plan
+     * lapses -- exactly the "PartnerPlan can lapse between rendering the
+     * queue and clicking Approve" window PartnerOrderResource is guarded
+     * against, but Pricing Settings previously was not.
+     */
+    public function test_the_plan_table_refuses_to_mount_once_the_partner_plan_is_no_longer_active(): void
+    {
+        $plain = $this->createTenant();
+        $this->actAsPartner($plain);
+
+        $this->expectException(HttpException::class);
+
+        Livewire::test(PartnerPlanPricingTable::class);
+    }
+
+    public function test_the_product_table_refuses_to_mount_once_the_partner_plan_is_no_longer_active(): void
+    {
+        $plain = $this->createTenant();
+        $this->actAsPartner($plain);
+
+        $this->expectException(HttpException::class);
+
+        Livewire::test(PartnerProductPricingTable::class);
+    }
+
+    public function test_set_price_is_refused_when_the_partner_plan_lapses_after_the_table_renders(): void
+    {
+        $tenant = $this->activePartnerTenant();
+        $this->actAsPartner($tenant);
+        $plan = $this->visiblePlan(23275);
+
+        $component = Livewire::test(PartnerPlanPricingTable::class);
+
+        // The plan lapses in the window between rendering the table and the
+        // partner clicking "Set price".
+        Subscription::where('tenant_id', $tenant->id)->update(['ends_at' => now()->subDay()]);
+
+        $component->callTableAction('set-price', $plan, data: ['price' => 500, 'is_enabled' => true])
+            ->assertNotified(__('Could not save offering'));
+
+        $this->assertNull(PartnerPlanOffering::where('tenant_id', $tenant->id)->where('plan_id', $plan->id)->first());
+    }
+
+    public function test_the_product_tables_set_price_is_also_refused_when_the_partner_plan_lapses_after_render(): void
+    {
+        $tenant = $this->activePartnerTenant();
+        $this->actAsPartner($tenant);
+        $product = $this->visibleProduct(4900);
+
+        $component = Livewire::test(PartnerProductPricingTable::class);
+
+        Subscription::where('tenant_id', $tenant->id)->update(['ends_at' => now()->subDay()]);
+
+        $component->callTableAction('set-price', $product, data: ['price' => 100, 'is_enabled' => true])
+            ->assertNotified(__('Could not save offering'));
+
+        $this->assertNull(PartnerProductOffering::where('tenant_id', $tenant->id)->where('one_time_product_id', $product->id)->first());
     }
 
     public function test_an_offering_never_leaks_across_tenants(): void

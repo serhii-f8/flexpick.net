@@ -3,6 +3,7 @@
 namespace App\Livewire\Filament\Dashboard;
 
 use App\Exceptions\PartnerOfferingValidationException;
+use App\Filament\Dashboard\Pages\PartnerPricingSettings;
 use App\Models\Plan;
 use App\Services\CurrencyService;
 use App\Services\PartnerCatalogService;
@@ -28,6 +29,19 @@ class PartnerPlanPricingTable extends Component implements HasActions, HasForms,
     use InteractsWithActions;
     use InteractsWithForms;
     use InteractsWithTable;
+
+    /**
+     * canAccess() is only checked once, at page load, by the parent
+     * PartnerPricingSettings page. A Partner Plan can lapse -- or the
+     * catalog permission can be revoked -- between rendering this table and
+     * interacting with it, so it's re-checked here too (same rationale as
+     * OrderApprovalService::assertPartnerMayAct() re-checking partner status
+     * live rather than trusting the queue's render-time state).
+     */
+    public function mount(): void
+    {
+        abort_unless(PartnerPricingSettings::canAccess(), 403);
+    }
 
     public function table(Table $table): Table
     {
@@ -93,6 +107,12 @@ class PartnerPlanPricingTable extends Component implements HasActions, HasForms,
                             ->default($this->catalog()->planOfferingFor(Filament::getTenant(), $record)?->is_enabled ?? true),
                     ])
                     ->action(function (array $data, Plan $record): void {
+                        if (! PartnerPricingSettings::canAccess()) {
+                            Notification::make()->danger()->title(__('Could not save offering'))->body(__('Your reseller access is no longer active.'))->persistent()->send();
+
+                            return;
+                        }
+
                         try {
                             $this->catalog()->setPlanOffering(
                                 Filament::getTenant(),

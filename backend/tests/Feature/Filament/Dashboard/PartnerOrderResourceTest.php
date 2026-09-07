@@ -187,6 +187,40 @@ class PartnerOrderResourceTest extends FeatureTest
         $this->assertSame(OrderStatus::PENDING->value, $foreign->fresh()->status);
     }
 
+    /**
+     * The second arm of getEloquentQuery()'s predicate matches on the
+     * buyer's CURRENT attribution, which is set at login/registration with
+     * no relation to when any given order was placed. Without a bound by
+     * partner_attributed_at, an order the customer placed long before ever
+     * being attributed to this partner would still surface here -- a
+     * purchase the partner had no part in.
+     */
+    public function test_an_order_placed_before_attribution_is_not_visible_to_the_partner(): void
+    {
+        $partner = $this->activePartnerTenant();
+        $this->actAsPartner($partner);
+        $customerTenant = $this->createTenant();
+        $attributedAt = now();
+        $customer = $this->createUser($customerTenant, [], [
+            'partner_tenant_id' => $partner->id,
+            'partner_attributed_at' => $attributedAt,
+        ]);
+        $stripe = PaymentProvider::where('slug', 'stripe')->firstOrFail();
+        $preAttribution = Order::factory()->create([
+            'user_id' => $customer->id,
+            'tenant_id' => $customerTenant->id,
+            'status' => OrderStatus::SUCCESS->value,
+            'is_local' => false,
+            'payment_provider_id' => $stripe->id,
+            'created_at' => $attributedAt->copy()->subDay(),
+        ]);
+        $postAttribution = $this->order($customer, $customerTenant, ['created_at' => $attributedAt->copy()->addDay()]);
+
+        Livewire::test(ListPartnerOrders::class, ['activeTab' => 'all'])
+            ->assertCanNotSeeTableRecords([$preAttribution])
+            ->assertCanSeeTableRecords([$postAttribution]);
+    }
+
     public function test_the_view_page_loads_for_an_own_order(): void
     {
         $partner = $this->activePartnerTenant();

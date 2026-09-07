@@ -41,6 +41,7 @@ class TrackReferralCode
 
         if (
             auth()->guest()
+            && $this->isTopLevelNavigation($request)
             && ! $this->partnerAttributionService->hasPartnerCookie($request)
             && $this->partnerAttributionService->resolveTenantForCode($code) !== null
         ) {
@@ -48,5 +49,25 @@ class TrackReferralCode
         }
 
         return $next($request);
+    }
+
+    /**
+     * The partner cookie is set-once and first-touch-wins, so it must only
+     * ever come from the visitor actually navigating to a partner link --
+     * never from a third-party page embedding `<img src="…/?rc=CODE">` or
+     * similar subresource requests, which would let anyone stuff another
+     * site's visitors into a partner's attribution window (classic
+     * affiliate cookie-stuffing). The session write above stays unguarded:
+     * it also feeds the personal-referral-reward system and isn't set-once.
+     */
+    private function isTopLevelNavigation(Request $request): bool
+    {
+        $fetchDest = $request->header('Sec-Fetch-Dest');
+
+        if ($fetchDest !== null) {
+            return $fetchDest === 'document';
+        }
+
+        return ! $request->ajax() && $request->acceptsHtml();
     }
 }
