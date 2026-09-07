@@ -377,4 +377,109 @@ class PartnerPricingResolverTest extends FeatureTest
 
         $this->assertSame(7900, $this->resolver()->productPrice($user, $product));
     }
+
+    public function test_purchasable_plans_is_unfiltered_for_a_non_attributed_buyer(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        [$sellable] = $this->sellablePlan($partnerTenant);
+        $plain = Plan::factory()->create(['is_active' => true, 'is_visible' => true]);
+        $user = $this->createUser();
+
+        $result = $this->resolver()->purchasablePlans(collect([$sellable, $plain]), $user);
+
+        $this->assertTrue($result->contains($sellable));
+        $this->assertTrue($result->contains($plain));
+    }
+
+    public function test_purchasable_plans_keeps_only_usable_offerings_for_an_attributed_buyer(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        [$sellable] = $this->sellablePlan($partnerTenant);
+        $notConfigured = Plan::factory()->create([
+            'product_id' => Product::factory()->create()->id,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+
+        $result = $this->resolver()->purchasablePlans(collect([$sellable, $notConfigured]), $user);
+
+        $this->assertTrue($result->contains($sellable));
+        $this->assertFalse($result->contains($notConfigured));
+    }
+
+    public function test_purchasable_plans_drops_a_disabled_offering(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        [$plan, $offering] = $this->sellablePlan($partnerTenant);
+        $offering->update(['is_enabled' => false]);
+        $user = $this->attributedUser($partnerTenant);
+
+        $result = $this->resolver()->purchasablePlans(collect([$plan]), $user);
+
+        $this->assertTrue($result->isEmpty());
+    }
+
+    public function test_purchasable_products_is_unfiltered_for_a_non_attributed_buyer(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = OneTimeProduct::factory()->create(['is_active' => true, 'is_visible' => true]);
+        OneTimeProductPrice::factory()->create([
+            'one_time_product_id' => $product->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => 4900,
+        ]);
+        $user = $this->createUser();
+
+        $result = $this->resolver()->purchasableProducts(collect([$product]), $user);
+
+        $this->assertTrue($result->contains($product));
+    }
+
+    public function test_purchasable_products_keeps_only_usable_offerings_for_an_attributed_buyer(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $sellable = OneTimeProduct::factory()->create(['is_active' => true, 'is_visible' => true]);
+        OneTimeProductPrice::factory()->create([
+            'one_time_product_id' => $sellable->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => 4900,
+        ]);
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $sellable->id,
+            'price' => 7900,
+            'is_enabled' => true,
+        ]);
+        $notConfigured = OneTimeProduct::factory()->create(['is_active' => true, 'is_visible' => true]);
+        OneTimeProductPrice::factory()->create([
+            'one_time_product_id' => $notConfigured->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => 4900,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+
+        $result = $this->resolver()->purchasableProducts(collect([$sellable, $notConfigured]), $user);
+
+        $this->assertTrue($result->contains($sellable));
+        $this->assertFalse($result->contains($notConfigured));
+    }
+
+    public function test_purchasable_plans_is_unfiltered_when_the_partners_plan_has_lapsed(): void
+    {
+        $partnerTenant = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        Subscription::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => Plan::factory()->create(['product_id' => $product->id])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->subDay(),
+        ]);
+        [$sellable] = $this->sellablePlan($partnerTenant);
+        $user = $this->attributedUser($partnerTenant);
+
+        $result = $this->resolver()->purchasablePlans(collect([$sellable]), $user);
+
+        $this->assertTrue($result->contains($sellable));
+    }
 }

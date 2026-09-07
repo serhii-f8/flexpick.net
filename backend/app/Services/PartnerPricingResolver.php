@@ -181,6 +181,39 @@ class PartnerPricingResolver
     }
 
     /**
+     * The list a purchasing surface should actually offer (spec §3, catalog
+     * restriction): unchanged for a non-attributed buyer or one whose
+     * partner's plan has lapsed; narrowed to only usable offerings for an
+     * attributed buyer. Reuses usablePlanOffering() rather than re-deriving
+     * "usable" — decoratePlans() and this method must never disagree about
+     * which plans are resellable.
+     *
+     * @param  Collection<int, Plan>  $plans
+     * @return Collection<int, Plan>
+     */
+    public function purchasablePlans(Collection $plans, ?User $user = null): Collection
+    {
+        if ($this->resolvePartnerTenant($user) === null) {
+            return $plans;
+        }
+
+        return $plans->filter(fn (Plan $plan): bool => $this->usablePlanOffering($user, $plan) !== null)->values();
+    }
+
+    /**
+     * @param  Collection<int, OneTimeProduct>  $products
+     * @return Collection<int, OneTimeProduct>
+     */
+    public function purchasableProducts(Collection $products, ?User $user = null): Collection
+    {
+        if ($this->resolvePartnerTenant($user) === null) {
+            return $products;
+        }
+
+        return $products->filter(fn (OneTimeProduct $product): bool => $this->usableProductOffering($user, $product) !== null)->values();
+    }
+
+    /**
      * The cookie is a fallback for anonymous visitors only.
      *
      * An authenticated user's answer is users.partner_tenant_id and nothing
