@@ -30,7 +30,7 @@ class ReferralFlowTest extends FeatureTest
         $referralService = app()->make(ReferralService::class);
         $referralCode = $referralService->getOrCreateReferralCode($referrer);
 
-        $response = $this->get('/login?referralCode='.$referralCode->code);
+        $response = $this->get('/login?rc='.$referralCode->code);
 
         $response->assertSessionHas(SessionConstants::REFERRAL_CODE, $referralCode->code);
     }
@@ -44,7 +44,7 @@ class ReferralFlowTest extends FeatureTest
         $referralService = app()->make(ReferralService::class);
         $referralCode = $referralService->getOrCreateReferralCode($referrer);
 
-        $this->get('/login?referralCode='.$referralCode->code);
+        $this->get('/login?rc='.$referralCode->code);
 
         $response = $this->get('/register');
         $response->assertSessionHas(SessionConstants::REFERRAL_CODE, $referralCode->code);
@@ -299,7 +299,8 @@ class ReferralFlowTest extends FeatureTest
 
         $link = $referralService->getReferralLink($user);
 
-        $this->assertStringContainsString('referralCode=', $link);
+        $this->assertStringContainsString('rc=', $link);
+        $this->assertStringNotContainsString('referralCode', $link);
         $this->assertStringContainsString(url('/'), $link);
     }
 

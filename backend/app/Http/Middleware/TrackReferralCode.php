@@ -18,7 +18,7 @@ class TrackReferralCode
     public function handle(Request $request, Closure $next): Response
     {
         if ($request->has(ReferralConstants::HTTP_PARAM_REFERRAL_CODE) && $this->referralService->isEnabled()) {
-            $referralCode = $request->get('referralCode');
+            $referralCode = $request->get(ReferralConstants::HTTP_PARAM_REFERRAL_CODE);
             session([SessionConstants::REFERRAL_CODE => $referralCode]);
         }
 

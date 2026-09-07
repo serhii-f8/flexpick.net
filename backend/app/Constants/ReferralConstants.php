@@ -4,7 +4,7 @@ namespace App\Constants;
 
 class ReferralConstants
 {
-    public const HTTP_PARAM_REFERRAL_CODE = 'referralCode';
+    public const HTTP_PARAM_REFERRAL_CODE = 'rc';
 
     public const TRIGGER_VERIFIED_REGISTRATION = 'verified_registration';
 
