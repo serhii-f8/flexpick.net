@@ -35,6 +35,7 @@ class All extends \App\View\Components\Plans\All
         );
 
         $plans = $this->partnerPricingResolver->decoratePlans($plans, auth()->user());
+        $plans = $this->partnerPricingResolver->purchasablePlans($plans, auth()->user());
 
         $viewData['subscription'] = $subscription;
 

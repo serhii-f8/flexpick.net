@@ -175,4 +175,103 @@ class PricingPageTest extends FeatureTest
 
         $response->assertSee('Loose Legacy Plan');
     }
+
+    public function test_an_attributed_customer_sees_only_the_partners_enabled_plans(): void
+    {
+        $partnerTenant = $this->createTenant();
+        $partnerProduct = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        Subscription::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => Plan::factory()->create(['product_id' => $partnerProduct->id])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
+        app(PartnerPricingResolver::class)->flush();
+
+        $enabledProduct = Product::factory()->create(['name' => 'Enabled Package']);
+        $enabledPlan = Plan::factory()->create([
+            'product_id' => $enabledProduct->id,
+            'type' => PlanType::FLAT_RATE->value,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        $enabledPlan->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 4900]);
+        PartnerPlanOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $enabledPlan->id,
+            'price' => 7900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+
+        $notConfiguredProduct = Product::factory()->create(['name' => 'Not Configured Package']);
+        $notConfiguredPlan = Plan::factory()->create([
+            'product_id' => $notConfiguredProduct->id,
+            'type' => PlanType::FLAT_RATE->value,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        $notConfiguredPlan->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 5900]);
+
+        $customer = $this->createUser(null, [], [
+            'partner_tenant_id' => $partnerTenant->id,
+            'partner_attributed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($customer)->get(route('pricing'));
+
+        $response->assertSee('Enabled Package');
+        $response->assertDontSee('Not Configured Package');
+    }
+
+    public function test_a_direct_customer_still_sees_every_visible_plan(): void
+    {
+        $product = Product::factory()->create(['name' => 'Any Product']);
+        $plan = Plan::factory()->create([
+            'product_id' => $product->id,
+            'type' => PlanType::FLAT_RATE->value,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        $plan->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 4900]);
+
+        $customer = $this->createUser();
+
+        $response = $this->actingAs($customer)->get(route('pricing'));
+
+        $response->assertSee('Any Product');
+    }
+
+    public function test_an_attributed_customer_with_nothing_enabled_sees_the_empty_state(): void
+    {
+        $partnerTenant = $this->createTenant();
+        $partnerProduct = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        Subscription::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => Plan::factory()->create(['product_id' => $partnerProduct->id])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $unconfiguredProduct = Product::factory()->create(['name' => 'Unconfigured Product']);
+        $unconfiguredPlan = Plan::factory()->create([
+            'product_id' => $unconfiguredProduct->id,
+            'type' => PlanType::FLAT_RATE->value,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        $unconfiguredPlan->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 4900]);
+
+        $customer = $this->createUser(null, [], [
+            'partner_tenant_id' => $partnerTenant->id,
+            'partner_attributed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($customer)->get(route('pricing'));
+
+        $response->assertDontSee('Unconfigured Product');
+        $response->assertSee(__('Nothing available yet — check back soon.'));
+    }
 }

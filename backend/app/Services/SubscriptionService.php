@@ -264,7 +264,16 @@ class SubscriptionService
             return collect();
         }
 
-        return Subscription::where('tenant_id', $tenant->id)
+        // Bypass Filament's tenancy global scope (same fix as
+        // TenantPermissionService): this query already scopes explicitly by
+        // the resolved $tenant above, so the global scope is redundant when
+        // $tenant matches the current panel tenant and actively wrong when it
+        // doesn't — e.g. a partner-pricing check for a DIFFERENT tenant than
+        // the one the dashboard panel is currently scoped to (the customer's
+        // own tenant) would otherwise silently see zero subscriptions for the
+        // partner tenant and fail closed.
+        return Subscription::withoutGlobalScope(filament()->getTenancyScopeName())
+            ->where('tenant_id', $tenant->id)
             ->where('status', '=', SubscriptionStatus::ACTIVE->value)
             ->where('ends_at', '>', now())
             ->get();

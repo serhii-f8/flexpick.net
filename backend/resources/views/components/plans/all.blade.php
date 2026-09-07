@@ -3,6 +3,11 @@
     $activeInterval = $preselectedInterval ?: ($intervals[0] ?? '');
 @endphp
 
+@if ($plans->isEmpty())
+    <div class="fp-panel mx-auto max-w-2xl text-center" style="padding: 48px 32px;">
+        <p class="m-0">{{ __('Nothing available yet — check back soon.') }}</p>
+    </div>
+@else
 @isset($partnerName)
     <div class="fp-partner-banner">
         <x-fp.status-dot color="primary" class="mt-1.5" />
@@ -77,4 +82,5 @@
             <a href="{{route('plan.start')}}" class="fp-btn fp-btn-primary mt-5 w-auto px-8">{{ __('Start now') }}</a>
         </div>
     </div>
+@endif
 @endif

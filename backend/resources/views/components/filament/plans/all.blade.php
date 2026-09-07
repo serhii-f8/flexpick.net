@@ -22,6 +22,11 @@
         </div>
     @endif
 
+    @if ($plans->isEmpty())
+        <div class="fp-panel mx-auto max-w-2xl text-center" style="padding: 48px 32px;">
+            <p class="m-0">{{ __('Nothing available yet — check back soon.') }}</p>
+        </div>
+    @else
     @if($isGrouped)
         <div x-data="{ interval: @js($activeInterval) }">
             @if (count($intervals) > 1)
@@ -64,5 +69,6 @@
                 <x-filament.plans.one :plan="$plan" :subscription="$subscription" :buyRoute="$buyRoute"/>
             @endforeach
         </div>
+    @endif
     @endif
 </section>
