@@ -6,6 +6,7 @@ use App\Constants\OrderStatus;
 use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
+use App\Exceptions\PurchaseNotAllowedException;
 use App\Models\Order;
 use App\Models\PartnerPlanOffering;
 use App\Models\PaymentProvider;
@@ -194,6 +195,16 @@ class PartnerPlanCashCheckoutTest extends FeatureTest
             'partner_attributed_at' => now(),
             'partner_attribution_source' => 'login',
         ]);
+        // The first initSubscriptionCheckout() call above already resolved
+        // (and Eloquent-cached) this user's partnerTenant relation as null via
+        // CheckoutService::assertPlanPurchasable(). update() does not
+        // invalidate an already-loaded relation, so without an explicit
+        // refresh() this in-process $user instance would keep reporting no
+        // partner tenant even after the write above — refresh() is the one
+        // Eloquent call that also reloads already-loaded relations. In real
+        // traffic this never comes up: attribution and checkout are always
+        // two separate HTTP requests, each resolving auth()->user() fresh.
+        $user->refresh();
         $this->offering($partnerTenant, $plan, price: 7900);
 
         $reused = app(CheckoutService::class)->initSubscriptionCheckout(
@@ -217,10 +228,20 @@ class PartnerPlanCashCheckoutTest extends FeatureTest
     }
 
     /**
-     * The mirror image: an offering the partner has since disabled must not
-     * leave a stale partner price frozen on a reused subscription.
+     * The mirror image: an offering the partner has since disabled must
+     * reject a repeat checkout attempt on the reused NEW subscription rather
+     * than silently falling back to base.
+     *
+     * This used to assert the opposite (fall back to base, per the original
+     * base spec §8.2). The 2026-09-07 catalog-restriction design explicitly
+     * amends base §8.2 and reverses that call (see its §1 and §6): once an
+     * item is no longer enabled for an attributed buyer's partner, no new
+     * purchase of it can complete at all, base-priced or not. §7's
+     * "grandfathering" is about a purchase that already went through, not a
+     * still-unpaid NEW subscription being re-submitted through checkout —
+     * that reuse is finalizing a purchase, which §6 now rejects outright.
      */
-    public function test_a_reused_subscription_falls_back_to_base_when_the_offering_is_withdrawn(): void
+    public function test_a_reused_subscription_checkout_is_rejected_when_the_offering_is_withdrawn(): void
     {
         $partnerTenant = $this->activePartnerTenant();
         $plan = $this->flatRatePlan(basePrice: 4900);
@@ -240,15 +261,20 @@ class PartnerPlanCashCheckoutTest extends FeatureTest
         $offering->update(['is_enabled' => false]);
         app(PartnerPricingResolver::class)->flush();
 
-        $reused = app(CheckoutService::class)->initSubscriptionCheckout(
-            $plan->slug,
-            $customerTenant->uuid,
-        );
+        try {
+            app(CheckoutService::class)->initSubscriptionCheckout(
+                $plan->slug,
+                $customerTenant->uuid,
+            );
+            $this->fail('Expected PurchaseNotAllowedException to be thrown.');
+        } catch (PurchaseNotAllowedException $e) {
+            // expected
+        }
 
-        $this->assertSame($subscription->id, $reused->id);
-        $this->assertSame(4900, (int) $reused->fresh()->price);
-        // Base-priced, but still the partner's customer (spec §8.2).
-        $this->assertSame($partnerTenant->id, $reused->fresh()->partner_tenant_id);
+        // Grandfathering (spec §7): the rejected re-checkout attempt must not
+        // have touched the already-frozen NEW subscription row.
+        $this->assertSame($partnerTenant->id, $subscription->fresh()->partner_tenant_id);
+        $this->assertSame(7900, (int) $subscription->fresh()->price);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Livewire\Checkout;
 use App\Dto\TotalsDto;
 use App\Exceptions\LoginException;
 use App\Exceptions\NoPaymentProvidersAvailableException;
+use App\Exceptions\PurchaseNotAllowedException;
 use App\Services\CalculationService;
 use App\Services\CheckoutService;
 use App\Services\DiscountService;
@@ -78,12 +79,16 @@ class ProductCheckoutForm extends CheckoutForm
         $user = auth()->user();
         $totals = $this->calculationService->calculateCartTotals($cartDto, $user);
 
-        $order = $checkoutService->initProductCheckout(
-            $cartDto,
-            $cartDto->tenantUuid,
-            $totals,
-            $cartDto->shouldCreateNewTenant,
-        );
+        try {
+            $order = $checkoutService->initProductCheckout(
+                $cartDto,
+                $cartDto->tenantUuid,
+                $totals,
+                $cartDto->shouldCreateNewTenant,
+            );
+        } catch (PurchaseNotAllowedException $e) {
+            return redirect()->back()->with('error', __('This product is not available for your account.'));
+        }
 
         $cartDto->orderId = $order->id;
 

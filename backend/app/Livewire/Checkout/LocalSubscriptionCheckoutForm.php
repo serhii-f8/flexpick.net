@@ -3,6 +3,7 @@
 namespace App\Livewire\Checkout;
 
 use App\Exceptions\LoginException;
+use App\Exceptions\PurchaseNotAllowedException;
 use App\Exceptions\SubscriptionCreationNotAllowedException;
 use App\Services\CalculationService;
 use App\Services\CheckoutService;
@@ -109,6 +110,8 @@ class LocalSubscriptionCheckoutForm extends CheckoutForm
             );
         } catch (SubscriptionCreationNotAllowedException $e) {
             return redirect()->route('checkout.subscription.already-subscribed');
+        } catch (PurchaseNotAllowedException $e) {
+            return redirect()->back()->with('error', __('This plan is not available for your account.'));
         }
 
         $subscriptionCheckoutDto->subscriptionId = $subscription->id;

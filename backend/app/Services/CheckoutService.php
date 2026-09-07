@@ -6,6 +6,8 @@ use App\Constants\OrderStatus;
 use App\Constants\PlanType;
 use App\Dto\CartDto;
 use App\Dto\TotalsDto;
+use App\Exceptions\PurchaseNotAllowedException;
+use App\Models\OneTimeProduct;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
@@ -20,11 +22,13 @@ class CheckoutService
         private PlanService $planService,
         private OneTimeProductService $oneTimeProductService,
         private PurchaseSnapshotService $purchaseSnapshotService,
+        private PartnerPricingResolver $partnerPricingResolver,
     ) {}
 
     public function initSubscriptionCheckout(string $planSlug, ?string $tenantUuid, int $quantity = 1, bool $shouldCreateNewTenant = false)
     {
         $plan = $this->planService->getActivePlanBySlug($planSlug);
+        $this->assertPlanPurchasable($plan);
         $tenant = $this->resolveSubscriptionTenant($shouldCreateNewTenant, $tenantUuid, $plan);
 
         $subscription = $this->subscriptionService->findNewByPlanSlugAndTenant($planSlug, $tenant);
@@ -55,6 +59,7 @@ class CheckoutService
     public function initLocalSubscriptionCheckout(string $planSlug, ?string $tenantUuid, int $quantity = 1, bool $shouldCreateNewTenant = false)
     {
         $plan = $this->planService->getActivePlanBySlug($planSlug);
+        $this->assertPlanPurchasable($plan);
         $tenant = $this->resolveSubscriptionTenant($shouldCreateNewTenant, $tenantUuid, $plan);
 
         $subscription = $this->subscriptionService->findNewByPlanSlugAndTenant($planSlug, $tenant);
@@ -85,6 +90,11 @@ class CheckoutService
     public function initProductCheckout(CartDto $cartDto, ?string $tenantUuid, TotalsDto $totalsDto, bool $shouldCreateNewTenant = false)
     {
         $user = auth()->user();
+
+        $firstItem = $cartDto->items[0] ?? null;
+        if ($firstItem !== null) {
+            $this->assertProductPurchasable($this->oneTimeProductService->getOneTimeProductById($firstItem->productId));
+        }
 
         $isLocalOrder = $totalsDto->amountDue === 0; // If amount due is zero, it's a local order (no payment provider needed)
 
@@ -165,5 +175,25 @@ class CheckoutService
             $user,
             $this->oneTimeProductService->getOneTimeProductById($firstItem->productId),
         );
+    }
+
+    /**
+     * @throws PurchaseNotAllowedException
+     */
+    private function assertPlanPurchasable(Plan $plan): void
+    {
+        if ($this->partnerPricingResolver->purchasablePlans(collect([$plan]), auth()->user())->isEmpty()) {
+            throw new PurchaseNotAllowedException("Plan [{$plan->slug}] is not available for this buyer.");
+        }
+    }
+
+    /**
+     * @throws PurchaseNotAllowedException
+     */
+    private function assertProductPurchasable(OneTimeProduct $product): void
+    {
+        if ($this->partnerPricingResolver->purchasableProducts(collect([$product]), auth()->user())->isEmpty()) {
+            throw new PurchaseNotAllowedException("Product [{$product->slug}] is not available for this buyer.");
+        }
     }
 }

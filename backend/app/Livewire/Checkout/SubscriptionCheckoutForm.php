@@ -5,6 +5,7 @@ namespace App\Livewire\Checkout;
 use App\Constants\PlanPriceType;
 use App\Exceptions\LoginException;
 use App\Exceptions\NoPaymentProvidersAvailableException;
+use App\Exceptions\PurchaseNotAllowedException;
 use App\Exceptions\SubscriptionCreationNotAllowedException;
 use App\Services\CalculationService;
 use App\Services\CheckoutService;
@@ -127,6 +128,8 @@ class SubscriptionCheckoutForm extends CheckoutForm
             );
         } catch (SubscriptionCreationNotAllowedException $e) {
             return redirect()->route('checkout.subscription.already-subscribed');
+        } catch (PurchaseNotAllowedException $e) {
+            return redirect()->back()->with('error', __('This plan is not available for your account.'));
         }
 
         $initData = $paymentProvider->initSubscriptionCheckout($plan, $subscription, $discount, $subscription->quantity);
