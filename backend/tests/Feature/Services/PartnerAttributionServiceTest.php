@@ -3,185 +3,250 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\PartnerAttributionSource;
-use App\Constants\SessionConstants;
 use App\Constants\SubscriptionStatus;
-use App\Models\PartnerReferralLink;
 use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\PartnerAttributionService;
+use App\Services\ReferralService;
+use Illuminate\Support\Facades\Cookie;
 use Tests\Feature\FeatureTest;
 
 class PartnerAttributionServiceTest extends FeatureTest
 {
-    public function test_pending_code_round_trips_through_session(): void
+    private function service(): PartnerAttributionService
     {
-        $service = app(PartnerAttributionService::class);
-
-        $this->assertNull($service->pendingCode());
-
-        $service->rememberPendingCode('ABC123');
-        $this->assertSame('ABC123', $service->pendingCode());
-
-        $service->clearPendingCode();
-        $this->assertNull($service->pendingCode());
+        return app(PartnerAttributionService::class);
     }
 
-    public function test_pending_code_ignores_a_non_string_session_value(): void
-    {
-        session([SessionConstants::PARTNER_REFERRAL_CODE => ['x']]);
-
-        $this->assertNull(app(PartnerAttributionService::class)->pendingCode());
-    }
-
-    public function test_resolve_tenant_for_code_finds_the_linked_tenant(): void
+    private function activePartnerTenant(): Tenant
     {
         $tenant = $this->createTenant();
-        PartnerReferralLink::factory()->create(['tenant_id' => $tenant->id, 'code' => 'FINDME']);
-
-        $resolved = app(PartnerAttributionService::class)->resolveTenantForCode('FINDME');
-
-        $this->assertTrue($resolved->is($tenant));
-    }
-
-    public function test_resolve_tenant_for_code_returns_null_for_inactive_link(): void
-    {
-        $tenant = $this->createTenant();
-        PartnerReferralLink::factory()->create(['tenant_id' => $tenant->id, 'code' => 'INACTIVE1', 'is_active' => false]);
-
-        $this->assertNull(app(PartnerAttributionService::class)->resolveTenantForCode('INACTIVE1'));
-    }
-
-    public function test_resolve_tenant_for_code_returns_null_for_unknown_code(): void
-    {
-        $this->assertNull(app(PartnerAttributionService::class)->resolveTenantForCode('NOPE'));
-    }
-
-    public function test_attribute_sets_partner_tenant_when_code_resolves_to_an_active_partner(): void
-    {
-        $partnerTenant = $this->createTenant();
         $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
         $plan = Plan::factory()->create(['product_id' => $product->id]);
         Subscription::factory()->create([
-            'tenant_id' => $partnerTenant->id,
+            'tenant_id' => $tenant->id,
             'plan_id' => $plan->id,
             'status' => SubscriptionStatus::ACTIVE->value,
             'ends_at' => now()->addDays(30),
         ]);
-        PartnerReferralLink::factory()->create(['tenant_id' => $partnerTenant->id, 'code' => 'REGCODE1']);
+
+        return $tenant;
+    }
+
+    /** @return array{0: Tenant, 1: User, 2: string} tenant, member, member's personal code */
+    private function partnerWithCode(): array
+    {
+        $tenant = $this->activePartnerTenant();
+        $member = $this->createUser($tenant);
+        $code = app(ReferralService::class)->getOrCreateReferralCode($member)->code;
+
+        return [$tenant, $member, $code];
+    }
+
+    private function setRequestCookie(?string $value): void
+    {
+        $this->app['request']->cookies->set(config('partner.cookie_name'), $value);
+    }
+
+    public function test_a_members_personal_code_resolves_to_their_active_partner_tenant(): void
+    {
+        [$tenant, , $code] = $this->partnerWithCode();
+
+        $this->assertTrue($this->service()->resolveTenantForCode($code)->is($tenant));
+    }
+
+    public function test_a_code_of_a_user_with_no_partner_tenant_resolves_to_null(): void
+    {
+        $tenant = $this->createTenant();
+        $member = $this->createUser($tenant);
+        $code = app(ReferralService::class)->getOrCreateReferralCode($member)->code;
+
+        $this->assertNull($this->service()->resolveTenantForCode($code));
+    }
+
+    public function test_an_unknown_code_resolves_to_null(): void
+    {
+        $this->assertNull($this->service()->resolveTenantForCode('REF-DOESNOTEXIST'));
+    }
+
+    public function test_a_lapsed_partner_tenant_does_not_resolve(): void
+    {
+        $tenant = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->subDay(),
+        ]);
+        $member = $this->createUser($tenant);
+        $code = app(ReferralService::class)->getOrCreateReferralCode($member)->code;
+
+        $this->assertNull($this->service()->resolveTenantForCode($code));
+    }
+
+    public function test_a_member_of_two_partner_tenants_resolves_to_the_lowest_id(): void
+    {
+        $first = $this->activePartnerTenant();
+        $second = $this->activePartnerTenant();
+        $member = $this->createUser($first);
+        $second->users()->attach($member);
+        $code = app(ReferralService::class)->getOrCreateReferralCode($member)->code;
+
+        $this->assertTrue($this->service()->resolveTenantForCode($code)->is($first));
+    }
+
+    public function test_cookie_code_reads_a_valid_value_and_rejects_junk(): void
+    {
+        $this->setRequestCookie('REF-ABCDEFGHIJKL');
+        $this->assertSame('REF-ABCDEFGHIJKL', $this->service()->cookieCode());
+
+        $this->setRequestCookie('');
+        $this->assertNull($this->service()->cookieCode());
+
+        $this->setRequestCookie(str_repeat('x', 65));
+        $this->assertNull($this->service()->cookieCode());
+
+        $this->app['request']->cookies->remove(config('partner.cookie_name'));
+        $this->assertNull($this->service()->cookieCode());
+    }
+
+    public function test_has_partner_cookie_requires_the_code_to_resolve(): void
+    {
+        [, , $code] = $this->partnerWithCode();
+
+        $this->setRequestCookie('REF-NOTAPARTNER0');
+        $this->assertFalse($this->service()->hasPartnerCookie());
+
+        $this->setRequestCookie($code);
+        $this->assertTrue($this->service()->hasPartnerCookie());
+    }
+
+    public function test_queue_cookie_queues_an_http_only_year_long_cookie(): void
+    {
+        $this->service()->queueCookie('REF-QUEUEDCODE1');
+
+        $cookie = Cookie::queued(config('partner.cookie_name'));
+
+        $this->assertNotNull($cookie);
+        $this->assertSame('REF-QUEUEDCODE1', $cookie->getValue());
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertSame('lax', $cookie->getSameSite());
+        $this->assertEqualsWithDelta(now()->addDays(365)->getTimestamp(), $cookie->getExpiresTime(), 120);
+    }
+
+    public function test_attribute_sets_the_partner_from_the_cookie_once(): void
+    {
+        [$tenant, , $code] = $this->partnerWithCode();
+        $this->setRequestCookie($code);
         $user = User::factory()->create();
 
-        $service = app(PartnerAttributionService::class);
-        $service->rememberPendingCode('REGCODE1');
-        $service->attribute($user, PartnerAttributionSource::REGISTRATION);
+        $this->service()->attribute($user, PartnerAttributionSource::REGISTRATION);
 
         $user->refresh();
-        $this->assertTrue($user->partnerTenant->is($partnerTenant));
+        $this->assertTrue($user->partnerTenant->is($tenant));
         $this->assertSame(PartnerAttributionSource::REGISTRATION->value, $user->partner_attribution_source);
-        $this->assertNull($service->pendingCode());
+        $this->assertNotNull($user->partner_attributed_at);
     }
 
     public function test_attribute_does_not_overwrite_an_existing_attribution(): void
     {
-        $originalPartner = $this->createTenant();
-        $otherPartner = $this->createTenant();
-        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
-        $plan = Plan::factory()->create(['product_id' => $product->id]);
-        Subscription::factory()->create([
-            'tenant_id' => $otherPartner->id,
-            'plan_id' => $plan->id,
-            'status' => SubscriptionStatus::ACTIVE->value,
-            'ends_at' => now()->addDays(30),
-        ]);
-        PartnerReferralLink::factory()->create(['tenant_id' => $otherPartner->id, 'code' => 'OTHERCODE']);
-        $user = User::factory()->create(['partner_tenant_id' => $originalPartner->id]);
+        $original = $this->createTenant();
+        [, , $otherCode] = $this->partnerWithCode();
+        $this->setRequestCookie($otherCode);
+        $user = User::factory()->create(['partner_tenant_id' => $original->id]);
 
-        $service = app(PartnerAttributionService::class);
-        $service->rememberPendingCode('OTHERCODE');
-        $service->attribute($user, PartnerAttributionSource::LOGIN);
+        $this->service()->attribute($user, PartnerAttributionSource::LOGIN);
 
-        $this->assertSame($originalPartner->id, $user->fresh()->partner_tenant_id);
+        $this->assertSame($original->id, $user->fresh()->partner_tenant_id);
     }
 
-    public function test_attribute_ignores_a_code_for_a_tenant_that_is_not_an_active_partner(): void
+    public function test_attribute_ignores_a_cookie_that_does_not_resolve(): void
     {
-        $tenant = $this->createTenant();
-        PartnerReferralLink::factory()->create(['tenant_id' => $tenant->id, 'code' => 'LAPSEDCODE']);
+        $this->setRequestCookie('REF-NOTAPARTNER0');
         $user = User::factory()->create();
 
-        $service = app(PartnerAttributionService::class);
-        $service->rememberPendingCode('LAPSEDCODE');
-        $service->attribute($user, PartnerAttributionSource::REGISTRATION);
+        $this->service()->attribute($user, PartnerAttributionSource::REGISTRATION);
 
         $this->assertNull($user->fresh()->partner_tenant_id);
     }
 
-    public function test_pending_code_conflicts_with_existing_attribution(): void
+    public function test_attribute_is_a_no_op_without_a_cookie(): void
     {
-        $originalPartner = $this->createTenant();
-        $otherPartner = $this->createTenant();
-        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
-        $plan = Plan::factory()->create(['product_id' => $product->id]);
-        Subscription::factory()->create([
-            'tenant_id' => $otherPartner->id,
-            'plan_id' => $plan->id,
-            'status' => SubscriptionStatus::ACTIVE->value,
-            'ends_at' => now()->addDays(30),
-        ]);
-        PartnerReferralLink::factory()->create(['tenant_id' => $otherPartner->id, 'code' => 'CONFLICTCODE']);
-        $user = User::factory()->create(['partner_tenant_id' => $originalPartner->id]);
-
-        $service = app(PartnerAttributionService::class);
-        $service->rememberPendingCode('CONFLICTCODE');
-
-        $this->assertTrue($service->pendingCodeConflictsWithExisting($user));
-    }
-
-    public function test_pending_code_does_not_conflict_when_it_matches_existing_attribution(): void
-    {
-        $partnerTenant = $this->createTenant();
-        PartnerReferralLink::factory()->create(['tenant_id' => $partnerTenant->id, 'code' => 'SAMECODE']);
-        $user = User::factory()->create(['partner_tenant_id' => $partnerTenant->id]);
-
-        $service = app(PartnerAttributionService::class);
-        $service->rememberPendingCode('SAMECODE');
-
-        $this->assertFalse($service->pendingCodeConflictsWithExisting($user));
-    }
-
-    public function test_attribute_is_not_overwritten_by_a_concurrent_call_after_the_first_wins(): void
-    {
-        $winningPartner = $this->createTenant();
-        $losingPartner = $this->createTenant();
-        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
-        $plan = Plan::factory()->create(['product_id' => $product->id]);
-        foreach ([$winningPartner, $losingPartner] as $tenant) {
-            Subscription::factory()->create([
-                'tenant_id' => $tenant->id,
-                'plan_id' => $plan->id,
-                'status' => SubscriptionStatus::ACTIVE->value,
-                'ends_at' => now()->addDays(30),
-            ]);
-        }
-        PartnerReferralLink::factory()->create(['tenant_id' => $winningPartner->id, 'code' => 'WINCODE']);
-        PartnerReferralLink::factory()->create(['tenant_id' => $losingPartner->id, 'code' => 'LOSECODE']);
+        $this->app['request']->cookies->remove(config('partner.cookie_name'));
         $user = User::factory()->create();
 
-        $service = app(PartnerAttributionService::class);
+        $this->service()->attribute($user, PartnerAttributionSource::LOGIN);
 
-        // Simulate the first call already having won the race by writing directly.
+        $this->assertNull($user->fresh()->partner_tenant_id);
+    }
+
+    public function test_the_first_concurrent_attribution_wins(): void
+    {
+        $winner = $this->activePartnerTenant();
+        [, , $loserCode] = $this->partnerWithCode();
+        $user = User::factory()->create();
+
         User::whereKey($user->id)->update([
-            'partner_tenant_id' => $winningPartner->id,
+            'partner_tenant_id' => $winner->id,
             'partner_attributed_at' => now(),
             'partner_attribution_source' => PartnerAttributionSource::REGISTRATION->value,
         ]);
 
-        // The in-memory $user object is still stale (partner_tenant_id null in memory),
-        // simulating a second concurrent request that read the row before the first write.
-        $service->rememberPendingCode('LOSECODE');
-        $service->attribute($user, PartnerAttributionSource::LOGIN);
+        // $user is stale in memory (partner_tenant_id null), like a second request
+        // that read the row before the first write landed.
+        $this->setRequestCookie($loserCode);
+        $this->service()->attribute($user, PartnerAttributionSource::LOGIN);
 
-        $this->assertSame($winningPartner->id, $user->fresh()->partner_tenant_id);
+        $this->assertSame($winner->id, $user->fresh()->partner_tenant_id);
+    }
+
+    public function test_code_for_tenant_returns_a_code_that_resolves_back_to_it(): void
+    {
+        $tenant = $this->activePartnerTenant();
+        $this->createUser($tenant); // no personal code yet — it must be created on demand
+
+        $code = $this->service()->codeForTenant($tenant);
+
+        $this->assertNotNull($code);
+        $this->assertTrue($this->service()->resolveTenantForCode($code)->is($tenant));
+    }
+
+    public function test_code_for_tenant_is_null_for_a_non_partner_or_memberless_tenant(): void
+    {
+        $plain = $this->createTenant();
+        $this->createUser($plain);
+        $this->assertNull($this->service()->codeForTenant($plain));
+
+        $empty = $this->activePartnerTenant();
+        $this->assertNull($this->service()->codeForTenant($empty));
+    }
+
+    public function test_refresh_cookie_rewrites_the_cookie_from_the_database(): void
+    {
+        [$tenant] = $this->partnerWithCode();
+        [, , $strayCode] = $this->partnerWithCode();
+        $user = User::factory()->create(['partner_tenant_id' => $tenant->id]);
+        $this->setRequestCookie($strayCode);
+
+        $this->service()->refreshCookieFromDatabase($user);
+
+        $queued = Cookie::queued(config('partner.cookie_name'));
+        $this->assertNotNull($queued);
+        $this->assertTrue($this->service()->resolveTenantForCode($queued->getValue())->is($tenant));
+        $this->assertNotSame($strayCode, $queued->getValue());
+    }
+
+    public function test_refresh_cookie_leaves_an_unattributed_user_alone(): void
+    {
+        $user = User::factory()->create();
+
+        $this->service()->refreshCookieFromDatabase($user);
+
+        $this->assertNull(Cookie::queued(config('partner.cookie_name')));
     }
 }
