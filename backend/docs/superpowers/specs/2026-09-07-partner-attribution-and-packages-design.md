@@ -93,7 +93,7 @@ with `cookieCode(?Request): ?string` (reads and validates the cookie),
 `hasPartnerCookie(?Request): bool`, `queueCookie(string $code)`,
 `refreshCookieFromDatabase(User)` and `codeForTenant(Tenant): ?string`; the
 pending-code consumers (`attribute()`, the resolver's cookie lookup) read the
-cookie instead. All three middleware steps are skipped while the admin
+cookie instead. All three steps are skipped while the admin
 Referral Settings switch (`app.referral.enabled`) is off; that switch is the
 single on/off for partner links too.
 
