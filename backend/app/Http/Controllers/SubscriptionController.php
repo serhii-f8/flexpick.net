@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Constants\TenancyPermissionConstants;
 use App\Services\CalculationService;
+use App\Services\PartnerPricingResolver;
 use App\Services\PaymentProviders\PaymentService;
 use App\Services\PlanService;
 use App\Services\SubscriptionService;
@@ -20,6 +21,7 @@ class SubscriptionController extends Controller
         private CalculationService $calculationService,
         private TenantPermissionService $tenantPermissionService,
         private TenantService $tenantService,
+        private PartnerPricingResolver $partnerPricingResolver,
     ) {}
 
     public function changePlan(string $subscriptionUuid, string $newPlanSlug, string $tenantUuid, Request $request)
@@ -50,6 +52,10 @@ class SubscriptionController extends Controller
 
         if (! $newPlan) {
             return redirect()->back()->with('error', __('Plan not found.'));
+        }
+
+        if ($this->partnerPricingResolver->resolvePartnerTenant($user) !== null) {
+            return redirect()->back()->with('error', __('Plan changes for partner customers are handled by your partner directly.'));
         }
 
         $tenantUserCount = $tenant->users()->count();
