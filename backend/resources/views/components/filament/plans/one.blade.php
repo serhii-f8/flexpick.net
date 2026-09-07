@@ -8,6 +8,7 @@
 
 @php
     $price = $planService->getPlanPrice($plan);
+    $effectivePrice = $price !== null ? ($plan->partner_price ?? $price->price) : null;
     $tenant = \Filament\Facades\Filament::getTenant();
     $tenantUserCount = $tenant ? $tenant->users()->count() : 0;
     $exceedsMaxUsers = $plan->max_users_per_tenant > 0 && $tenantUserCount > $plan->max_users_per_tenant;
@@ -24,11 +25,12 @@
 <x-fp.plan-card
     :name="$plan->product->name"
     :description="$plan->product->description"
-    :price="$price !== null && $price->price > 0 ? money($price->price, $price->currency->code) : null"
-    :interval="$price !== null && $price->price > 0 ? $intervalLabel : null"
+    :price="$effectivePrice !== null && $effectivePrice > 0 ? money($effectivePrice, $price->currency->code) : null"
+    :interval="$effectivePrice !== null && $effectivePrice > 0 ? $intervalLabel : null"
     :features="$features"
     :popular="(bool) $plan->product->is_popular"
     :current="$isCurrent"
+    :partner="$plan->partner_price !== null ? $plan->partner_tenant_name : null"
     :href="route($buyRoute, ['planSlug' => $plan->slug, 'subscriptionUuid' => $subscription?->uuid, 'tenantUuid' => \Filament\Facades\Filament::getTenant()->uuid])"
     :cta="__('Switch to :plan', ['plan' => $plan->product->name])"
     :disabled="$exceedsMaxUsers"

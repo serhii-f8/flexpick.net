@@ -34,6 +34,8 @@ class All extends \App\View\Components\Plans\All
             onlyVisible: true,
         );
 
+        $plans = $this->partnerPricingResolver->decoratePlans($plans, auth()->user());
+
         $viewData['subscription'] = $subscription;
 
         return $this->enrichViewData($viewData, $plans);
