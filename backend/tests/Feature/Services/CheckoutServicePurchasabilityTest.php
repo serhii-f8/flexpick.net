@@ -150,4 +150,45 @@ class CheckoutServicePurchasabilityTest extends FeatureTest
 
         app(CheckoutService::class)->initProductCheckout($cartDto, null, $totals, true);
     }
+
+    /**
+     * Regression for Finding 1 of the final whole-branch review: a product
+     * seeded not-visible (e.g. audit-report-unlock) can never have a
+     * PartnerProductOffering configured for it — PartnerProductPricingTable's
+     * table query only lists is_visible ones — so gating it the same way as
+     * a browsable product would permanently strand every attributed buyer on
+     * a purely transactional SKU. An attributed buyer with no offering at all
+     * must still be able to complete checkout for it.
+     */
+    public function test_an_attributed_buyer_can_check_out_a_not_visible_product_with_no_offering(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $product = OneTimeProduct::factory()->create(['is_active' => true, 'is_visible' => false]);
+        OneTimeProductPrice::factory()->create([
+            'one_time_product_id' => $product->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => 4900,
+        ]);
+
+        $user = $this->createUser(null, [], [
+            'partner_tenant_id' => $partnerTenant->id,
+            'partner_attributed_at' => now(),
+        ]);
+        $this->actingAs($user);
+
+        $cartItem = new CartItemDto;
+        $cartItem->productId = (string) $product->id;
+        $cartItem->quantity = 1;
+
+        $cartDto = new CartDto;
+        $cartDto->items = [$cartItem];
+
+        $totals = new TotalsDto;
+        $totals->amountDue = 4900;
+        $totals->currencyCode = 'USD';
+
+        $order = app(CheckoutService::class)->initProductCheckout($cartDto, null, $totals, true);
+
+        $this->assertNotNull($order);
+    }
 }

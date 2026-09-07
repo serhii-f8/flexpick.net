@@ -192,6 +192,16 @@ class CheckoutService
      */
     private function assertProductPurchasable(OneTimeProduct $product): void
     {
+        // A product no partner can ever configure an offering for — the only
+        // path that creates a PartnerProductOffering, PartnerProductPricingTable's
+        // table query, lists only is_visible ones — was never this feature's
+        // target. Gating a purely transactional SKU like audit-report-unlock
+        // would permanently strand every attributed buyer, since no offering
+        // for it can ever exist to satisfy the check below.
+        if (! $product->is_visible) {
+            return;
+        }
+
         if ($this->partnerPricingResolver->purchasableProducts(collect([$product]), auth()->user())->isEmpty()) {
             throw new PurchaseNotAllowedException("Product [{$product->slug}] is not available for this buyer.");
         }
