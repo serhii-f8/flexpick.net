@@ -682,7 +682,21 @@ class SubscriptionService
     {
         return $subscription->type === SubscriptionType::PAYMENT_PROVIDER_MANAGED &&
             $this->planService->isPlanChangeable($subscription->plan) &&
-            $subscription->status === SubscriptionStatus::ACTIVE->value;
+            $subscription->status === SubscriptionStatus::ACTIVE->value &&
+            ! $this->tenantIsPartner($subscription);
+    }
+
+    /**
+     * A partner tenant's plans are administered by the operator, not
+     * self-served (spec §5). Resolved lazily: PartnerCapabilityService
+     * constructor-injects this service, so the dependency cannot run both ways.
+     */
+    private function tenantIsPartner(Subscription $subscription): bool
+    {
+        /** @var Tenant|null $tenant */
+        $tenant = $subscription->tenant;
+
+        return $tenant !== null && app(PartnerCapabilityService::class)->tenantIsActivePartner($tenant);
     }
 
     public function getLocalSubscriptionExpiringIn(int $days)

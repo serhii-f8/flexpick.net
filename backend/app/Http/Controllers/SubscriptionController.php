@@ -38,6 +38,10 @@ class SubscriptionController extends Controller
             return redirect()->back()->with('error', __('You do not have an active subscription.'));
         }
 
+        if (! $this->subscriptionService->canChangeSubscriptionPlan($subscription)) {
+            return redirect()->back()->with('error', __('Plan changes are not available for this subscription.'));
+        }
+
         if ($subscription->plan->slug === $newPlanSlug) {
             return redirect()->back()->with('error', __('You are already subscribed to this plan.'));
         }
