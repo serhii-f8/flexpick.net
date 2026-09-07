@@ -9,7 +9,6 @@ use App\Models\Plan;
 use App\Models\Product;
 use App\Models\ReferralCode;
 use App\Models\Subscription;
-use App\Models\Tenant;
 use App\Models\User;
 use App\Services\ReferralService;
 use Tests\Feature\FeatureTest;
