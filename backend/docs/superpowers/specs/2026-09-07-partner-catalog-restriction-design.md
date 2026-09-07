@@ -29,11 +29,25 @@ applies — see §5 below for its replacement.
 - Applies to **both** plans (subscriptions) and one-time products (report
   packages) — the same rule, since both already have their own offering
   model (`PartnerPlanOffering` / `PartnerProductOffering`).
-- Applies to **every surface**: the public/anonymous pricing page (a guest
-  who followed a partner's `?rc=` link but hasn't registered), the
-  authenticated dashboard's own pricing/subscription views, and the
-  Filament dashboard's change-plan page (which reuses the same plan-listing
-  component).
+- Applies to **every catalog surface that actually exists**: `route('pricing')`
+  requires authentication (`PricingPageTest::test_guest_is_redirected_to_login`
+  confirms a guest is redirected to `/login`, never shown a catalog) — so in
+  the current app there is no reachable anonymous storefront page to filter.
+  The real surfaces are the authenticated `/pricing` page and the Filament
+  dashboard's change-plan page (which reuses the same plan-listing
+  component). `purchasableFor()` still accepts `?User $user = null` and
+  resolves an anonymous visitor's partner via the `fp_rc` cookie, matching
+  `decoratePlans()`/`decorateProducts()`'s existing signature — so it is
+  correct by construction if a guest-facing catalog page is ever added —
+  but no such page exists to wire it into today.
+- **Pre-existing bug found while scoping this work, fixed as a prerequisite**:
+  `App\View\Components\Filament\Plans\All::calculateViewData()` — the
+  component the change-plan page actually renders — overrides its parent
+  and never calls `decoratePlans()` at all, so that page has never shown
+  partner pricing to anyone, attributed or not (confirmed: no commit on
+  this branch has touched this file, and no test exercises it). This is
+  fixed as part of this work because `purchasableFor()` filtering is only
+  meaningful once the surface it filters is also correctly priced.
 - Applies to **checkout**, not just display: a request to buy a
   non-enabled item is rejected server-side, the same way
   `SubscriptionService::canChangeSubscriptionPlan()` already rejects a
