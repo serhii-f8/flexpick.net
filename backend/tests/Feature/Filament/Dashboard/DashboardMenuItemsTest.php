@@ -11,6 +11,7 @@ use App\Filament\Dashboard\Pages\Users;
 use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Filament\Dashboard\Resources\Invitations\InvitationResource;
 use App\Filament\Dashboard\Resources\Orders\OrderResource;
+use App\Filament\Dashboard\Resources\PartnerOrders\PartnerOrderResource;
 use App\Filament\Dashboard\Resources\ReferralRewards\ReferralRewardResource;
 use App\Filament\Dashboard\Resources\Referrals\ReferralResource;
 use App\Filament\Dashboard\Resources\Subscriptions\SubscriptionResource;
@@ -198,7 +199,7 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $navigation = $this->renderedNavigation();
 
-        $this->assertSame(['Referrals', 'Pricing Settings'], $navigation['Partner'] ?? []);
+        $this->assertSame(['Referrals', 'Orders', 'Pricing Settings'], $navigation['Partner'] ?? []);
         $this->assertSame(['Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
     }
 
@@ -215,5 +216,6 @@ class DashboardMenuItemsTest extends FeatureTest
         [, $tenant] = $this->partnerUserAndTenant();
 
         $this->get(PartnerPricingSettings::getUrl(tenant: $tenant))->assertSuccessful();
+        $this->get(PartnerOrderResource::getUrl(tenant: $tenant))->assertSuccessful();
     }
 }
