@@ -532,6 +532,21 @@ html.fi:not(.dark) {
     text-transform: none;
 }
 
+.fp-tier-heading {
+    margin: 2.5rem 0 1rem;
+}
+
+.fp-tier-heading:first-child {
+    margin-top: 0;
+}
+
+.fp-tier-headline {
+    margin: 0.35rem 0 0;
+    max-width: 48rem;
+    font-size: 0.95rem;
+    color: var(--fp-muted);
+}
+
 /* Checkout: switch plan. */
 .fp-checkout {
     max-width: 960px;

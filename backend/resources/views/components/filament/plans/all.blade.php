@@ -40,10 +40,20 @@
                 </div>
             @endif
 
-            @foreach($groupedPlans as $interval => $plans)
-                <div id="plans-{{ $interval }}" role="tabpanel" class="fp-plan-grid" x-show="interval === @js($interval)" @if ($interval !== $activeInterval) x-cloak @endif>
-                    @foreach($plans as $plan)
-                        <x-filament.plans.one :plan="$plan" :subscription="$subscription" :buyRoute="$buyRoute" />
+            @foreach($groupedPlans as $interval => $intervalPlans)
+                <div id="plans-{{ $interval }}" role="tabpanel" x-show="interval === @js($interval)" @if ($interval !== $activeInterval) x-cloak @endif>
+                    @foreach($tierSections[$interval] as $section)
+                        @if($section['title'] !== null)
+                            <div class="fp-tier-heading">
+                                <h3 class="fp-pricing-section-title">{{ __($section['title']) }}</h3>
+                                <p class="fp-tier-headline">{{ __($section['headline']) }}</p>
+                            </div>
+                        @endif
+                        <div class="fp-plan-grid">
+                            @foreach($section['plans'] as $plan)
+                                <x-filament.plans.one :plan="$plan" :subscription="$subscription" :buyRoute="$buyRoute" />
+                            @endforeach
+                        </div>
                     @endforeach
                 </div>
             @endforeach

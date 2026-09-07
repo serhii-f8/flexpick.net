@@ -2,6 +2,7 @@
 
 namespace App\View\Components\Plans;
 
+use App\Models\Plan;
 use App\Services\PartnerPricingResolver;
 use App\Services\PlanService;
 use App\Services\SubscriptionService;
@@ -68,6 +69,7 @@ class All extends Component
         }
 
         $viewData['groupedPlans'] = $groupedPlans;
+        $viewData['tierSections'] = array_map(fn (array $intervalPlans): array => $this->tierSections($intervalPlans), $groupedPlans);
 
         // One banner names the partner once; the cards only repeat it as a caption.
         $partnerName = $plans->first(fn ($plan) => ($plan->partner_price ?? null) !== null && ($plan->partner_tenant_name ?? null) !== null)?->partner_tenant_name;
@@ -85,6 +87,46 @@ class All extends Component
             : $this->preselectedInterval;
 
         return $viewData;
+    }
+
+    /**
+     * Split one interval's cards into tier sections (spec §6.3): packages
+     * carry product.metadata.audit_tier_group; anything without it lands in
+     * one trailing unlabelled section, so plans outside the package catalog
+     * keep rendering exactly as before.
+     *
+     * @param  list<Plan>  $plans
+     * @return list<array{key: ?string, title: ?string, headline: ?string, plans: list<Plan>}>
+     */
+    protected function tierSections(array $plans): array
+    {
+        $tiers = (array) config('pricing.package_tiers', []);
+        $byTier = [];
+        $ungrouped = [];
+
+        foreach ($plans as $plan) {
+            $key = data_get($plan->product?->metadata, 'audit_tier_group');
+
+            if (is_string($key) && array_key_exists($key, $tiers)) {
+                $byTier[$key][] = $plan;
+            } else {
+                $ungrouped[] = $plan;
+            }
+        }
+
+        $sections = [];
+
+        foreach ($tiers as $key => $tier) {
+            if (isset($byTier[$key])) {
+                $sections[] = ['key' => $key, 'title' => $tier['name'], 'headline' => $tier['headline'], 'plans' => $byTier[$key]];
+            }
+        }
+
+        if ($ungrouped !== []) {
+            $sections[] = ['key' => null, 'title' => null, 'headline' => null, 'plans' => $ungrouped];
+        }
+
+        return $sections;
     }
 
     private function groupPlans(Collection $plans): array

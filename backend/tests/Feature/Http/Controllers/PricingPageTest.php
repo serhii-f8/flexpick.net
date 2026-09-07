@@ -136,4 +136,43 @@ class PricingPageTest extends FeatureTest
         $response->assertSee($product->name);
         $response->assertSee('0–7331');
     }
+
+    private function visiblePlan(array $metadata, string $name): Plan
+    {
+        $plan = Plan::factory()->create([
+            'product_id' => Product::factory()->create(['name' => $name, 'metadata' => $metadata])->id,
+            'type' => PlanType::FLAT_RATE->value,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        $plan->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 1000]);
+
+        return $plan;
+    }
+
+    public function test_packages_are_grouped_under_their_tier_headings_in_tier_order(): void
+    {
+        $this->visiblePlan(['audit_tier_group' => 'expert'], 'Zed Expert Pack');
+        $this->visiblePlan(['audit_tier_group' => 'diagnostic'], 'Alpha Diagnostic Pack');
+        $user = $this->createUser($this->createTenant());
+
+        $response = $this->actingAs($user)->get(route('pricing'))->assertOk();
+
+        $response->assertSeeInOrder([
+            config('pricing.package_tiers.diagnostic.headline'),
+            'Alpha Diagnostic Pack',
+            config('pricing.package_tiers.expert.headline'),
+            'Zed Expert Pack',
+        ]);
+    }
+
+    public function test_plans_without_a_tier_render_in_a_trailing_unlabelled_grid(): void
+    {
+        $this->visiblePlan([], 'Loose Legacy Plan');
+        $user = $this->createUser($this->createTenant());
+
+        $response = $this->actingAs($user)->get(route('pricing'))->assertOk();
+
+        $response->assertSee('Loose Legacy Plan');
+    }
 }

@@ -43,9 +43,19 @@
         @endif
 
         @foreach($groupedPlans as $interval => $intervalPlans)
-            <div id="pricing-{{ $interval }}" role="tabpanel" class="fp-plan-grid" x-show="interval === @js($interval)" @if ($interval !== $activeInterval) x-cloak @endif>
-                @foreach($intervalPlans as $plan)
-                    <x-plans.one :plan="$plan" />
+            <div id="pricing-{{ $interval }}" role="tabpanel" x-show="interval === @js($interval)" @if ($interval !== $activeInterval) x-cloak @endif>
+                @foreach($tierSections[$interval] as $section)
+                    @if($section['title'] !== null)
+                        <div class="fp-tier-heading">
+                            <h3 class="fp-pricing-section-title">{{ __($section['title']) }}</h3>
+                            <p class="fp-tier-headline">{{ __($section['headline']) }}</p>
+                        </div>
+                    @endif
+                    <div class="fp-plan-grid">
+                        @foreach($section['plans'] as $plan)
+                            <x-plans.one :plan="$plan" />
+                        @endforeach
+                    </div>
                 @endforeach
             </div>
         @endforeach
