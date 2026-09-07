@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Seeders;
 
+use App\Models\Interval;
 use App\Models\OneTimeProduct;
 use App\Models\Plan;
 use App\Models\Product;
 use Database\Seeders\AuditMonetizationSeeder;
+use Database\Seeders\ReportPackagesSeeder;
 use Tests\Feature\FeatureTest;
 
 class AuditMonetizationSeederTest extends FeatureTest
@@ -41,19 +43,6 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->assertSame('diagnostic', $product->metadata['audit_tier']);
     }
 
-    public function test_seeds_the_pitch_subscription_grid(): void
-    {
-        $this->seedCatalog();
-
-        foreach (['audit-starter' => 5900, 'audit-growth' => 14900,
-            'audit-agency' => 49900, 'audit-enterprise' => 150000] as $slug => $cents) {
-            $plan = Plan::where('slug', $slug.'-monthly')->first();
-
-            $this->assertNotNull($plan, "Missing plan [{$slug}-monthly].");
-            $this->assertSame($cents, (int) $plan->prices()->first()->price);
-        }
-    }
-
     /**
      * Deliberately outside config('pricing.subscriptions') -- never shown
      * publicly, never exported to the marketing site -- but must exist for
@@ -75,6 +64,7 @@ class AuditMonetizationSeederTest extends FeatureTest
         $this->assertSame(100, (int) $metadata['audit_diagnostic_credits']);
         $this->assertSame(50, (int) $metadata['audit_deep_ai_credits']);
         $this->assertSame(10, (int) $metadata['audit_expert_credits']);
+        $this->assertTrue($metadata['enables_reseller_program']);
     }
 
     /**
@@ -100,20 +90,6 @@ class AuditMonetizationSeederTest extends FeatureTest
             $this->assertFalse((bool) $product->is_active);
             $this->assertFalse((bool) $product->is_visible);
         }
-    }
-
-    public function test_subscription_products_carry_allowance_metadata(): void
-    {
-        $this->seedCatalog();
-
-        $growth = Product::where('slug', 'audit-growth')->firstOrFail();
-
-        $this->assertSame(
-            config('pricing.subscriptions.audit-growth.audit_diagnostic_credits'),
-            (int) $growth->metadata['audit_diagnostic_credits'],
-        );
-        $this->assertArrayNotHasKey('audit_analyses_per_month', $growth->metadata);
-        $this->assertArrayHasKey('audit_deep_ai_credits', $growth->metadata);
     }
 
     /**
@@ -142,8 +118,11 @@ class AuditMonetizationSeederTest extends FeatureTest
         // Created here rather than guarded on existence: a conditional assertion
         // silently degrades to no assertion at all when the fixture stops matching.
         foreach (config('pricing.retired.plans') as $slug) {
-            Plan::factory()->create([
-                'slug' => $slug,
+            Plan::updateOrCreate(['slug' => $slug], [
+                'name' => $slug,
+                'product_id' => Product::factory()->create()->id,
+                'interval_id' => Interval::where('slug', 'month')->firstOrFail()->id,
+                'interval_count' => 1,
                 'is_active' => true,
                 'is_visible' => true,
             ]);
@@ -191,8 +170,15 @@ class AuditMonetizationSeederTest extends FeatureTest
     public function test_every_plan_carries_an_expert_credits_metadata_key(): void
     {
         $this->seedCatalog();
+        $this->seed(ReportPackagesSeeder::class);
 
-        foreach (array_keys(config('pricing.subscriptions')) as $slug) {
+        // Every package carries the key (ReportPackagesSeeder::run() fills
+        // all three credit keys via array_fill_keys before overriding its
+        // own tier's), but the value is only zero off the expert tier -- the
+        // three audit-expert-* packages legitimately grant nonzero expert
+        // credits, unlike the old subscription grid where this key was
+        // always zero by design.
+        foreach (config('pricing.packages') as $slug => $package) {
             $product = Product::where('slug', $slug)->firstOrFail();
 
             $this->assertArrayHasKey(
@@ -201,9 +187,9 @@ class AuditMonetizationSeederTest extends FeatureTest
                 "Plan {$slug} is missing audit_expert_credits metadata",
             );
             $this->assertSame(
-                0,
-                $product->metadata['audit_expert_credits'],
-                "Plan {$slug} must seed zero expert credits",
+                $package['tier'] === 'expert' ? $package['actions'] : 0,
+                (int) $product->metadata['audit_expert_credits'],
+                "Plan {$slug} has unexpected expert credits",
             );
         }
     }

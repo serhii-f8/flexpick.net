@@ -76,11 +76,31 @@ class ExportPricingCommand extends Command
             ];
         }
 
+        $packages = [];
+
+        foreach (config('pricing.packages') as $slug => $package) {
+            $tier = config('pricing.package_tiers.'.$package['tier']);
+
+            $packages[$slug] = [
+                'name' => $package['name'],
+                'tier' => $package['tier'],
+                'tier_name' => $tier['name'],
+                'actions' => $package['actions'],
+                'unit_price_cents' => $package['unit_price'],
+                'price_cents' => $package['price'],
+                'price_display' => $this->display($package['price']),
+                'discount_percent' => $package['discount_percent'],
+                'headline' => $tier['headline'],
+                'is_popular' => $package['is_popular'],
+            ];
+        }
+
         return [
             '_generated' => 'php artisan app:export-pricing — do not edit by hand',
             'currency' => config('pricing.currency'),
             'tiers' => $tiers,
             'subscriptions' => $subscriptions,
+            'packages' => $packages,
         ];
     }
 

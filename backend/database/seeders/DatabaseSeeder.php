@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             EmailProvidersSeeder::class,
             VerificationProvidersSeeder::class,
             AuditMonetizationSeeder::class,
+            ReportPackagesSeeder::class,
         ]);
     }
 }

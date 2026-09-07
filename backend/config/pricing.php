@@ -52,43 +52,49 @@ return [
         ],
     ],
 
-    // audit_expert_credits is zero on every plan below, by design: Agency at
-    // $499/month cannot absorb a $999 audit, and Enterprise at $1,500/month
-    // barely can. The key exists so a custom enterprise deal is an admin
-    // metadata edit rather than a code change.
-    'subscriptions' => [
-        'audit-starter' => [
-            'name' => 'Starter',
-            'price' => 5900,
-            'audit_diagnostic_credits' => 5,
-            'audit_deep_ai_credits' => 0,
-            'audit_expert_credits' => 0,
-            'is_popular' => false,
+    // Starter/Growth/Agency/Enterprise were replaced by `packages` on
+    // 2026-09-07; their slugs are in `retired.plans`. Kept as an empty block
+    // so AuditMonetizationSeeder and app:export-pricing need no branch.
+    'subscriptions' => [],
+
+    // The per-report tiers the packages below are built from. `credit_key`
+    // is the plan-metadata key AuditEntitlementService meters that tier on.
+    'package_tiers' => [
+        'diagnostic' => [
+            'name' => 'Diagnostic Report',
+            'plural' => 'Diagnostic Reports',
+            'credit_key' => 'audit_diagnostic_credits',
+            'headline' => 'CTOs, product owners, and business leaders who want to evaluate team efficiency and basic code health.',
         ],
-        'audit-growth' => [
-            'name' => 'Growth',
-            'price' => 14900,
-            'audit_diagnostic_credits' => 20,
-            'audit_deep_ai_credits' => 1,
-            'audit_expert_credits' => 0,
-            'is_popular' => true,
+        'deep_ai' => [
+            'name' => 'Deep AI Code Review',
+            'plural' => 'Deep AI Code Reviews',
+            'credit_key' => 'audit_deep_ai_credits',
+            'headline' => 'Small, medium-sized, and large development teams that want to verify code health without paying for a full manual QA review.',
         ],
-        'audit-agency' => [
-            'name' => 'Agency',
-            'price' => 49900,
-            'audit_diagnostic_credits' => 75,
-            'audit_deep_ai_credits' => 4,
-            'audit_expert_credits' => 0,
-            'is_popular' => false,
+        'expert' => [
+            'name' => 'Expert Audit',
+            'plural' => 'Expert Audits',
+            'credit_key' => 'audit_expert_credits',
+            'headline' => 'Product companies that outsource development and need both a code-health assessment and support from a human expert.',
         ],
-        'audit-enterprise' => [
-            'name' => 'Enterprise',
-            'price' => 150000,
-            'audit_diagnostic_credits' => 250,
-            'audit_deep_ai_credits' => 15,
-            'audit_expert_credits' => 0,
-            'is_popular' => false,
-        ],
+    ],
+
+    // Monthly packages: N reports of one tier. `price` is the FlexPick package
+    // price (unit × actions × (1 − discount)); `partner_unit_price` is the
+    // suggested partner selling price per report, which the Pricing Settings
+    // page multiplies by `actions` as the partner's default. A test asserts
+    // the arithmetic so the table cannot drift.
+    'packages' => [
+        'audit-diagnostic-5' => ['tier' => 'diagnostic', 'name' => 'Diagnostic Report × 5', 'actions' => 5, 'unit_price' => 4900, 'price' => 23275, 'discount_percent' => 5, 'partner_unit_price' => 10000, 'is_popular' => false],
+        'audit-diagnostic-15' => ['tier' => 'diagnostic', 'name' => 'Diagnostic Report × 15', 'actions' => 15, 'unit_price' => 4900, 'price' => 66150, 'discount_percent' => 10, 'partner_unit_price' => 10000, 'is_popular' => false],
+        'audit-diagnostic-30' => ['tier' => 'diagnostic', 'name' => 'Diagnostic Report × 30', 'actions' => 30, 'unit_price' => 4900, 'price' => 117600, 'discount_percent' => 20, 'partner_unit_price' => 10000, 'is_popular' => false],
+        'audit-deep-ai-5' => ['tier' => 'deep_ai', 'name' => 'Deep AI Code Review × 5', 'actions' => 5, 'unit_price' => 11900, 'price' => 56525, 'discount_percent' => 5, 'partner_unit_price' => 25000, 'is_popular' => false],
+        'audit-deep-ai-15' => ['tier' => 'deep_ai', 'name' => 'Deep AI Code Review × 15', 'actions' => 15, 'unit_price' => 11900, 'price' => 160650, 'discount_percent' => 10, 'partner_unit_price' => 25000, 'is_popular' => false],
+        'audit-deep-ai-30' => ['tier' => 'deep_ai', 'name' => 'Deep AI Code Review × 30', 'actions' => 30, 'unit_price' => 11900, 'price' => 285600, 'discount_percent' => 20, 'partner_unit_price' => 25000, 'is_popular' => false],
+        'audit-expert-5' => ['tier' => 'expert', 'name' => 'Expert Audit × 5', 'actions' => 5, 'unit_price' => 99900, 'price' => 474525, 'discount_percent' => 5, 'partner_unit_price' => 170000, 'is_popular' => false],
+        'audit-expert-15' => ['tier' => 'expert', 'name' => 'Expert Audit × 15', 'actions' => 15, 'unit_price' => 99900, 'price' => 1348650, 'discount_percent' => 10, 'partner_unit_price' => 170000, 'is_popular' => false],
+        'audit-expert-30' => ['tier' => 'expert', 'name' => 'Expert Audit × 30', 'actions' => 30, 'unit_price' => 99900, 'price' => 2397600, 'discount_percent' => 20, 'partner_unit_price' => 170000, 'is_popular' => false],
     ],
 
     /**
@@ -119,8 +125,15 @@ return [
         // Diagnostic tier -- so the product is deactivated rather than
         // deleted, because orders referencing it still exist.
         'one_time' => ['audit-automated'],
-        // Starter and Growth reuse their old slugs at new prices; Scale has
-        // no successor and is the only plan genuinely orphaned by this catalog.
-        'plans' => ['audit-scale-monthly'],
+        // Starter/Growth/Agency/Enterprise were the subscription grid;
+        // Scale had no successor even before that. None have a package
+        // equivalent, so all five are retired.
+        'plans' => [
+            'audit-scale-monthly',
+            'audit-starter-monthly',
+            'audit-growth-monthly',
+            'audit-agency-monthly',
+            'audit-enterprise-monthly',
+        ],
     ],
 ];

@@ -18,7 +18,7 @@ class ExportPricingCommandTest extends FeatureTest
         $exported = json_decode((string) file_get_contents($this->target()), true);
 
         $this->assertArrayHasKey('audit-deep-ai', $exported['tiers']);
-        $this->assertArrayHasKey('audit-enterprise', $exported['subscriptions']);
+        $this->assertArrayHasKey('audit-diagnostic-5', $exported['packages']);
     }
 
     public function test_exports_prices_as_display_strings_and_cents(): void
@@ -31,7 +31,8 @@ class ExportPricingCommandTest extends FeatureTest
         // drifts from the figure the backend charges.
         $this->assertSame(11900, $exported['tiers']['audit-deep-ai']['price_cents']);
         $this->assertSame('$119', $exported['tiers']['audit-deep-ai']['price_display']);
-        $this->assertSame('$1,500', $exported['subscriptions']['audit-enterprise']['price_display']);
+        $this->assertSame('$23,976', $exported['packages']['audit-expert-30']['price_display']);
+        $this->assertSame('$232.75', $exported['packages']['audit-diagnostic-5']['price_display']);
     }
 
     public function test_check_mode_passes_when_the_committed_file_is_current(): void

@@ -6,8 +6,10 @@ import pricing from '~/data/pricing.json';
 
 const diagnosticTier = pricing.tiers['audit-diagnostic'];
 const deepAiTier = pricing.tiers['audit-deep-ai'];
-const starterPlan = pricing.subscriptions['audit-starter'];
-const enterprisePlan = pricing.subscriptions['audit-enterprise'];
+const packages = Object.values(pricing.packages);
+const cheapestPackage = packages.reduce((a, b) => (a.price_cents <= b.price_cents ? a : b));
+const fewestActions = Math.min(...packages.map((p) => p.actions));
+const mostActions = Math.max(...packages.map((p) => p.actions));
 
 const structuredData = {
   '@context': 'https://schema.org',
@@ -852,10 +854,10 @@ const hotspots = [
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015);"
           >
             <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">03</span> · monitor/</p>
-            <h3 class="fp-card-title">Track it — from {starterPlan.price_display}/mo</h3>
+            <h3 class="fp-card-title">Track it — from {cheapestPackage.price_display}/mo</h3>
             <p class="fp-card-body">
               Re-audit on a schedule, watch your health score trend as you ship, and catch new risks before they
-              compound. Plans include {starterPlan.diagnostic_credits} to {enterprisePlan.diagnostic_credits} audits a month.
+              compound. Packages include {fewestActions} to {mostActions} reports a month.
             </p>
           </div>
         </div>

@@ -39,41 +39,114 @@
             ]
         }
     },
-    "subscriptions": {
-        "audit-starter": {
-            "name": "Starter",
-            "price_cents": 5900,
-            "price_display": "$59",
-            "diagnostic_credits": 5,
-            "deep_ai_credits": 0,
-            "expert_credits": 0,
+    "subscriptions": [],
+    "packages": {
+        "audit-diagnostic-5": {
+            "name": "Diagnostic Report \u00d7 5",
+            "tier": "diagnostic",
+            "tier_name": "Diagnostic Report",
+            "actions": 5,
+            "unit_price_cents": 4900,
+            "price_cents": 23275,
+            "price_display": "$232.75",
+            "discount_percent": 5,
+            "headline": "CTOs, product owners, and business leaders who want to evaluate team efficiency and basic code health.",
             "is_popular": false
         },
-        "audit-growth": {
-            "name": "Growth",
-            "price_cents": 14900,
-            "price_display": "$149",
-            "diagnostic_credits": 20,
-            "deep_ai_credits": 1,
-            "expert_credits": 0,
-            "is_popular": true
-        },
-        "audit-agency": {
-            "name": "Agency",
-            "price_cents": 49900,
-            "price_display": "$499",
-            "diagnostic_credits": 75,
-            "deep_ai_credits": 4,
-            "expert_credits": 0,
+        "audit-diagnostic-15": {
+            "name": "Diagnostic Report \u00d7 15",
+            "tier": "diagnostic",
+            "tier_name": "Diagnostic Report",
+            "actions": 15,
+            "unit_price_cents": 4900,
+            "price_cents": 66150,
+            "price_display": "$661.50",
+            "discount_percent": 10,
+            "headline": "CTOs, product owners, and business leaders who want to evaluate team efficiency and basic code health.",
             "is_popular": false
         },
-        "audit-enterprise": {
-            "name": "Enterprise",
-            "price_cents": 150000,
-            "price_display": "$1,500",
-            "diagnostic_credits": 250,
-            "deep_ai_credits": 15,
-            "expert_credits": 0,
+        "audit-diagnostic-30": {
+            "name": "Diagnostic Report \u00d7 30",
+            "tier": "diagnostic",
+            "tier_name": "Diagnostic Report",
+            "actions": 30,
+            "unit_price_cents": 4900,
+            "price_cents": 117600,
+            "price_display": "$1,176",
+            "discount_percent": 20,
+            "headline": "CTOs, product owners, and business leaders who want to evaluate team efficiency and basic code health.",
+            "is_popular": false
+        },
+        "audit-deep-ai-5": {
+            "name": "Deep AI Code Review \u00d7 5",
+            "tier": "deep_ai",
+            "tier_name": "Deep AI Code Review",
+            "actions": 5,
+            "unit_price_cents": 11900,
+            "price_cents": 56525,
+            "price_display": "$565.25",
+            "discount_percent": 5,
+            "headline": "Small, medium-sized, and large development teams that want to verify code health without paying for a full manual QA review.",
+            "is_popular": false
+        },
+        "audit-deep-ai-15": {
+            "name": "Deep AI Code Review \u00d7 15",
+            "tier": "deep_ai",
+            "tier_name": "Deep AI Code Review",
+            "actions": 15,
+            "unit_price_cents": 11900,
+            "price_cents": 160650,
+            "price_display": "$1,606.50",
+            "discount_percent": 10,
+            "headline": "Small, medium-sized, and large development teams that want to verify code health without paying for a full manual QA review.",
+            "is_popular": false
+        },
+        "audit-deep-ai-30": {
+            "name": "Deep AI Code Review \u00d7 30",
+            "tier": "deep_ai",
+            "tier_name": "Deep AI Code Review",
+            "actions": 30,
+            "unit_price_cents": 11900,
+            "price_cents": 285600,
+            "price_display": "$2,856",
+            "discount_percent": 20,
+            "headline": "Small, medium-sized, and large development teams that want to verify code health without paying for a full manual QA review.",
+            "is_popular": false
+        },
+        "audit-expert-5": {
+            "name": "Expert Audit \u00d7 5",
+            "tier": "expert",
+            "tier_name": "Expert Audit",
+            "actions": 5,
+            "unit_price_cents": 99900,
+            "price_cents": 474525,
+            "price_display": "$4,745.25",
+            "discount_percent": 5,
+            "headline": "Product companies that outsource development and need both a code-health assessment and support from a human expert.",
+            "is_popular": false
+        },
+        "audit-expert-15": {
+            "name": "Expert Audit \u00d7 15",
+            "tier": "expert",
+            "tier_name": "Expert Audit",
+            "actions": 15,
+            "unit_price_cents": 99900,
+            "price_cents": 1348650,
+            "price_display": "$13,486.50",
+            "discount_percent": 10,
+            "headline": "Product companies that outsource development and need both a code-health assessment and support from a human expert.",
+            "is_popular": false
+        },
+        "audit-expert-30": {
+            "name": "Expert Audit \u00d7 30",
+            "tier": "expert",
+            "tier_name": "Expert Audit",
+            "actions": 30,
+            "unit_price_cents": 99900,
+            "price_cents": 2397600,
+            "price_display": "$23,976",
+            "discount_percent": 20,
+            "headline": "Product companies that outsource development and need both a code-health assessment and support from a human expert.",
             "is_popular": false
         }
     }

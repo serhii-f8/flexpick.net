@@ -139,6 +139,7 @@ class AuditMonetizationSeeder extends Seeder
                 ['feature' => '10 Expert Audit credits / month'],
             ],
             'metadata' => [
+                'enables_reseller_program' => true,
                 'audit_diagnostic_credits' => 100,
                 'audit_deep_ai_credits' => 50,
                 'audit_expert_credits' => 10,

@@ -5,8 +5,10 @@ namespace Tests\Feature\Seeders;
 use App\Constants\AuditTier;
 use App\Constants\SubscriptionStatus;
 use App\Models\AuditRequest;
+use App\Models\Currency;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
+use App\Models\PlanPrice;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\AuditReport\AuditEntitlementService;
@@ -66,8 +68,14 @@ class AuditDemoSeederTest extends FeatureTest
         $user = User::where('email', AuditDemoSeeder::EMAIL)->firstOrFail();
         $tenant = $user->tenants()->firstOrFail();
 
-        $growthPlan = Plan::where('slug', 'audit-growth-monthly')->firstOrFail();
-        $price = $growthPlan->prices()->firstOrFail();
+        // Any plan other than Partner will do -- the old Growth subscription
+        // grid is retired (config('pricing.subscriptions') is now empty), so
+        // a factory-made plan stands in for "whatever plan this account used
+        // to be on" rather than depending on a slug that no longer seeds.
+        $growthPlan = Plan::factory()->create();
+        $price = PlanPrice::factory()->for($growthPlan, 'plan')->create([
+            'currency_id' => Currency::where('code', config('pricing.currency'))->firstOrFail()->id,
+        ]);
         $stripe = PaymentProvider::where('slug', 'stripe')->firstOrFail();
 
         $user->subscriptions()->create([
