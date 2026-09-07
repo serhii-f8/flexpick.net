@@ -72,6 +72,7 @@ class DashboardPanelProvider extends PanelProvider
             ->defaultThemeMode(ThemeMode::Dark)
             ->font('DM Sans')
             ->sidebarCollapsibleOnDesktop()
+            ->databaseNotifications()
             ->maxContentWidth(Width::SevenExtraLarge)
             ->userMenuItems([
                 Action::make('admin-panel')

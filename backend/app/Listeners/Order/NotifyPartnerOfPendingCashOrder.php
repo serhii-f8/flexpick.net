@@ -7,6 +7,7 @@ use App\Events\Order\OrderedOffline;
 use App\Mail\CashPayments\PartnerNewPendingOrder;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Notifications\PartnerNewOrder;
 use App\Services\CashPayments\OrderApprovalService;
 use App\Services\Mail\RenderSafeMailer;
 use App\Services\TenantPermissionService;
@@ -45,6 +46,7 @@ class NotifyPartnerOfPendingCashOrder implements ShouldQueue
         foreach ($recipients as $recipient) {
             /** @var User $recipient */
             $this->mailer->send(new PartnerNewPendingOrder($event->order, $amountDue), $recipient->email);
+            $recipient->notify(new PartnerNewOrder($event->order, $partnerTenant, $amountDue));
         }
     }
 }

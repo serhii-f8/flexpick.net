@@ -17,9 +17,11 @@ use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Notifications\PartnerNewOrder;
 use App\Services\CashPayments\OrderApprovalService;
 use App\Services\OrderService;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Tests\Feature\FeatureTest;
 
 class CashPaymentMailTest extends FeatureTest
@@ -135,5 +137,35 @@ class CashPaymentMailTest extends FeatureTest
         $service->approve($order, OrderApprovalActor::PARTNER, User::factory()->create());
 
         Mail::assertQueued(CustomerOrderApproved::class, 1);
+    }
+
+    public function test_the_partner_also_gets_an_in_app_notification(): void
+    {
+        Mail::fake();
+        Notification::fake();
+
+        $partnerTenant = $this->activePartnerTenant();
+        $partnerUser = $this->createUser($partnerTenant, [TenancyPermissionConstants::PERMISSION_MANAGE_PARTNER_ORDERS]);
+        $bystander = $this->createUser($partnerTenant, []);
+        $customerTenant = $this->createTenant();
+        $customer = $this->createUser($customerTenant);
+
+        app(OrderService::class)->create(
+            $customer,
+            $customerTenant,
+            totalAmount: 6900,
+            currency: Currency::where('code', 'USD')->first(),
+            isLocal: true,
+            snapshot: ['partner_tenant_id' => $partnerTenant->id, 'base_price_snapshot' => 4900],
+        );
+
+        Notification::assertSentTo($partnerUser, PartnerNewOrder::class, function (PartnerNewOrder $notification, array $channels) use ($partnerUser) {
+            $data = $notification->toDatabase($partnerUser);
+
+            return $channels === ['database']
+                && str_contains($data['body'], (string) money(6900, 'USD'))
+                && str_contains(json_encode($data), 'partner-orders');
+        });
+        Notification::assertNotSentTo($bystander, PartnerNewOrder::class);
     }
 }
