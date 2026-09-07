@@ -4,10 +4,14 @@ namespace Tests\Feature\Referral;
 
 use App\Constants\ReferralConstants;
 use App\Constants\SessionConstants;
+use App\Constants\SubscriptionStatus;
 use App\Events\Referral\ReferralSucceeded;
 use App\Mail\Referral\ReferralRewardEarned;
 use App\Models\Discount;
+use App\Models\Plan;
+use App\Models\Product;
 use App\Models\Referral;
+use App\Models\ReferralReward;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\Transaction;
@@ -340,5 +344,61 @@ class ReferralFlowTest extends FeatureTest
 
         $this->assertEquals(4, $stats['total_referrals']);
         $this->assertEquals(1, $stats['rewarded_referrals']);
+    }
+
+    public function test_a_partner_attributed_referral_is_recorded_but_never_rewarded(): void
+    {
+        Mail::fake();
+        config([
+            'app.referral.enabled' => true,
+            'app.referral.trigger' => ReferralConstants::TRIGGER_VERIFIED_REGISTRATION,
+            'app.referral.reward_type' => ReferralConstants::REWARD_TYPE_CUSTOM_EVENT,
+        ]);
+        Event::fake([ReferralSucceeded::class]);
+
+        $partnerTenant = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        Subscription::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => Plan::factory()->create(['product_id' => $product->id])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+        $referrer = $this->createUser($partnerTenant);
+        $referralService = app(ReferralService::class);
+        $code = $referralService->getOrCreateReferralCode($referrer)->code;
+
+        $referred = User::factory()->create(['partner_tenant_id' => $partnerTenant->id, 'partner_attributed_at' => now()]);
+        $referral = $referralService->trackReferral($referred, $code);
+        $this->assertNotNull($referral, 'the partner still sees the referral in My Referrals');
+
+        $referralService->processVerifiedRegistration($referred);
+
+        $this->assertSame(ReferralConstants::STATUS_VERIFIED, $referral->fresh()->status);
+        $this->assertNull($referral->fresh()->rewarded_at);
+        $this->assertSame(0, ReferralReward::where('referral_id', $referral->id)->count());
+        Event::assertNotDispatched(ReferralSucceeded::class);
+    }
+
+    public function test_a_direct_referral_is_still_rewarded(): void
+    {
+        Mail::fake();
+        config([
+            'app.referral.enabled' => true,
+            'app.referral.trigger' => ReferralConstants::TRIGGER_VERIFIED_REGISTRATION,
+            'app.referral.reward_type' => ReferralConstants::REWARD_TYPE_CUSTOM_EVENT,
+        ]);
+        Event::fake([ReferralSucceeded::class]);
+
+        $referrer = User::factory()->create();
+        $referralService = app(ReferralService::class);
+        $code = $referralService->getOrCreateReferralCode($referrer)->code;
+        $referred = User::factory()->create();
+        $referral = $referralService->trackReferral($referred, $code);
+
+        $referralService->processVerifiedRegistration($referred);
+
+        $this->assertSame(ReferralConstants::STATUS_REWARDED, $referral->fresh()->status);
+        Event::assertDispatched(ReferralSucceeded::class);
     }
 }

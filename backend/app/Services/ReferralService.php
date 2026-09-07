@@ -189,6 +189,13 @@ class ReferralService
 
     private function processReward(Referral $referral): void
     {
+        // A partner's referral is paid through their margin, never a coupon
+        // (spec §3.6). The Referral row stays so My Referrals lists the
+        // customer; it simply never reaches `rewarded`.
+        if ($referral->referredUser?->partner_tenant_id !== null) {
+            return;
+        }
+
         $rewardType = config('app.referral.reward_type');
 
         if ($rewardType === ReferralConstants::REWARD_TYPE_COUPON) {
