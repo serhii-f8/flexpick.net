@@ -1,0 +1,129 @@
+<?php
+
+namespace App\Livewire\Filament\Dashboard;
+
+use App\Exceptions\PartnerOfferingValidationException;
+use App\Models\Plan;
+use App\Services\CurrencyService;
+use App\Services\PartnerCatalogService;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
+use Filament\Facades\Filament;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
+use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
+use Livewire\Component;
+
+class PartnerPlanPricingTable extends Component implements HasActions, HasForms, HasTable
+{
+    use InteractsWithActions;
+    use InteractsWithForms;
+    use InteractsWithTable;
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(fn (): Builder => Plan::query()
+                ->where('is_visible', true)
+                ->where('is_active', true)
+                ->whereHas('prices', fn (Builder $query): Builder => $query->where('currency_id', app(CurrencyService::class)->getCurrency()->id))
+                ->with('product'))
+            ->columns([
+                TextColumn::make('product.name')->label(__('Package')),
+                TextColumn::make('platform_price')
+                    ->label(__('Platform price'))
+                    ->getStateUsing(fn (Plan $record): string => $this->money($this->catalog()->planBasePrice($record))),
+                TextColumn::make('your_price')
+                    ->label(__('Your price'))
+                    ->getStateUsing(function (Plan $record): string {
+                        $offering = $this->catalog()->planOfferingFor(Filament::getTenant(), $record);
+
+                        return $offering === null ? __('Not set') : $this->money((int) $offering->price);
+                    }),
+                TextColumn::make('margin')
+                    ->label(__('Margin'))
+                    ->getStateUsing(function (Plan $record): string {
+                        $offering = $this->catalog()->planOfferingFor(Filament::getTenant(), $record);
+
+                        return $offering === null ? '—' : $this->money((int) $offering->price - $this->catalog()->planBasePrice($record));
+                    }),
+                TextColumn::make('offering_status')
+                    ->label(__('Status'))
+                    ->badge()
+                    ->getStateUsing(function (Plan $record): string {
+                        $offering = $this->catalog()->planOfferingFor(Filament::getTenant(), $record);
+
+                        return match (true) {
+                            $offering === null, ! $offering->is_enabled => __('Disabled'),
+                            $this->catalog()->isPlanOfferingBelowMinimum($offering) => __('Below minimum'),
+                            default => __('Enabled'),
+                        };
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        __('Enabled') => 'success',
+                        __('Below minimum') => 'danger',
+                        default => 'gray',
+                    }),
+            ])
+            ->recordActions([
+                Action::make('set-price')
+                    ->label(__('Set price'))
+                    ->icon('heroicon-m-pencil-square')
+                    ->schema(fn (Plan $record): array => [
+                        TextInput::make('price')
+                            ->label(__('Your price'))
+                            ->prefix('$')
+                            ->numeric()
+                            ->step(0.01)
+                            ->minValue(0)
+                            ->required()
+                            ->default($this->catalog()->suggestedPlanPrice(Filament::getTenant(), $record) / 100)
+                            ->helperText(__('Platform price: :price. Your price cannot go below it.', ['price' => $this->money($this->catalog()->planBasePrice($record))])),
+                        Toggle::make('is_enabled')
+                            ->label(__('Resell this package'))
+                            ->default($this->catalog()->planOfferingFor(Filament::getTenant(), $record)?->is_enabled ?? true),
+                    ])
+                    ->action(function (array $data, Plan $record): void {
+                        try {
+                            $this->catalog()->setPlanOffering(
+                                Filament::getTenant(),
+                                $record,
+                                (int) round(((float) $data['price']) * 100),
+                                [],
+                                (bool) $data['is_enabled'],
+                            );
+                        } catch (PartnerOfferingValidationException $e) {
+                            Notification::make()->danger()->title(__('Could not save offering'))->body($e->getMessage())->persistent()->send();
+
+                            return;
+                        }
+
+                        Notification::make()->success()->title(__('Price saved'))->send();
+                    }),
+            ]);
+    }
+
+    public function render(): View
+    {
+        return view('livewire.filament.dashboard.partner-pricing-table');
+    }
+
+    private function catalog(): PartnerCatalogService
+    {
+        return app(PartnerCatalogService::class);
+    }
+
+    private function money(int $cents): string
+    {
+        return (string) money($cents, app(CurrencyService::class)->getCurrency()->code);
+    }
+}

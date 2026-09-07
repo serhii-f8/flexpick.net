@@ -6,6 +6,7 @@ use App\Constants\SubscriptionStatus;
 use App\Constants\TenancyPermissionConstants;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Filament\Dashboard\Pages\Dashboard;
+use App\Filament\Dashboard\Pages\PartnerPricingSettings;
 use App\Filament\Dashboard\Pages\Users;
 use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Filament\Dashboard\Resources\Invitations\InvitationResource;
@@ -197,7 +198,7 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $navigation = $this->renderedNavigation();
 
-        $this->assertSame(['Referrals'], $navigation['Partner'] ?? []);
+        $this->assertSame(['Referrals', 'Pricing Settings'], $navigation['Partner'] ?? []);
         $this->assertSame(['Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
     }
 
@@ -207,5 +208,12 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $this->get(ReferralResource::getUrl(tenant: $tenant))->assertSuccessful();
         $this->get(ReferralResource::getUrl(tenant: $tenant))->assertSee(__('Customers who sign up through this link buy at your prices.'));
+    }
+
+    public function test_each_partner_menu_item_page_loads(): void
+    {
+        [, $tenant] = $this->partnerUserAndTenant();
+
+        $this->get(PartnerPricingSettings::getUrl(tenant: $tenant))->assertSuccessful();
     }
 }

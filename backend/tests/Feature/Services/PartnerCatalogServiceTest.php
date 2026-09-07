@@ -10,6 +10,7 @@ use App\Models\PartnerProductOffering;
 use App\Models\Plan;
 use App\Models\PlanPrice;
 use App\Models\Product;
+use App\Services\CurrencyService;
 use App\Services\PartnerCatalogService;
 use Tests\Feature\FeatureTest;
 
@@ -261,5 +262,31 @@ class PartnerCatalogServiceTest extends FeatureTest
         OneTimeProductPrice::where('one_time_product_id', $product->id)->update(['price' => 3000]);
 
         $this->assertTrue(app(PartnerCatalogService::class)->isProductOfferingBelowMinimum($offering->fresh()));
+    }
+
+    public function test_suggested_plan_price_prefers_offering_then_metadata_then_base(): void
+    {
+        $tenant = $this->createTenant();
+        $product = Product::factory()->create(['metadata' => ['partner_suggested_price' => 47500]]);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        $plan->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 23275]);
+        $service = app(PartnerCatalogService::class);
+
+        $this->assertSame(47500, $service->suggestedPlanPrice($tenant, $plan));
+
+        $product->update(['metadata' => []]);
+        $this->assertSame(23275, $service->suggestedPlanPrice($tenant, $plan->fresh()));
+
+        $service->setPlanOffering($tenant, $plan->fresh(), 30000, [], true);
+        $this->assertSame(30000, $service->suggestedPlanPrice($tenant, $plan->fresh()));
+    }
+
+    public function test_suggested_product_price_falls_back_to_base(): void
+    {
+        $tenant = $this->createTenant();
+        $product = OneTimeProduct::factory()->create(['metadata' => []]);
+        $product->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 4900]);
+
+        $this->assertSame(4900, app(PartnerCatalogService::class)->suggestedProductPrice($tenant, $product));
     }
 }

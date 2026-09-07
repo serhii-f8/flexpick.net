@@ -108,6 +108,47 @@ class PartnerCatalogService
         }
     }
 
+    public function planOfferingFor(Tenant $tenant, Plan $plan): ?PartnerPlanOffering
+    {
+        return PartnerPlanOffering::where('tenant_id', $tenant->id)->where('plan_id', $plan->id)->first();
+    }
+
+    public function productOfferingFor(Tenant $tenant, OneTimeProduct $product): ?PartnerProductOffering
+    {
+        return PartnerProductOffering::where('tenant_id', $tenant->id)->where('one_time_product_id', $product->id)->first();
+    }
+
+    /**
+     * The price the Pricing Settings form opens with (spec §7): what the
+     * partner already set, else the catalog's suggested selling price, else
+     * the platform price itself.
+     */
+    public function suggestedPlanPrice(Tenant $tenant, Plan $plan): int
+    {
+        $offering = $this->planOfferingFor($tenant, $plan);
+
+        if ($offering !== null) {
+            return (int) $offering->price;
+        }
+
+        $suggested = data_get($plan->product?->metadata, 'partner_suggested_price');
+
+        return is_numeric($suggested) ? (int) $suggested : $this->planBasePrice($plan);
+    }
+
+    public function suggestedProductPrice(Tenant $tenant, OneTimeProduct $product): int
+    {
+        $offering = $this->productOfferingFor($tenant, $product);
+
+        if ($offering !== null) {
+            return (int) $offering->price;
+        }
+
+        $suggested = data_get($product->metadata, 'partner_suggested_price');
+
+        return is_numeric($suggested) ? (int) $suggested : $this->productBasePrice($product);
+    }
+
     public function isPlanOfferingBelowMinimum(PartnerPlanOffering $offering): bool
     {
         /** @var Plan $plan */
