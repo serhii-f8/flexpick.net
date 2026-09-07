@@ -7,7 +7,10 @@ use App\Constants\PlanPriceTierConstants;
 use App\Constants\PlanPriceType;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
+use App\Models\OneTimeProduct;
+use App\Models\OneTimeProductPrice;
 use App\Models\PartnerPlanOffering;
+use App\Models\PartnerProductOffering;
 use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\PlanPrice;
@@ -273,5 +276,58 @@ class PricingPageTest extends FeatureTest
 
         $response->assertDontSee('Unconfigured Product');
         $response->assertSee(__('Nothing available yet — check back soon.'));
+    }
+
+    public function test_an_attributed_customer_sees_only_the_partners_enabled_products(): void
+    {
+        $partnerTenant = $this->createTenant();
+        $partnerProduct = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        Subscription::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => Plan::factory()->create(['product_id' => $partnerProduct->id])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
+        app(PartnerPricingResolver::class)->flush();
+
+        $enabledOneTimeProduct = OneTimeProduct::factory()->create([
+            'name' => 'Enabled One-Time Package',
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        OneTimeProductPrice::factory()->create([
+            'one_time_product_id' => $enabledOneTimeProduct->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => 4900,
+        ]);
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $enabledOneTimeProduct->id,
+            'price' => 7900,
+            'is_enabled' => true,
+        ]);
+
+        $notConfiguredOneTimeProduct = OneTimeProduct::factory()->create([
+            'name' => 'Not Configured One-Time Package',
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+        OneTimeProductPrice::factory()->create([
+            'one_time_product_id' => $notConfiguredOneTimeProduct->id,
+            'currency_id' => app(CurrencyService::class)->getCurrency()->id,
+            'price' => 5900,
+        ]);
+
+        $customer = $this->createUser(null, [], [
+            'partner_tenant_id' => $partnerTenant->id,
+            'partner_attributed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($customer)->get(route('pricing'));
+
+        $response->assertSee('Enabled One-Time Package');
+        $response->assertDontSee('Not Configured One-Time Package');
     }
 }

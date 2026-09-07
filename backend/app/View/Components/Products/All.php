@@ -29,8 +29,11 @@ class All extends Component
     {
         $products = $this->productService->getAllProductsWithPrices($this->sortBy, $this->sortDirection, true);
 
+        $products = $this->partnerPricingResolver->decorateProducts($products, auth()->user());
+        $products = $this->partnerPricingResolver->purchasableProducts($products, auth()->user());
+
         return [
-            'products' => $this->partnerPricingResolver->decorateProducts($products, auth()->user()),
+            'products' => $products,
         ];
     }
 }
