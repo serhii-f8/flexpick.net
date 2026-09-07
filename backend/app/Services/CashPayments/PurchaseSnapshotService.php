@@ -38,6 +38,12 @@ class PurchaseSnapshotService
     }
 
     /**
+     * partner_tenant_id names the partner responsible for this buyer (spec §8.2):
+     * their active partner tenant whether or not a usable offering priced the
+     * item. Price and quota still come from the offering only when one is usable,
+     * so a base-priced sale stays base-priced — it is simply the partner, not an
+     * admin, who confirms the cash for it.
+     *
      * @return array{partner_tenant_id: int|null, base_price_snapshot: int|null, quota_snapshot: array<string, mixed>}
      */
     public function forPlan(User $user, Plan $plan): array
@@ -48,13 +54,19 @@ class PurchaseSnapshotService
         $offering = $this->pricingResolver->usablePlanOffering($user, $plan);
 
         return [
-            'partner_tenant_id' => $offering?->tenant_id,
+            'partner_tenant_id' => $this->partnerTenantFor($user)?->id,
             'base_price_snapshot' => $this->basePriceOrNull(fn (): int => $this->catalogService->planBasePrice($plan)),
             'quota_snapshot' => (array) ($offering->quota_overrides ?? []) + $baseMetadata,
         ];
     }
 
     /**
+     * partner_tenant_id names the partner responsible for this buyer (spec §8.2):
+     * their active partner tenant whether or not a usable offering priced the
+     * item. Price and quota still come from the offering only when one is usable,
+     * so a base-priced sale stays base-priced — it is simply the partner, not an
+     * admin, who confirms the cash for it.
+     *
      * @return array{partner_tenant_id: int|null, base_price_snapshot: int|null, quota_snapshot: array<string, mixed>}
      */
     public function forProduct(User $user, OneTimeProduct $product): array
@@ -63,7 +75,7 @@ class PurchaseSnapshotService
         $offering = $this->pricingResolver->usableProductOffering($user, $product);
 
         return [
-            'partner_tenant_id' => $offering?->tenant_id,
+            'partner_tenant_id' => $this->partnerTenantFor($user)?->id,
             'base_price_snapshot' => $this->basePriceOrNull(fn (): int => $this->catalogService->productBasePrice($product)),
             'quota_snapshot' => (array) ($offering->quota_overrides ?? []) + $baseMetadata,
         ];

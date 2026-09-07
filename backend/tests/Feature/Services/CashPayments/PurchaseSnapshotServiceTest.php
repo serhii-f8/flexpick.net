@@ -109,7 +109,7 @@ class PurchaseSnapshotServiceTest extends FeatureTest
         );
     }
 
-    public function test_a_disabled_offering_makes_it_a_direct_sale(): void
+    public function test_a_disabled_offering_still_stamps_the_partner_at_base_quota(): void
     {
         $partnerTenant = $this->activePartnerTenant();
         [$plan] = $this->sellablePlan();
@@ -125,11 +125,11 @@ class PurchaseSnapshotServiceTest extends FeatureTest
 
         $snapshot = app(PurchaseSnapshotService::class)->forPlan($user, $plan);
 
-        $this->assertNull($snapshot['partner_tenant_id']);
+        $this->assertSame($partnerTenant->id, $snapshot['partner_tenant_id']);
         $this->assertSame(['audit_diagnostic_credits' => 10], $snapshot['quota_snapshot']);
     }
 
-    public function test_an_offering_that_fell_below_the_admin_minimum_makes_it_a_direct_sale(): void
+    public function test_an_offering_that_fell_below_the_admin_minimum_still_stamps_the_partner(): void
     {
         $partnerTenant = $this->activePartnerTenant();
         [$plan, $product] = $this->sellablePlan();
@@ -148,7 +148,7 @@ class PurchaseSnapshotServiceTest extends FeatureTest
 
         $snapshot = app(PurchaseSnapshotService::class)->forPlan($user, $plan);
 
-        $this->assertNull($snapshot['partner_tenant_id']);
+        $this->assertSame($partnerTenant->id, $snapshot['partner_tenant_id']);
         $this->assertSame(['audit_diagnostic_credits' => 20], $snapshot['quota_snapshot']);
     }
 
@@ -212,14 +212,17 @@ class PurchaseSnapshotServiceTest extends FeatureTest
         $this->assertSame([], $snapshot['quota_snapshot']);
     }
 
-    public function test_no_partner_is_stamped_when_the_offline_provider_is_inactive(): void
+    public function test_the_partner_is_stamped_even_when_the_offline_provider_is_inactive(): void
     {
         // Otherwise the same arrangement as
         // test_an_attributed_buyer_gets_the_partners_quota_overrides_merged_over_base
         // in this file — an active partner tenant with an enabled, above-minimum
         // offering — except the Offline provider (the only way a partner price
-        // can be charged) is explicitly left/switched off, which the offering
-        // alone would otherwise make usable.
+        // can be charged) is explicitly left/switched off, which would otherwise
+        // make the offering's price usable. The offering can't price the sale,
+        // but the partner is still stamped: the stamp is informational for a
+        // gateway order — it names who is responsible for this buyer, not who
+        // set the price (spec §8.2).
         $partnerTenant = $this->activePartnerTenant();
         [$plan] = $this->sellablePlan(4900, ['audit_diagnostic_credits' => 10, 'audit_deep_ai_credits' => 2]);
         $user = User::factory()->create(['partner_tenant_id' => $partnerTenant->id, 'partner_attributed_at' => now()]);
@@ -238,7 +241,7 @@ class PurchaseSnapshotServiceTest extends FeatureTest
 
         $snapshot = app(PurchaseSnapshotService::class)->forPlan($user, $plan);
 
-        $this->assertNull($snapshot['partner_tenant_id']);
+        $this->assertSame($partnerTenant->id, $snapshot['partner_tenant_id']);
         // The base snapshot is still written — it is written for every purchase,
         // partner-attributed or not (spec §6.2).
         $this->assertNotNull($snapshot['base_price_snapshot']);

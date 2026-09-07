@@ -247,7 +247,8 @@ class PartnerPlanCashCheckoutTest extends FeatureTest
 
         $this->assertSame($subscription->id, $reused->id);
         $this->assertSame(4900, (int) $reused->fresh()->price);
-        $this->assertNull($reused->fresh()->partner_tenant_id);
+        // Base-priced, but still the partner's customer (spec §8.2).
+        $this->assertSame($partnerTenant->id, $reused->fresh()->partner_tenant_id);
     }
 
     /**
