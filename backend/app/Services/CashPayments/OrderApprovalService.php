@@ -148,11 +148,23 @@ class OrderApprovalService
      * qualifies. Gating on isPendingCashOrder() (not the bare status) keeps
      * this service inside its own domain — a gateway order that happens to be
      * PENDING is not this service's to complete or reject.
+     *
+     * withoutGlobalScope() is required here: a partner acting on a referred
+     * customer's order is inherently cross-tenant (the order's tenant_id is
+     * the customer's, not the partner's), but OrderResource -- the
+     * tenant-scoped customer-facing resource sharing this same Order model
+     * -- registers a global scope on Order keyed to whichever tenant is
+     * currently active in Filament (the partner, here). Without stripping
+     * it, this query silently returns null for every partner approval,
+     * which reads as a harmless "no longer pending" no-op while the DB
+     * never changes. A no-op call outside any Filament panel context is
+     * safe: Eloquent ignores an unregistered scope name.
      */
     private function lockIfPending(Order $order): ?Order
     {
         /** @var Order|null $locked */
-        $locked = Order::whereKey($order->getKey())->lockForUpdate()->first();
+        $locked = Order::withoutGlobalScope(filament()->getTenancyScopeName())
+            ->whereKey($order->getKey())->lockForUpdate()->first();
 
         if ($locked === null || ! $this->isPendingCashOrder($locked)) {
             return null;
@@ -169,6 +181,10 @@ class OrderApprovalService
      * subscription (e.g. two renewals approved back to back) would each read
      * the same ends_at and the second write would silently overwrite the
      * first, losing a paid cycle.
+     *
+     * withoutGlobalScope() for the same cross-tenant reason as
+     * lockIfPending(): the subscription being renewed belongs to the
+     * customer's tenant, not the acting partner's.
      */
     private function lockSubscriptionForOrder(Order $order): ?Subscription
     {
@@ -177,7 +193,8 @@ class OrderApprovalService
         }
 
         /** @var Subscription|null $subscription */
-        $subscription = Subscription::whereKey($order->subscription_id)->lockForUpdate()->first();
+        $subscription = Subscription::withoutGlobalScope(filament()->getTenancyScopeName())
+            ->whereKey($order->subscription_id)->lockForUpdate()->first();
 
         return $subscription;
     }

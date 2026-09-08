@@ -9,6 +9,8 @@ use App\Constants\OrderType;
 use App\Constants\PaymentProviderConstants;
 use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
+use App\Constants\TenancyPermissionConstants;
+use App\Filament\Dashboard\Resources\Orders\OrderResource;
 use App\Models\Currency;
 use App\Models\Order;
 use App\Models\OrderApproval;
@@ -19,6 +21,7 @@ use App\Models\Subscription;
 use App\Services\CashPayments\CashSubscriptionService;
 use App\Services\CashPayments\OrderApprovalService;
 use Carbon\Carbon;
+use Filament\Facades\Filament;
 use Tests\Feature\FeatureTest;
 
 class OrderApprovalServiceTest extends FeatureTest
@@ -85,6 +88,60 @@ class OrderApprovalServiceTest extends FeatureTest
         $this->assertSame(OrderApprovalDecision::APPROVED->value, $approval->decision);
         $this->assertSame('Cash received.', $approval->note);
         $this->assertNotNull($approval->decided_at);
+    }
+
+    /**
+     * Reproduces a real partner-orders click, not just a bare service call.
+     * On a genuine HTTP request Panel::boot() registers a global scope on
+     * Order (and Subscription) keyed to whichever tenant OrderResource --
+     * the tenant-scoped customer-facing resource -- currently has active
+     * (Filament\Resources\Resource\Concerns\BelongsToTenant::registerTenancyModelGlobalScope()).
+     * PartnerOrderResource opts out of that scope for its own listing query
+     * (Filament's Resource::getEloquentQuery() strips it when
+     * $isScopedToTenant is false), but OrderApprovalService builds its own
+     * fresh Order/Subscription queries in lockIfPending() and
+     * lockSubscriptionForOrder() -- outside any resource's scoped query --
+     * so they silently inherit the scope. Filament::setTenant() alone
+     * (what every other test in this suite does) never registers that
+     * scope, which is why this bug shipped past a green suite: it has to
+     * be registered explicitly here to reproduce it.
+     */
+    public function test_approve_as_partner_succeeds_while_the_dashboard_tenancy_scope_is_active_for_the_partner(): void
+    {
+        $partner = $this->createTenant();
+        Subscription::factory()->create([
+            'tenant_id' => $partner->id,
+            'plan_id' => Plan::factory()->create([
+                'product_id' => Product::factory()->create(['metadata' => ['enables_reseller_program' => true]])->id,
+            ])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+        $partnerUser = $this->createUser($partner, [TenancyPermissionConstants::PERMISSION_MANAGE_PARTNER_ORDERS]);
+
+        // The order belongs to the referred customer's own tenant, not the
+        // partner's -- exactly like a real partner-attributed purchase.
+        $customerTenant = $this->createTenant();
+        $order = Order::factory()->create([
+            'user_id' => $this->createUser($customerTenant)->id,
+            'tenant_id' => $customerTenant->id,
+            'partner_tenant_id' => $partner->id,
+            'status' => OrderStatus::PENDING->value,
+            'is_local' => true,
+            'total_amount' => 5900,
+            'base_price_snapshot' => 4900,
+        ]);
+
+        $this->actingAs($partnerUser);
+        $panel = Filament::getPanel('dashboard');
+        OrderResource::registerTenancyModelGlobalScope($panel);
+        Filament::setCurrentPanel($panel);
+        Filament::setTenant($partner);
+
+        $this->assertTrue(
+            app(OrderApprovalService::class)->approveAsPartner($order, $partnerUser, $partner),
+        );
+        $this->assertSame(OrderStatus::SUCCESS->value, $order->fresh()->status);
     }
 
     public function test_a_second_approval_is_a_silent_no_op(): void
