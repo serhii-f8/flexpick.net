@@ -75,6 +75,10 @@ class DashboardPanelProvider extends PanelProvider
             ->databaseNotifications()
             ->maxContentWidth(Width::SevenExtraLarge)
             ->userMenuItems([
+                Action::make('buy-more')
+                    ->label(__('Buy More / Upgrade'))
+                    ->icon('heroicon-s-shopping-cart')
+                    ->url(fn () => route('pricing')),
                 Action::make('admin-panel')
                     ->label(__('Admin Panel'))
                     ->visible(
