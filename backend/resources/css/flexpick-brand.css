@@ -470,6 +470,22 @@ html.fi:not(.dark) {
 
 .fp-current-strip strong { font-weight: 600; }
 
+/* Generic warning notice (public pricing). */
+.fp-notice-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    max-width: 48rem;
+    margin: 0 auto 2rem;
+    padding: 0.875rem 1.125rem;
+    border-radius: 10px;
+    border: 1px solid rgba(201, 138, 59, 0.35);
+    border-inline-start-width: 3px;
+    background: rgba(201, 138, 59, 0.08);
+    font-size: 0.875rem;
+    line-height: 1.55;
+}
+
 /* Pricing page structure. */
 .fp-pricing {
     max-width: 1140px;

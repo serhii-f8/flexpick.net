@@ -8,6 +8,15 @@
         <p class="m-0">{{ __('Nothing available yet — check back soon.') }}</p>
     </div>
 @else
+@isset($warnBeforePlanPurchase)
+    <div class="fp-notice-warning">
+        <x-fp.status-dot color="warning" class="mt-1.5" />
+        <p class="m-0">
+            <strong>{{ __('Buying a plan here starts a brand-new workspace.') }}</strong>
+            {{ __("Your current plan is managed by your partner and can't be changed from here — contact them to upgrade it instead. This page is still fine for one-time report packages.") }}
+        </p>
+    </div>
+@endisset
 @if (count($groupedPlans) === 0)
     <div class="fp-plan-grid">
         @foreach($plans as $plan)

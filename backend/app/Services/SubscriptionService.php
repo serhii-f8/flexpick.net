@@ -298,6 +298,27 @@ class SubscriptionService
         return $subscription;
     }
 
+    /**
+     * True when any of the user's tenants has an active subscription that
+     * isn't self-service-changeable (cash/partner-managed, or the tenant is
+     * itself an active reseller). /pricing warns before purchase in this
+     * case: buying a plan there always creates a brand-new workspace rather
+     * than upgrading the existing one, since a tenant can only ever hold one
+     * active subscription and this segment has no self-service path to
+     * change the one it already has.
+     */
+    public function hasNonSelfServiceActiveSubscription(User $user): bool
+    {
+        foreach ($user->tenants as $tenant) {
+            if ($this->findActiveTenantSubscriptions($tenant)->isNotEmpty()
+                && $this->findChangeablePlanSubscription($tenant) === null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function findActiveTenantSubscriptionProducts(?Tenant $tenant): Collection
     {
         return $this->findActiveTenantSubscriptions($tenant)

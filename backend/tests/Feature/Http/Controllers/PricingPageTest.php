@@ -7,6 +7,7 @@ use App\Constants\PlanPriceTierConstants;
 use App\Constants\PlanPriceType;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
+use App\Constants\SubscriptionType;
 use App\Models\OneTimeProduct;
 use App\Models\OneTimeProductPrice;
 use App\Models\PartnerPlanOffering;
@@ -30,6 +31,52 @@ class PricingPageTest extends FeatureTest
 
         $response->assertStatus(200);
         $response->assertSee(__('Plans & Pricing'));
+        $response->assertDontSee(__('Buying a plan here starts a brand-new workspace.'));
+    }
+
+    /**
+     * The bug this guards against: a customer whose active subscription is
+     * cash/partner-managed has no self-service way to change it, so buying
+     * a plan here would otherwise silently spin up a second workspace
+     * (DashboardPanelProvider::upgradeUrl()'s counterpart for the one path
+     * it can't redirect away from).
+     */
+    public function test_a_customer_with_a_non_self_service_subscription_sees_the_new_workspace_warning(): void
+    {
+        $this->visiblePlan([], 'Any Visible Plan');
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => Plan::factory()->create(['is_active' => true])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'type' => SubscriptionType::LOCALLY_MANAGED,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('pricing'));
+
+        $response->assertStatus(200);
+        $response->assertSee(__('Buying a plan here starts a brand-new workspace.'));
+    }
+
+    public function test_a_customer_with_a_self_service_subscription_does_not_see_the_warning(): void
+    {
+        $this->visiblePlan([], 'Any Visible Plan');
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => Plan::factory()->create(['is_active' => true])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('pricing'));
+
+        $response->assertStatus(200);
+        $response->assertDontSee(__('Buying a plan here starts a brand-new workspace.'));
     }
 
     public function test_guest_is_redirected_to_login(): void
