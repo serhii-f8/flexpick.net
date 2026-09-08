@@ -71,41 +71,13 @@ class AuditStatsWidgetTest extends FeatureTest
             ->assertDontSee(__('Free audits remaining'));
     }
 
-    public function test_visible_for_fresh_user_with_only_free_runs(): void
+    /**
+     * Off in the customer dashboard for every tenant user — admin, invited
+     * member, well-entitled or not (product decision, 2026-09-07).
+     */
+    public function test_never_visible_on_the_customer_dashboard(): void
     {
         config(['audit.free_reports_limit' => 3]);
-        $user = User::factory()->create();
-        $tenant = $this->createTenantFor($user);
-
-        $this->actingAs($user);
-        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
-        Filament::setTenant($tenant);
-
-        $this->assertTrue(AuditStatsWidget::canView());
-    }
-
-    /**
-     * The production default is zero free runs, so a fresh signup clears no
-     * quota arm -- but every tier is priced, and being able to buy one is
-     * itself access.
-     */
-    public function test_visible_for_a_fresh_signup_at_the_production_default(): void
-    {
-        $user = User::factory()->create();
-        $tenant = $this->createTenantFor($user);
-
-        $this->actingAs($user);
-        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
-        Filament::setTenant($tenant);
-
-        $this->assertTrue(AuditStatsWidget::canView());
-    }
-
-    public function test_hidden_without_audits_allowance_free_runs_or_a_buyable_tier(): void
-    {
-        // An empty catalog is what makes this a real negative now: with one,
-        // any authenticated user can always reach a purchase.
-        config(['audit.free_reports_limit' => 0, 'pricing.tiers' => []]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
 

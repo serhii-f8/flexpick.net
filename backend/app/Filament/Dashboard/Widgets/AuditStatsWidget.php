@@ -4,8 +4,6 @@ namespace App\Filament\Dashboard\Widgets;
 
 use App\Constants\AuditRequestStatus;
 use App\Models\AuditRequest;
-use App\Services\AuditReport\AuditEntitlementService;
-use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -81,12 +79,9 @@ class AuditStatsWidget extends BaseWidget
 
     public static function canView(): bool
     {
-        $user = auth()->user();
-
-        if (! $user) {
-            return false;
-        }
-
-        return app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
+        // Off in the customer dashboard for every tenant user, admin or not
+        // (product decision, 2026-09-07) — kept in place rather than removed
+        // in case it moves to the Admin panel for platform staff later.
+        return false;
     }
 }

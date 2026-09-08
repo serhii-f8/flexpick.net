@@ -12,7 +12,6 @@ use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Filament\Dashboard\Resources\Invitations\InvitationResource;
 use App\Filament\Dashboard\Resources\Orders\OrderResource;
 use App\Filament\Dashboard\Resources\PartnerOrders\PartnerOrderResource;
-use App\Filament\Dashboard\Resources\ReferralRewards\ReferralRewardResource;
 use App\Filament\Dashboard\Resources\Referrals\ReferralResource;
 use App\Filament\Dashboard\Resources\Subscriptions\SubscriptionResource;
 use App\Filament\Dashboard\Resources\Transactions\TransactionResource;
@@ -96,7 +95,7 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $this->assertSame(['Dashboard'], $navigation[''] ?? []);
         $this->assertSame(['Run an audit', 'Audit history'], $navigation['Audits'] ?? []);
-        $this->assertSame(['Orders', 'Subscriptions', 'Payments', 'My Rewards'], $navigation['Billing'] ?? []);
+        $this->assertSame(['Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
         $this->assertArrayNotHasKey('Referrals', $navigation);
         $this->assertArrayNotHasKey('Partner', $navigation);
         $this->assertSame(['Users', 'Invitations'], $navigation['Team Management'] ?? []);
@@ -118,7 +117,6 @@ class DashboardMenuItemsTest extends FeatureTest
             'Payments' => [TransactionResource::class],
             'Users' => [Users::class],
             'Invitations' => [InvitationResource::class],
-            'My Rewards' => [ReferralRewardResource::class],
         ];
     }
 

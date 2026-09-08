@@ -2,7 +2,6 @@
 
 namespace App\Filament\Dashboard\Resources\Referrals;
 
-use App\Constants\ReferralConstants;
 use App\Filament\Dashboard\Resources\Referrals\Pages\ListReferrals;
 use App\Models\Referral;
 use App\Services\PartnerCapabilityService;
@@ -38,17 +37,6 @@ class ReferralResource extends Resource
                 TextColumn::make('referredUser.email')
                     ->label(__('Email'))
                     ->searchable(),
-                TextColumn::make('status')
-                    ->label(__('Status'))
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        ReferralConstants::STATUS_PENDING => 'gray',
-                        ReferralConstants::STATUS_VERIFIED => 'info',
-                        ReferralConstants::STATUS_PAID => 'warning',
-                        ReferralConstants::STATUS_REWARDED => 'success',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn (string $state): string => __(ucfirst($state))),
                 TextColumn::make('created_at')
                     ->label(__('Referred On'))
                     ->dateTime(config('app.datetime_format'))

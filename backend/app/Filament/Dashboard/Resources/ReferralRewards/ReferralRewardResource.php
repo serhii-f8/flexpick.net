@@ -5,8 +5,6 @@ namespace App\Filament\Dashboard\Resources\ReferralRewards;
 use App\Constants\ReferralConstants;
 use App\Filament\Dashboard\Resources\ReferralRewards\Pages\ListReferralRewards;
 use App\Models\ReferralReward;
-use App\Services\PartnerCapabilityService;
-use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -111,8 +109,10 @@ class ReferralRewardResource extends Resource
 
     public static function canAccess(): bool
     {
-        return config('app.referral.enabled', false)
-            && ! app(PartnerCapabilityService::class)->userCanAccessPartnerArea(Filament::getTenant(), auth()->user());
+        // Coupon rewards are off for every tenant, partner and direct alike (product
+        // decision, 2026-09-07) — kept in place rather than removed in case it's
+        // reactivated later.
+        return false;
     }
 
     public static function getNavigationLabel(): string
