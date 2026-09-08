@@ -8,16 +8,6 @@
         <p class="m-0">{{ __('Nothing available yet — check back soon.') }}</p>
     </div>
 @else
-@isset($partnerName)
-    <div class="fp-partner-banner">
-        <x-fp.status-dot color="primary" class="mt-1.5" />
-        <p class="m-0">
-            <strong>{{ __('Prices on this page are set by :partner.', ['partner' => $partnerName]) }}</strong>
-            {{ __('You buy through them and they stay your point of contact; the audits themselves are run by FlexPick.') }}
-        </p>
-    </div>
-@endisset
-
 @if (count($groupedPlans) === 0)
     <div class="fp-plan-grid">
         @foreach($plans as $plan)

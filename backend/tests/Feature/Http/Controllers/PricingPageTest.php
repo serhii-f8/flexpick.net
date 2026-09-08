@@ -53,7 +53,7 @@ class PricingPageTest extends FeatureTest
         );
     }
 
-    public function test_a_partner_customer_sees_one_banner_naming_the_partner(): void
+    public function test_a_partner_customer_sees_the_partner_named_on_the_plan_card(): void
     {
         PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
             ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
@@ -97,7 +97,6 @@ class PricingPageTest extends FeatureTest
 
         $response = $this->actingAs($user)->get(route('pricing'))->assertOk();
 
-        $response->assertSee(__('Prices on this page are set by :partner.', ['partner' => $partnerTenant->name]));
         $response->assertSee(__('Sold through :partner', ['partner' => $partnerTenant->name]));
     }
 

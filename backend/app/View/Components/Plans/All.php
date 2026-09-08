@@ -72,13 +72,6 @@ class All extends Component
         $viewData['groupedPlans'] = $groupedPlans;
         $viewData['tierSections'] = array_map(fn (array $intervalPlans): array => $this->tierSections($intervalPlans), $groupedPlans);
 
-        // One banner names the partner once; the cards only repeat it as a caption.
-        $partnerName = $plans->first(fn ($plan) => ($plan->partner_price ?? null) !== null && ($plan->partner_tenant_name ?? null) !== null)?->partner_tenant_name;
-
-        if ($partnerName !== null) {
-            $viewData['partnerName'] = $partnerName;
-        }
-
         if (! empty($this->preselectedInterval) && ! array_key_exists($this->preselectedInterval, $groupedPlans)) {
             $this->preselectedInterval = '';
         }
