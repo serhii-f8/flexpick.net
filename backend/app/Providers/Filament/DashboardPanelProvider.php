@@ -8,9 +8,11 @@ use App\Filament\Dashboard\Pages\CreateWorkspace;
 use App\Filament\Dashboard\Pages\Dashboard;
 use App\Filament\Dashboard\Pages\TenantSettings;
 use App\Filament\Dashboard\Pages\TwoFactorAuth\TwoFactorAuth;
+use App\Filament\Dashboard\Resources\Subscriptions\SubscriptionResource;
 use App\Http\Middleware\UpdateUserLastSeenAt;
 use App\Livewire\AddressForm;
 use App\Models\Tenant;
+use App\Services\SubscriptionService;
 use App\Services\TenantPermissionService;
 use Filament\Actions\Action;
 use Filament\Enums\ThemeMode;
@@ -19,6 +21,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Navigation\NavigationGroup;
+use Filament\Navigation\NavigationItem;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -78,7 +81,7 @@ class DashboardPanelProvider extends PanelProvider
                 Action::make('buy-more')
                     ->label(__('Buy More / Upgrade'))
                     ->icon('heroicon-s-shopping-cart')
-                    ->url(fn () => route('pricing')),
+                    ->url(fn () => self::upgradeUrl()),
                 Action::make('admin-panel')
                     ->label(__('Admin Panel'))
                     ->visible(
@@ -163,6 +166,17 @@ class DashboardPanelProvider extends PanelProvider
                     ->label(__('Team Management'))
                     ->collapsed(),
             ])
+            ->navigationItems([
+                // Plain link, not a resource -- lives in the same 'Billing'
+                // group as Orders/Subscriptions/Transactions above, matching
+                // its group() string to their $navigationGroup exactly for
+                // the same lookup navigationGroups() relies on.
+                NavigationItem::make(__('Buy More / Upgrade'))
+                    ->group('Billing')
+                    ->icon('heroicon-s-shopping-cart')
+                    ->sort(-1)
+                    ->url(fn () => self::upgradeUrl()),
+            ])
             ->renderHook(
                 PanelsRenderHook::BODY_START,
                 fn (): string => Blade::render("@livewire('announcement.view', ['placement' => '".AnnouncementPlacement::USER_DASHBOARD->value."'])")
@@ -190,5 +204,24 @@ class DashboardPanelProvider extends PanelProvider
             ])
             ->tenantMenu()
             ->tenant(Tenant::class, 'uuid');
+    }
+
+    /**
+     * Routes to the in-place Change Plan page when the current tenant has an
+     * active, self-service-eligible subscription -- a plain /pricing link
+     * would otherwise silently create a second workspace for a tenant that
+     * already has one (a tenant can only ever hold one active subscription;
+     * see TenantCreationService::findUserTenantsForNewSubscription()).
+     * Everyone else (no subscription yet, or one that isn't self-service --
+     * e.g. cash/partner-managed) still goes to /pricing, which remains
+     * correct for a first plan or a one-time credit top-up.
+     */
+    private static function upgradeUrl(): string
+    {
+        $subscription = app(SubscriptionService::class)->findChangeablePlanSubscription(Filament::getTenant());
+
+        return $subscription !== null
+            ? SubscriptionResource::getUrl('change-plan', ['record' => $subscription->uuid])
+            : route('pricing');
     }
 }

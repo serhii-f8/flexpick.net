@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
 use App\Events\Subscription\Subscribed;
@@ -16,6 +17,7 @@ use App\Models\PlanPrice;
 use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\UserSubscriptionTrial;
+use App\Services\PartnerCapabilityService;
 use App\Services\PaymentProviders\PaymentProviderInterface;
 use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Event;
@@ -340,6 +342,67 @@ class SubscriptionServiceTest extends FeatureTest
         $subscriptions = $service->findActiveTenantSubscriptions($tenant);
 
         $this->assertCount(2, $subscriptions);
+    }
+
+    public function test_find_changeable_plan_subscription_returns_a_gateway_managed_active_subscription(): void
+    {
+        $tenant = $this->createTenant();
+        $plan = Plan::factory()->create(['type' => PlanType::FLAT_RATE->value, 'is_active' => true]);
+        $subscription = Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $result = app(SubscriptionService::class)->findChangeablePlanSubscription($tenant);
+
+        $this->assertNotNull($result);
+        $this->assertSame($subscription->id, $result->id);
+    }
+
+    public function test_find_changeable_plan_subscription_returns_null_for_a_cash_subscription(): void
+    {
+        $tenant = $this->createTenant();
+        $plan = Plan::factory()->create(['type' => PlanType::FLAT_RATE->value, 'is_active' => true]);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'type' => SubscriptionType::LOCALLY_MANAGED,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $this->assertNull(app(SubscriptionService::class)->findChangeablePlanSubscription($tenant));
+    }
+
+    /**
+     * A tenant that is itself an active reseller partner (not merely
+     * attributed to one) has its own plan administered by the operator --
+     * canChangeSubscriptionPlan()'s tenantIsPartner() guard.
+     */
+    public function test_find_changeable_plan_subscription_returns_null_for_a_partner_tenants_own_subscription(): void
+    {
+        $tenant = $this->createTenant();
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => Plan::factory()->create([
+                'type' => PlanType::FLAT_RATE->value,
+                'product_id' => Product::factory()->create(['metadata' => ['enables_reseller_program' => true]])->id,
+            ])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $this->assertTrue(app(PartnerCapabilityService::class)->tenantIsActivePartner($tenant->fresh()));
+        $this->assertNull(app(SubscriptionService::class)->findChangeablePlanSubscription($tenant));
+    }
+
+    public function test_find_changeable_plan_subscription_returns_null_when_the_tenant_has_no_active_subscription(): void
+    {
+        $this->assertNull(app(SubscriptionService::class)->findChangeablePlanSubscription($this->createTenant()));
     }
 
     public function test_find_active_tenant_subscription_products()

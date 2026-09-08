@@ -95,10 +95,43 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $this->assertSame(['Dashboard'], $navigation[''] ?? []);
         $this->assertSame(['Run an audit', 'Audit history'], $navigation['Audits'] ?? []);
-        $this->assertSame(['Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
+        $this->assertSame(['Buy More / Upgrade', 'Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
         $this->assertArrayNotHasKey('Referrals', $navigation);
         $this->assertArrayNotHasKey('Partner', $navigation);
         $this->assertSame(['Users', 'Invitations'], $navigation['Team Management'] ?? []);
+    }
+
+    /**
+     * The sidebar counterpart of the user-menu test guarding the same bug:
+     * a tenant that already has an active subscription must route to
+     * Change Plan, not /pricing's plan-purchase flow (which would silently
+     * create a second workspace for a tenant that can only ever hold one
+     * active subscription).
+     */
+    public function test_buy_more_or_upgrade_sidebar_item_links_to_change_plan_when_eligible(): void
+    {
+        [, $tenant] = $this->fullyPermittedUserAndTenant();
+        $plan = Plan::factory()->create(['is_active' => true]);
+        $subscription = Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $buyMoreUrl = null;
+        foreach (Filament::getNavigation() as $group) {
+            foreach ($group->getItems() as $item) {
+                if ($item->getLabel() === __('Buy More / Upgrade')) {
+                    $buyMoreUrl = $item->getUrl();
+                }
+            }
+        }
+
+        $this->assertSame(
+            SubscriptionResource::getUrl('change-plan', ['record' => $subscription->uuid]),
+            $buyMoreUrl,
+        );
     }
 
     /**
@@ -130,8 +163,11 @@ class DashboardMenuItemsTest extends FeatureTest
 
     /**
      * The counterpart to the item list: a user holding none of the tenancy
-     * permissions must not be offered Billing or Team Management at all.
-     * Without this, the group assertions above could pass while the gates were
+     * permissions must not be offered the Billing *resources* or Team
+     * Management at all. Billing itself still appears with only the
+     * permission-less "Buy More / Upgrade" link, which is intentionally
+     * ungated -- purchasing isn't tied to a viewing permission. Without
+     * this, the group assertions above could pass while the gates were
      * dead, since every gate is consulted only when a permission is missing.
      */
     public function test_an_unpermitted_user_is_not_offered_the_gated_groups(): void
@@ -145,7 +181,7 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $navigation = $this->renderedNavigation();
 
-        $this->assertArrayNotHasKey('Billing', $navigation);
+        $this->assertSame(['Buy More / Upgrade'], $navigation['Billing'] ?? []);
         $this->assertArrayNotHasKey('Team Management', $navigation);
         $this->assertSame(['Dashboard'], $navigation[''] ?? []);
     }
@@ -198,7 +234,7 @@ class DashboardMenuItemsTest extends FeatureTest
         $navigation = $this->renderedNavigation();
 
         $this->assertSame(['Referrals', 'Orders', 'Pricing Settings'], $navigation['Partner'] ?? []);
-        $this->assertSame(['Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
+        $this->assertSame(['Buy More / Upgrade', 'Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
     }
 
     public function test_the_referrals_page_loads_for_a_partner(): void

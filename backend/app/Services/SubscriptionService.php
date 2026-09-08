@@ -279,6 +279,25 @@ class SubscriptionService
             ->get();
     }
 
+    /**
+     * The tenant's active subscription that self-service Change Plan is
+     * actually offered for, if any -- gateway-managed and not a partner
+     * tenant, per canChangeSubscriptionPlan(). Used to route a generic
+     * "Upgrade" link to the in-place Change Plan page instead of
+     * /pricing's plan-purchase flow, which would otherwise silently spin
+     * up a second workspace for a tenant that already has an active plan
+     * (a tenant can only ever have one, per
+     * TenantCreationService::findUserTenantsForNewSubscription()).
+     */
+    public function findChangeablePlanSubscription(?Tenant $tenant): ?Subscription
+    {
+        /** @var Subscription|null $subscription */
+        $subscription = $this->findActiveTenantSubscriptions($tenant)
+            ->first(fn (Subscription $subscription): bool => $this->canChangeSubscriptionPlan($subscription));
+
+        return $subscription;
+    }
+
     public function findActiveTenantSubscriptionProducts(?Tenant $tenant): Collection
     {
         return $this->findActiveTenantSubscriptions($tenant)
