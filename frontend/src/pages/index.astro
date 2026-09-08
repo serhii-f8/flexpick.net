@@ -7,7 +7,6 @@ import pricing from '~/data/pricing.json';
 const diagnosticTier = pricing.tiers['audit-diagnostic'];
 const deepAiTier = pricing.tiers['audit-deep-ai'];
 const packages = Object.values(pricing.packages);
-const cheapestPackage = packages.reduce((a, b) => (a.price_cents <= b.price_cents ? a : b));
 const fewestActions = Math.min(...packages.map((p) => p.actions));
 const mostActions = Math.max(...packages.map((p) => p.actions));
 
@@ -780,8 +779,8 @@ const hotspots = [
             <div class="fp-dash"></div>
             <p class="fp-trust-title">We'll tell you if we can't help</p>
             <p class="fp-trust-body">
-              The audit starts at {diagnosticTier.price_display} and the verdict is honest. If your codebase is healthier
-              than you feared — or beyond what we can save — we say exactly that.
+              The verdict is honest. If your codebase is healthier than you feared — or beyond what we can save — we say
+              exactly that.
             </p>
           </div>
           <div
@@ -830,7 +829,7 @@ const hotspots = [
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015);"
           >
             <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">01</span> · diagnostic/</p>
-            <h3 class="fp-card-title">{diagnosticTier.name} — {diagnosticTier.price_display}</h3>
+            <h3 class="fp-card-title">{diagnosticTier.name}</h3>
             <p class="fp-card-body">
               The full analysis pipeline on your repo — five static analyzers across security, duplication, and
               dependencies — with AI interpretation of every result, an overall health score, and a prioritized
@@ -842,7 +841,7 @@ const hotspots = [
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015);"
           >
             <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">02</span> · deep-ai/</p>
-            <h3 class="fp-card-title">{deepAiTier.name} — {deepAiTier.price_display}</h3>
+            <h3 class="fp-card-title">{deepAiTier.name}</h3>
             <p class="fp-card-body">
               Everything in the Diagnostic Report, plus an AI code review of your key files and core flows — findings
               bound to real files, with evidence and effort sizing, and a PDF you can share. One click from your report
@@ -854,7 +853,7 @@ const hotspots = [
             style="border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 28px; background: rgba(255,255,255,0.015);"
           >
             <p class="fp-mono fp-card-tag"><span style="color: #d4a853;">03</span> · monitor/</p>
-            <h3 class="fp-card-title">Track it — from {cheapestPackage.price_display}/mo</h3>
+            <h3 class="fp-card-title">Track it — monthly report packages</h3>
             <p class="fp-card-body">
               Re-audit on a schedule, watch your health score trend as you ship, and catch new risks before they
               compound. Packages include {fewestActions} to {mostActions} reports a month.
