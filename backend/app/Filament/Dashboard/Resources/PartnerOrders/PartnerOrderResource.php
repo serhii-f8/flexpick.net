@@ -2,6 +2,7 @@
 
 namespace App\Filament\Dashboard\Resources\PartnerOrders;
 
+use App\Constants\OrderStatus;
 use App\Constants\TenancyPermissionConstants;
 use App\Filament\Dashboard\Resources\Orders\OrderResource;
 use App\Filament\Dashboard\Resources\PartnerOrders\Pages\ListPartnerOrders;
@@ -63,6 +64,19 @@ class PartnerOrderResource extends Resource
     public static function getPluralModelLabel(): string
     {
         return __('Orders');
+    }
+
+    /**
+     * Same style as ReferralResource's badge: the count for the tab a
+     * partner actually needs to act on (the "Pending cash" default tab),
+     * scoped through the same tenant-attribution query as the list itself.
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        return (string) static::getEloquentQuery()
+            ->where('status', OrderStatus::PENDING->value)
+            ->where('is_local', true)
+            ->count();
     }
 
     public static function form(Schema $schema): Schema

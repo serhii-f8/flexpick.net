@@ -128,6 +128,22 @@ class PartnerOrderResourceTest extends FeatureTest
             ->assertSee(__('Cash'));
     }
 
+    public function test_the_navigation_badge_counts_only_this_partners_pending_cash_orders(): void
+    {
+        $partner = $this->activePartnerTenant();
+        $this->actAsPartner($partner);
+        [$customer, $customerTenant] = $this->referredCustomer($partner);
+        $this->order($customer, $customerTenant); // pending cash — counts
+        $this->order($customer, $customerTenant, ['status' => OrderStatus::SUCCESS->value]); // approved — doesn't count
+        $this->order($customer, $customerTenant, ['is_local' => false]); // pending gateway — doesn't count
+
+        $otherPartner = $this->activePartnerTenant();
+        [$otherCustomer, $otherTenant] = $this->referredCustomer($otherPartner);
+        $this->order($otherCustomer, $otherTenant); // another partner's pending cash order — doesn't count
+
+        $this->assertSame('1', PartnerOrderResource::getNavigationBadge());
+    }
+
     public function test_approve_confirms_the_cash_and_records_the_partner_decision(): void
     {
         $partner = $this->activePartnerTenant();
