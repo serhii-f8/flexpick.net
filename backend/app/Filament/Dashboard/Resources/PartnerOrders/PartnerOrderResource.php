@@ -26,6 +26,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Every order placed by the customers this partner referred (spec §8): the
@@ -103,7 +104,23 @@ class PartnerOrderResource extends Resource
                         ->where('users.partner_tenant_id', $tenantId)
                         ->whereColumn('users.partner_attributed_at', '<=', 'orders.created_at'));
             })
-            ->with(['user', 'currency', 'paymentProvider', 'partnerTenant']);
+            ->with([
+                'user', 'currency', 'paymentProvider', 'partnerTenant',
+                'items.oneTimeProduct',
+                // withoutGlobalScope() here for the same reason as
+                // OrderApprovalService::lockIfPending(): Subscription
+                // carries Filament's tenancy global scope (registered by
+                // the customer-facing SubscriptionResource), which would
+                // otherwise silently filter this eager load to
+                // subscriptions owned by the ACTIVE tenant -- the partner
+                // here, not the customer who actually owns the order's
+                // subscription. Bypassing it at eager-load time, rather
+                // than only on a later lazy access, is what keeps
+                // itemName() from ever seeing the scope apply at all.
+                'subscription' => fn (BelongsTo $query) => $query
+                    ->withoutGlobalScope(filament()->getTenancyScopeName())
+                    ->with('plan.product'),
+            ]);
     }
 
     public static function canAccess(): bool
@@ -212,6 +229,8 @@ class PartnerOrderResource extends Resource
                     TextEntry::make('uuid')->label('ID')->copyable(),
                     TextEntry::make('user.email')->label(__('Customer')),
                     TextEntry::make('type')->label(__('Type'))->badge(),
+                    TextEntry::make('item')->label(__('Item'))
+                        ->getStateUsing(fn (Order $record): string => self::itemName($record)),
                     TextEntry::make('payment')->label(__('Payment'))
                         ->getStateUsing(fn (Order $record): string => $record->is_local ? __('Cash') : (optional($record->paymentProvider)->name ?? '—')),
                     TextEntry::make('base_price_snapshot')->label(__('Base price'))

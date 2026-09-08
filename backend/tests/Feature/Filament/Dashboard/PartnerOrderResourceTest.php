@@ -128,6 +128,34 @@ class PartnerOrderResourceTest extends FeatureTest
             ->assertSee(__('Cash'));
     }
 
+    /**
+     * Livewire::test() never boots the panel, so it never registers
+     * Filament's tenancy global scope on Subscription -- the exact blind
+     * spot that let the infolist regression above ship silently. This
+     * drives the list page through a real request instead, the only way to
+     * actually exercise that scope, matching how a browser really hits it.
+     */
+    public function test_the_list_page_shows_the_plan_product_name_for_a_subscription_purchase(): void
+    {
+        $partner = $this->activePartnerTenant();
+        $this->actAsPartner($partner);
+        [$customer, $customerTenant] = $this->referredCustomer($partner);
+
+        $product = Product::factory()->create(['name' => 'Deep AI Code Review']);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        $subscription = Subscription::factory()->create([
+            'tenant_id' => $customerTenant->id,
+            'user_id' => $customer->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::PENDING->value,
+        ]);
+        $this->order($customer, $customerTenant, ['subscription_id' => $subscription->id]);
+
+        $this->get(PartnerOrderResource::getUrl(tenant: $partner))
+            ->assertSuccessful()
+            ->assertSee('Deep AI Code Review');
+    }
+
     public function test_the_navigation_badge_counts_only_this_partners_pending_cash_orders(): void
     {
         $partner = $this->activePartnerTenant();
@@ -235,6 +263,35 @@ class PartnerOrderResourceTest extends FeatureTest
         Livewire::test(ListPartnerOrders::class, ['activeTab' => 'all'])
             ->assertCanNotSeeTableRecords([$preAttribution])
             ->assertCanSeeTableRecords([$postAttribution]);
+    }
+
+    /**
+     * The "Items" infolist section (OrderResource::orderItems()) only ever
+     * populates from Order::items(), which a subscription purchase never
+     * creates rows in -- one-time products do. Without a dedicated entry,
+     * the view page a partner opens to review before approving showed
+     * price and status but never *what* was bought for the (now common,
+     * since partner-reselling) plan-purchase case.
+     */
+    public function test_the_view_page_shows_the_plan_product_name_for_a_subscription_purchase(): void
+    {
+        $partner = $this->activePartnerTenant();
+        $this->actAsPartner($partner);
+        [$customer, $customerTenant] = $this->referredCustomer($partner);
+
+        $product = Product::factory()->create(['name' => 'Deep AI Code Review']);
+        $plan = Plan::factory()->create(['product_id' => $product->id]);
+        $subscription = Subscription::factory()->create([
+            'tenant_id' => $customerTenant->id,
+            'user_id' => $customer->id,
+            'plan_id' => $plan->id,
+            'status' => SubscriptionStatus::PENDING->value,
+        ]);
+        $order = $this->order($customer, $customerTenant, ['subscription_id' => $subscription->id]);
+
+        $this->get(PartnerOrderResource::getUrl('view', ['record' => $order], tenant: $partner))
+            ->assertSuccessful()
+            ->assertSee('Deep AI Code Review');
     }
 
     public function test_the_view_page_loads_for_an_own_order(): void
