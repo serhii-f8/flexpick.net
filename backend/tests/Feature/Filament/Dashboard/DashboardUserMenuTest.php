@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament\Dashboard;
 
+use App\Filament\Dashboard\Pages\Dashboard;
 use Filament\Facades\Filament;
 use Tests\Feature\FeatureTest;
 
@@ -24,5 +25,24 @@ class DashboardUserMenuTest extends FeatureTest
         $this->assertArrayHasKey('buy-more', $items);
         $this->assertSame(__('Buy More / Upgrade'), $items['buy-more']->getLabel());
         $this->assertSame(route('pricing'), $items['buy-more']->getUrl());
+    }
+
+    /**
+     * Registration alone (the test above) would not have caught a page that
+     * still renders fine but silently drops the item -- assert it actually
+     * appears in the rendered dashboard HTML, the same way
+     * DashboardMenuItemsTest verifies the sidebar.
+     */
+    public function test_buy_more_or_upgrade_appears_on_the_rendered_dashboard_page(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $this->get(Dashboard::getUrl(tenant: $tenant))
+            ->assertSuccessful()
+            ->assertSee(__('Buy More / Upgrade'));
     }
 }
