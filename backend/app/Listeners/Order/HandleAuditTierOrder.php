@@ -12,7 +12,7 @@ use App\Models\OneTimeProduct;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\UserParameter;
-use Illuminate\Support\Facades\Log;
+use App\Services\AuditReport\AuditEntitlementService;
 
 /**
  * A completed order for a tier product runs the customer's repository at the
@@ -27,6 +27,10 @@ class HandleAuditTierOrder
 {
     /** Written by the dashboard when a user buys a tier for a named repo. */
     public const INTENT_PARAM = 'audit_tier_intent';
+
+    public function __construct(
+        private AuditEntitlementService $entitlementService,
+    ) {}
 
     public function handle(Ordered $event): void
     {
@@ -57,12 +61,14 @@ class HandleAuditTierOrder
             $source = $this->sourceRequestFor($order);
 
             if ($source === null) {
-                // The order is captured but nothing can be run: no intent
-                // request (uuid match or tier/status fallback) and no prior
-                // diagnostic to clone. Silent here means a paid order simply
-                // delivers nothing with no trace, so make it loud instead.
-                Log::error("HandleAuditTierOrder: paid order {$order->id} for tier product '{$slug}' matched no runnable audit request (no intent, no diagnostic to clone).");
-                report(new \RuntimeException("Paid audit tier order #{$order->id} for '{$slug}' produced no runnable audit request."));
+                // Nothing to run this against yet: no dashboard intent (no
+                // repo was ever named) and no prior diagnostic to clone.
+                // Rather than deliver nothing for a paid order, grant a
+                // standing, never-expiring credit for the tier -- the
+                // customer spends it later via AuditReports::launchAudit(),
+                // on whichever repo they choose, the same way plan
+                // allowance already works.
+                $this->grantPurchasedCredit($order, $tierValue);
 
                 continue;
             }
@@ -135,6 +141,18 @@ class HandleAuditTierOrder
         $intent?->delete();
 
         return $request;
+    }
+
+    private function grantPurchasedCredit(Order $order, string $tierValue): void
+    {
+        $user = User::find($order->user_id);
+        $tier = AuditTier::tryFrom($tierValue);
+
+        if ($user === null || $tier === null) {
+            return;
+        }
+
+        $this->entitlementService->grantPurchasedCredit($user, $tier);
     }
 
     /** @return list<string> */

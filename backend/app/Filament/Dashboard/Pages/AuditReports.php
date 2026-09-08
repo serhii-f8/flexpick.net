@@ -217,6 +217,8 @@ class AuditReports extends Page
             return;
         }
 
+        $funding = $entitlements->consume($user, $tenant, $selected, $quota);
+
         $auditRequest = AuditRequest::create([
             'name' => $user->name,
             'email' => $user->email,
@@ -226,15 +228,14 @@ class AuditReports extends Page
             'email_verified_at' => now(),
             'source' => 'dashboard',
             'tier' => $selected->value,
-            'funding' => $quota->isLifetime
-                ? AuditFunding::FREE->value
-                : AuditFunding::ALLOWANCE->value,
+            'funding' => $funding->value,
             'user_id' => $user->id,
         ]);
 
-        // An allowance run is metered simply by existing at its tier. A free
-        // run has to be flagged on the request to be deducted.
-        if ($quota->isLifetime) {
+        // An allowance or purchased-credit run is metered simply by existing
+        // at its tier (consume() already spent the credit). A free run has
+        // to be flagged on the request itself to be deducted.
+        if ($funding === AuditFunding::FREE) {
             $entitlements->consumeFreeRun($auditRequest);
         }
 

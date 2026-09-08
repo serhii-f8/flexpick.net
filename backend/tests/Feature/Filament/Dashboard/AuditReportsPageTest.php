@@ -101,6 +101,33 @@ class AuditReportsPageTest extends FeatureTest
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
+    public function test_launch_audit_spends_a_purchased_credit_once_the_plan_allowance_is_exhausted(): void
+    {
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_deep_ai_credits' => 1]);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+        app(AuditEntitlementService::class)->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://github.com/acme/my-app', AuditTier::DEEP_AI->value);
+
+        $request = AuditRequest::where('user_id', $user->id)->where('repo_url', 'https://github.com/acme/my-app')->firstOrFail();
+        $this->assertSame(AuditFunding::PURCHASE, $request->funding);
+        $this->assertSame(0, app(AuditEntitlementService::class)->purchasedCreditBalance($user, AuditTier::DEEP_AI));
+        Queue::assertPushed(GenerateAuditReport::class);
+    }
+
     public function test_navigation_registers_for_user_with_only_free_runs(): void
     {
         config(['audit.free_reports_limit' => 3]);

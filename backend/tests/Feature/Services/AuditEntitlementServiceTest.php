@@ -298,6 +298,71 @@ class AuditEntitlementServiceTest extends FeatureTest
         $this->assertTrue($this->service->hasAuditAccess($user, $tenant));
     }
 
+    public function test_grant_purchased_credit_adds_to_the_balance(): void
+    {
+        $user = $this->createUser();
+
+        $this->service->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+        $this->service->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+
+        $this->assertSame(2, $this->service->purchasedCreditBalance($user, AuditTier::DEEP_AI));
+        // Independent per tier -- granting Deep AI must not leak into Expert.
+        $this->assertSame(0, $this->service->purchasedCreditBalance($user, AuditTier::EXPERT));
+    }
+
+    public function test_purchased_credit_extends_the_tier_limit_beyond_the_plan_allowance(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_deep_ai_credits' => 5]);
+        AuditRequest::factory()->count(5)->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+        $this->assertSame(0, $this->service->quotaFor($user, $tenant, AuditTier::DEEP_AI)->remaining());
+
+        $this->service->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+
+        $quota = $this->service->quotaFor($user, $tenant, AuditTier::DEEP_AI);
+        $this->assertSame(6, $quota->limit);
+        $this->assertSame(1, $quota->remaining());
+    }
+
+    public function test_consume_draws_from_the_plan_allowance_before_a_purchased_credit(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_deep_ai_credits' => 5]);
+        $this->service->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+
+        $funding = $this->service->consume($user, $tenant, AuditTier::DEEP_AI, $this->service->quotaFor($user, $tenant, AuditTier::DEEP_AI));
+
+        $this->assertSame(AuditFunding::ALLOWANCE, $funding);
+        $this->assertSame(1, $this->service->purchasedCreditBalance($user, AuditTier::DEEP_AI));
+    }
+
+    public function test_consume_spends_a_purchased_credit_once_the_plan_allowance_is_exhausted(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_deep_ai_credits' => 1]);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+        $this->service->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+
+        $funding = $this->service->consume($user, $tenant, AuditTier::DEEP_AI, $this->service->quotaFor($user, $tenant, AuditTier::DEEP_AI));
+
+        $this->assertSame(AuditFunding::PURCHASE, $funding);
+        $this->assertSame(0, $this->service->purchasedCreditBalance($user, AuditTier::DEEP_AI));
+    }
+
+    public function test_consume_never_dips_the_balance_below_zero(): void
+    {
+        $user = $this->createUser();
+
+        $this->service->spendPurchasedCredit($user, AuditTier::DEEP_AI);
+
+        $this->assertSame(0, $this->service->purchasedCreditBalance($user, AuditTier::DEEP_AI));
+    }
+
     /** @return array{0: User, 1: Tenant} */
     private function subscribedTenant(array $productMetadata): array
     {

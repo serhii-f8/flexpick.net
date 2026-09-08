@@ -106,6 +106,30 @@ class HandleAuditTierOrderTest extends FeatureTest
         Queue::assertNotPushed(GenerateAuditReport::class);
     }
 
+    /**
+     * The bug this guards against: a customer with zero prior audit
+     * requests bought a tier product cold (via /pricing, not the dashboard
+     * "Run an audit" flow), so there was no intent to match and no
+     * diagnostic to clone. Before this fix, that silently logged an error
+     * and delivered nothing -- the order was paid and the customer got
+     * nothing for it, with no trace visible to them at all.
+     */
+    public function test_an_order_with_no_intent_or_prior_diagnostic_grants_a_purchased_credit_instead_of_failing_silently(): void
+    {
+        Queue::fake();
+        $user = $this->createUser();
+
+        $this->completeOrderFor($user, 'audit-deep-ai');
+
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count(), 'Nothing can run yet -- no repo was ever named.');
+        $this->assertSame(
+            1,
+            app(AuditEntitlementService::class)->purchasedCreditBalance($user, AuditTier::DEEP_AI),
+            'The purchase must still be worth something: a spendable credit for that tier.',
+        );
+        Queue::assertNotPushed(GenerateAuditReport::class);
+    }
+
     public function test_the_purchased_run_is_not_charged_against_the_free_quota(): void
     {
         Queue::fake();
@@ -139,7 +163,7 @@ class HandleAuditTierOrderTest extends FeatureTest
         ]);
 
         $order = $this->orderFor($user, 'audit-deep-ai');
-        (new HandleAuditTierOrder)->handle(new Ordered($order));
+        app(HandleAuditTierOrder::class)->handle(new Ordered($order));
 
         $run = AuditRequest::where('tier', AuditTier::DEEP_AI->value)->where('user_id', $user->id)->firstOrFail();
 
@@ -179,7 +203,7 @@ class HandleAuditTierOrderTest extends FeatureTest
         ]);
 
         $order = $this->orderFor($user, 'audit-deep-ai');
-        (new HandleAuditTierOrder)->handle(new Ordered($order));
+        app(HandleAuditTierOrder::class)->handle(new Ordered($order));
 
         $intended->refresh();
 
@@ -223,7 +247,7 @@ class HandleAuditTierOrderTest extends FeatureTest
         ]);
 
         $order = $this->orderFor($user, 'audit-deep-ai');
-        (new HandleAuditTierOrder)->handle(new Ordered($order));
+        app(HandleAuditTierOrder::class)->handle(new Ordered($order));
 
         $target->refresh();
 

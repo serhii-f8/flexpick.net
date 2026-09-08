@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament\Dashboard;
 
+use App\Constants\AuditTier;
 use App\Constants\SubscriptionStatus;
 use App\Filament\Dashboard\Widgets\PlanUsageWidget;
 use App\Models\Plan;
@@ -9,6 +10,7 @@ use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\AuditReport\AuditEntitlementService;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
@@ -57,6 +59,29 @@ class PlanUsageWidgetTest extends FeatureTest
         Livewire::test(PlanUsageWidget::class)
             ->assertSee(__('Free audits'))
             ->assertDontSee(__('Diagnostic Report'));
+    }
+
+    /**
+     * The bug this guards against: a customer with no active subscription
+     * (or one with no allowance for this tier) who has a purchased credit
+     * must still see it -- the widget used to show nothing at all for a
+     * one-time purchase with no matching plan quota.
+     */
+    public function test_shows_a_purchased_credit_with_no_subscription_at_all(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->tenantFor($user);
+        app(AuditEntitlementService::class)
+            ->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::test(PlanUsageWidget::class)
+            ->assertSee(__('Deep AI Code Review'))
+            ->assertSee(__(':used of :total used', ['used' => 0, 'total' => 1]))
+            ->assertDontSee(__('No audit credits on this plan. Pick a plan to run audits every month, or buy a single audit when you need one.'));
     }
 
     /**

@@ -163,15 +163,84 @@ class AuditEntitlementService
         // decided.
         $subscriptionAllowance = $this->allowance($tenant, $tier);
         $isLifetime = $tier === AuditTier::DIAGNOSTIC && $subscriptionAllowance === 0;
+        $baseLimit = $isLifetime ? $this->freeRunsLimit($user->email) : $subscriptionAllowance;
 
         return new TierQuota(
             tier: $tier,
             label: $tier->label(),
-            limit: $isLifetime ? $this->freeRunsLimit($user->email) : $subscriptionAllowance,
+            // A purchased credit never expires and is never metered
+            // monthly, so it always widens the limit rather than resetting
+            // with the calendar -- see consume()/spendPurchasedCredit() for
+            // how it's actually drawn down.
+            limit: $baseLimit + $this->purchasedCreditBalance($user, $tier),
             used: $isLifetime ? $this->freeRunsUsed($user->email) : $this->runsUsedThisMonth($user, $tier),
             isLifetime: $isLifetime,
             priceCents: $this->tierPriceCents($tier),
         );
+    }
+
+    private function purchasedCreditParam(AuditTier $tier): string
+    {
+        return 'audit_purchased_credits_'.$tier->value;
+    }
+
+    public function purchasedCreditBalance(User $user, AuditTier $tier): int
+    {
+        return (int) UserParameter::query()
+            ->where('user_id', $user->id)
+            ->where('name', $this->purchasedCreditParam($tier))
+            ->value('value');
+    }
+
+    /**
+     * Grants a one-time, never-expiring credit for the tier -- what a
+     * one-time tier product purchase resolves to when there's no dashboard
+     * intent or prior diagnostic to run it against immediately (see
+     * HandleAuditTierOrder). Spent later via consume(), whenever the
+     * customer submits a run for any repo -- not tied to the purchase.
+     */
+    public function grantPurchasedCredit(User $user, AuditTier $tier, int $quantity = 1): void
+    {
+        $param = UserParameter::query()->firstOrCreate(
+            ['user_id' => $user->id, 'name' => $this->purchasedCreditParam($tier)],
+            ['value' => 0],
+        );
+
+        $param->update(['value' => ((int) $param->value) + $quantity]);
+    }
+
+    public function spendPurchasedCredit(User $user, AuditTier $tier): void
+    {
+        $param = UserParameter::query()->firstOrCreate(
+            ['user_id' => $user->id, 'name' => $this->purchasedCreditParam($tier)],
+            ['value' => 0],
+        );
+
+        $param->update(['value' => max(0, ((int) $param->value) - 1)]);
+    }
+
+    /**
+     * Decides which pool a new run draws from, spending it immediately if
+     * it's a purchased credit -- called exactly once, at the moment an
+     * AuditRequest is actually created (never merely to check availability;
+     * use quotaFor()/TierQuota::hasRuns() for that). Plan allowance is
+     * always drawn first: it resets every month regardless of use, while a
+     * purchased credit never expires, so spending the credit before the
+     * allowance would waste it for nothing.
+     */
+    public function consume(User $user, ?Tenant $tenant, AuditTier $tier, TierQuota $quota): AuditFunding
+    {
+        if ($quota->isLifetime && $this->hasFreeRun($user->email)) {
+            return AuditFunding::FREE;
+        }
+
+        if (! $quota->isLifetime && $this->runsUsedThisMonth($user, $tier) < $this->allowance($tenant, $tier)) {
+            return AuditFunding::ALLOWANCE;
+        }
+
+        $this->spendPurchasedCredit($user, $tier);
+
+        return AuditFunding::PURCHASE;
     }
 
     /** @return list<TierQuota> */
