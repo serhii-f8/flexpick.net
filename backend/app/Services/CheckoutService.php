@@ -149,6 +149,20 @@ class CheckoutService
                 $tenant = $this->tenantCreationService->findUserTenantForNewSubscription(auth()->user());
 
                 if ($tenant === null) {
+                    // No eligible tenant -- but rather than always spinning
+                    // up a new workspace, check whether the block is one we
+                    // can clear ourselves: a tenant whose only live
+                    // subscription(s) are cash-collected. A repeat cash
+                    // purchase supersedes it in place instead of stranding
+                    // the buyer's new order on a workspace they never see.
+                    $tenant = $this->tenantCreationService->findUserTenantWithSupersedableCashSubscription(auth()->user());
+
+                    if ($tenant !== null) {
+                        $this->subscriptionService->supersedeCashSubscriptions($tenant);
+                    }
+                }
+
+                if ($tenant === null) {
                     $tenant = $this->tenantCreationService->createTenant(auth()->user());
                 }
             }

@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\SubscriptionStatus;
+use App\Constants\SubscriptionType;
 use App\Constants\TenancyPermissionConstants;
 use App\Events\Tenant\TenantCreated;
 use App\Models\Plan;
+use App\Models\Subscription;
 use App\Services\TenantCreationService;
 use App\Services\TenantPermissionService;
 use Illuminate\Support\Facades\Event;
@@ -110,6 +113,52 @@ class TenantCreationServiceTest extends FeatureTest
         $tenants = $this->tenantCreationService->findUserTenantsForNewSubscription($user);
 
         $this->assertTrue($tenants->contains('id', $tenant->id));
+    }
+
+    public function test_find_tenant_with_supersedable_cash_subscription_finds_a_cash_only_blocked_tenant(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant, [TenancyPermissionConstants::PERMISSION_CREATE_SUBSCRIPTIONS]);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => Plan::factory()->create(['is_active' => true])->id,
+            'status' => SubscriptionStatus::PENDING->value,
+            'type' => SubscriptionType::LOCALLY_MANAGED,
+        ]);
+
+        $result = $this->tenantCreationService->findUserTenantWithSupersedableCashSubscription($user);
+
+        $this->assertNotNull($result);
+        $this->assertSame($tenant->id, $result->id);
+    }
+
+    /**
+     * A gateway-managed subscription needs proper provider-side
+     * cancellation (Stripe etc.), not a plain DB status flip -- so a
+     * tenant blocked by one must never be offered up for silent
+     * supersession.
+     */
+    public function test_find_tenant_with_supersedable_cash_subscription_excludes_a_gateway_managed_block(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant, [TenancyPermissionConstants::PERMISSION_CREATE_SUBSCRIPTIONS]);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => Plan::factory()->create(['is_active' => true])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $this->assertNull($this->tenantCreationService->findUserTenantWithSupersedableCashSubscription($user));
+    }
+
+    public function test_find_tenant_with_supersedable_cash_subscription_returns_null_when_nothing_blocks(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant, [TenancyPermissionConstants::PERMISSION_CREATE_SUBSCRIPTIONS]);
+
+        $this->assertNull($this->tenantCreationService->findUserTenantWithSupersedableCashSubscription($user));
     }
 
     public function test_find_tenant_by_uuid_returns_null_when_exceeding_plan_max_users(): void

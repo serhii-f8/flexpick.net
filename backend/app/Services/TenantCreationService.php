@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Constants\SubscriptionConstants;
+use App\Constants\SubscriptionType;
 use App\Constants\TenancyPermissionConstants;
 use App\Constants\TenantConstants;
 use App\Events\Tenant\TenantCreated;
@@ -78,6 +79,33 @@ class TenantCreationService
             $user->tenants()->whereDoesntHave('subscriptions', function ($query) {
                 $query->whereIn('status', SubscriptionConstants::SUBSCRIPTION_STATUS_THAT_ARE_NOT_DEAD);
             })->get(),
+            TenancyPermissionConstants::PERMISSION_CREATE_SUBSCRIPTIONS
+        )->first();
+    }
+
+    /**
+     * A tenant whose only "not dead" subscription(s) are all cash-collected
+     * (locally-managed) -- safe to supersede without any payment-gateway
+     * involvement, unlike a gateway-managed one which needs proper
+     * provider-side cancellation. findUserTenantForNewSubscription() already
+     * excludes any tenant with a live subscription, cash or not, correctly
+     * -- this is the fallback that decides whether that block is one we're
+     * actually allowed to clear ourselves, so a repeat cash purchase
+     * attaches to the tenant it's really upgrading instead of silently
+     * spinning up a new workspace every time.
+     */
+    public function findUserTenantWithSupersedableCashSubscription(User $user): ?Tenant
+    {
+        return $this->tenantPermissionService->filterTenantsWhereUserHasPermission(
+            $user->tenants()
+                ->whereHas('subscriptions', function ($query) {
+                    $query->whereIn('status', SubscriptionConstants::SUBSCRIPTION_STATUS_THAT_ARE_NOT_DEAD);
+                })
+                ->whereDoesntHave('subscriptions', function ($query) {
+                    $query->whereIn('status', SubscriptionConstants::SUBSCRIPTION_STATUS_THAT_ARE_NOT_DEAD)
+                        ->where('type', '!=', SubscriptionType::LOCALLY_MANAGED);
+                })
+                ->get(),
             TenancyPermissionConstants::PERMISSION_CREATE_SUBSCRIPTIONS
         )->first();
     }

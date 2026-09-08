@@ -319,6 +319,30 @@ class SubscriptionService
         return false;
     }
 
+    /**
+     * Cancels every not-dead cash subscription on the tenant so a fresh
+     * cash purchase can attach to it instead of a new workspace getting
+     * created (canCreateSubscription() guards against two live
+     * subscriptions on one tenant otherwise). Only ever called via
+     * CheckoutService::resolveSubscriptionTenant() for a tenant
+     * TenantCreationService::findUserTenantWithSupersedableCashSubscription()
+     * already confirmed has no gateway-managed subscription to protect.
+     */
+    public function supersedeCashSubscriptions(Tenant $tenant): void
+    {
+        $subscriptions = Subscription::withoutGlobalScope(filament()->getTenancyScopeName())
+            ->where('tenant_id', $tenant->id)
+            ->whereIn('status', SubscriptionConstants::SUBSCRIPTION_STATUS_THAT_ARE_NOT_DEAD)
+            ->get();
+
+        foreach ($subscriptions as $subscription) {
+            $this->updateSubscription($subscription, [
+                'status' => SubscriptionStatus::CANCELED->value,
+                'cancelled_at' => now(),
+            ]);
+        }
+    }
+
     public function findActiveTenantSubscriptionProducts(?Tenant $tenant): Collection
     {
         return $this->findActiveTenantSubscriptions($tenant)

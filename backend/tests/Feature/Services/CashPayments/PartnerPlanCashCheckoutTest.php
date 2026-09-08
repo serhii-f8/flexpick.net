@@ -6,6 +6,8 @@ use App\Constants\OrderStatus;
 use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
+use App\Constants\SubscriptionType;
+use App\Constants\TenancyPermissionConstants;
 use App\Exceptions\PurchaseNotAllowedException;
 use App\Models\Order;
 use App\Models\PartnerPlanOffering;
@@ -313,5 +315,84 @@ class PartnerPlanCashCheckoutTest extends FeatureTest
         $this->assertSame(4900, (int) $reused->fresh()->price);
         // The snapshot still records who sold it — only the price is base.
         $this->assertSame($partnerTenant->id, $reused->fresh()->partner_tenant_id);
+    }
+
+    /**
+     * Reproduces the real bug: a customer with an existing cash subscription
+     * buys ANOTHER plan through /pricing, which never passes a tenantUuid
+     * (there's no tenant picker to render, since
+     * TenantCreationService::findUserTenantsForNewSubscription() correctly
+     * excludes any tenant already holding a live subscription). Before this
+     * fix, CheckoutService::resolveSubscriptionTenant() fell all the way
+     * through to creating a brand-new tenant every time -- three separate
+     * purchases, three separate workspaces, none of them visible on the
+     * page the customer was actually looking at.
+     */
+    public function test_a_second_cash_plan_purchase_supersedes_the_first_instead_of_creating_a_new_workspace(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $firstPlan = $this->flatRatePlan(basePrice: 4900);
+        $this->offering($partnerTenant, $firstPlan, price: 7900);
+
+        $customerTenant = $this->createTenant();
+        $user = $this->attributedUser($partnerTenant, $customerTenant);
+        // attributedUser() grants no tenant permissions -- a real signup
+        // grants the creator full access via TenantCreationService's
+        // TENANT_CREATOR_ROLE, which is what makes the tenant eligible in
+        // TenantCreationService::findUserTenantForNewSubscription() at all.
+        $user->tenants()->where('tenant_id', $customerTenant->id)->first()->pivot
+            ->givePermissionTo(TenancyPermissionConstants::PERMISSION_CREATE_SUBSCRIPTIONS);
+        $this->actingAs($user);
+
+        $firstSubscription = app(CheckoutService::class)->initSubscriptionCheckout($firstPlan->slug, null);
+        app(PaymentService::class)
+            ->getPaymentProviderBySlug(PaymentProviderConstants::OFFLINE_SLUG)
+            ->initSubscriptionCheckout($firstPlan, $firstSubscription);
+        $firstSubscription->update(['status' => SubscriptionStatus::ACTIVE->value, 'ends_at' => now()->addDays(30)]);
+
+        $secondPlan = $this->flatRatePlan(basePrice: 24000);
+        $this->offering($partnerTenant, $secondPlan, price: 240000);
+
+        // No tenantUuid -- exactly what /pricing's plan-purchase buttons send.
+        $secondSubscription = app(CheckoutService::class)->initSubscriptionCheckout($secondPlan->slug, null);
+
+        $this->assertSame(
+            $customerTenant->id,
+            $secondSubscription->tenant_id,
+            'The new plan must attach to the customer\'s existing workspace, not a new one.',
+        );
+        $this->assertCount(1, $user->tenants()->get(), 'No second workspace should have been created.');
+        $this->assertSame(SubscriptionStatus::CANCELED->value, $firstSubscription->fresh()->status);
+    }
+
+    /**
+     * The counterpart: a gateway-managed subscription must never be
+     * silently cancelled by a new purchase (only proper provider-side
+     * cancellation is safe for those), so this segment keeps the old
+     * fall-back-to-a-new-workspace behaviour unchanged.
+     */
+    public function test_a_gateway_managed_subscription_is_not_superseded_and_still_gets_a_new_workspace(): void
+    {
+        $customerTenant = $this->createTenant();
+        $user = $this->createUser($customerTenant, [TenancyPermissionConstants::PERMISSION_CREATE_SUBSCRIPTIONS]);
+        $this->actingAs($user);
+
+        $existingPlan = $this->flatRatePlan(basePrice: 4900);
+        $existing = Subscription::factory()->create([
+            'tenant_id' => $customerTenant->id,
+            'user_id' => $user->id,
+            'plan_id' => $existingPlan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $newPlan = $this->flatRatePlan(basePrice: 9900);
+
+        $newSubscription = app(CheckoutService::class)->initSubscriptionCheckout($newPlan->slug, null);
+
+        $this->assertNotSame($customerTenant->id, $newSubscription->tenant_id);
+        $this->assertSame(SubscriptionStatus::ACTIVE->value, $existing->fresh()->status);
+        $this->assertCount(2, $user->tenants()->get());
     }
 }
