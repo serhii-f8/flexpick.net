@@ -667,6 +667,7 @@ class SubscriptionService
     public function canEditSubscriptionPaymentDetails(Subscription $subscription)
     {
         return $subscription->type === SubscriptionType::PAYMENT_PROVIDER_MANAGED &&
+            (bool) optional($subscription->paymentProvider)->is_active &&
             ($subscription->status === SubscriptionStatus::ACTIVE->value ||
                 $subscription->status === SubscriptionStatus::PAST_DUE->value ||
                 $subscription->status === SubscriptionStatus::CANCELED->value

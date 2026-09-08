@@ -3,12 +3,14 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\SubscriptionStatus;
+use App\Constants\SubscriptionType;
 use App\Events\Subscription\Subscribed;
 use App\Events\Subscription\SubscriptionCancelled;
 use App\Events\Subscription\SubscriptionRenewed;
 use App\Exceptions\SubscriptionCreationNotAllowedException;
 use App\Models\Currency;
 use App\Models\Interval;
+use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\PlanPrice;
 use App\Models\Product;
@@ -817,6 +819,58 @@ class SubscriptionServiceTest extends FeatureTest
         $result = $service->changePlan($subscription, $paymentProvider, $newPlan->slug);
 
         $this->assertTrue($result);
+    }
+
+    /**
+     * A subscription whose payment provider has been deactivated (e.g. no
+     * API key configured locally) must not offer "Update Payment Details" —
+     * the action would otherwise crash the provider's SDK client instead of
+     * failing gracefully.
+     */
+    public function test_can_edit_subscription_payment_details_is_false_when_the_provider_is_inactive(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+        $provider = PaymentProvider::where('slug', 'stripe')->firstOrFail();
+        $provider->update(['is_active' => false]);
+
+        $plan = Plan::factory()->create(['slug' => Str::random(), 'is_active' => true]);
+        $subscription = Subscription::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED,
+            'payment_provider_id' => $provider->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $service = app()->make(SubscriptionService::class);
+
+        $this->assertFalse($service->canEditSubscriptionPaymentDetails($subscription));
+    }
+
+    public function test_can_edit_subscription_payment_details_is_true_when_the_provider_is_active(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+        $provider = PaymentProvider::where('slug', 'stripe')->firstOrFail();
+        $provider->update(['is_active' => true]);
+
+        $plan = Plan::factory()->create(['slug' => Str::random(), 'is_active' => true]);
+        $subscription = Subscription::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'type' => SubscriptionType::PAYMENT_PROVIDER_MANAGED,
+            'payment_provider_id' => $provider->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        $service = app()->make(SubscriptionService::class);
+
+        $this->assertTrue($service->canEditSubscriptionPaymentDetails($subscription));
     }
 
     public static function nonDeadSubscriptionProvider()
