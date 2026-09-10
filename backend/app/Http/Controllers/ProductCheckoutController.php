@@ -47,7 +47,13 @@ class ProductCheckoutController extends Controller
         // buyer whose partner hasn't enabled this product must never reach a
         // rendered checkout page (and never mutate the cart) only to be
         // rejected on final submit by CheckoutService's guard.
-        if ($this->partnerPricingResolver->purchasableProducts(collect([$product]), auth()->user())->isEmpty()) {
+        //
+        // Not-visible products are exempt, mirroring
+        // CheckoutService::assertProductPurchasable(): no partner offering
+        // can ever exist for one (PartnerProductPricingTable lists only
+        // is_visible products), and AuditReportController::unlock() sends
+        // every buyer here for the not-visible audit-report-unlock SKU.
+        if ($product->is_visible && $this->partnerPricingResolver->purchasableProducts(collect([$product]), auth()->user())->isEmpty()) {
             return redirect()->back()->with('error', __('This product is not currently available for your account.'));
         }
 

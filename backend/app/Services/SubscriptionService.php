@@ -538,12 +538,42 @@ class SubscriptionService
         $changeResult = $paymentProviderStrategy->changePlan($subscription, $newPlan, $isProrated);
 
         if ($changeResult) {
+            $this->refreshPurchaseSnapshot($subscription, $newPlan);
+
             Subscribed::dispatch($subscription);
 
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * The snapshot frozen at purchase wins over live plan metadata in
+     * AuditEntitlementService::planMetadata(), and the gateway providers'
+     * changePlan() only rewrite plan_id/price. A plan change is a fresh
+     * purchase decision, so the quota and base-price snapshot are re-frozen
+     * from the new plan here -- otherwise an upgraded customer keeps being
+     * metered on the plan they left. partner_tenant_id is deliberately left
+     * alone: it records who sold the subscription, which a plan change does
+     * not alter.
+     */
+    private function refreshPurchaseSnapshot(Subscription $subscription, Plan $newPlan): void
+    {
+        /** @var User|null $user */
+        $user = $subscription->user;
+
+        if ($user === null) {
+            return;
+        }
+
+        // Same lazy-resolution reason as planPriceForBuyer() above.
+        $snapshot = app(PurchaseSnapshotService::class)->forPlan($user, $newPlan);
+
+        $subscription->fill([
+            'base_price_snapshot' => $snapshot['base_price_snapshot'],
+            'quota_snapshot' => $snapshot['quota_snapshot'],
+        ])->save();
     }
 
     public function canAddDiscount(Subscription $subscription)

@@ -842,6 +842,57 @@ class SubscriptionServiceTest extends FeatureTest
         $this->assertTrue($result);
     }
 
+    /**
+     * quota_snapshot is frozen at purchase and wins over live plan metadata
+     * in AuditEntitlementService::planMetadata(). A plan change is a new
+     * purchase decision, so the snapshot must be re-frozen from the new plan
+     * -- otherwise an upgraded customer keeps being metered on the plan they
+     * left.
+     */
+    public function test_change_plan_refreshes_the_quota_snapshot_from_the_new_plan(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant);
+
+        $currentPlan = Plan::factory()->create([
+            'slug' => Str::random(),
+            'is_active' => true,
+            'product_id' => Product::factory()->create(['metadata' => ['audit_diagnostic_credits' => 5]])->id,
+        ]);
+
+        $newPlan = Plan::factory()->create([
+            'slug' => Str::random(),
+            'is_active' => true,
+            'product_id' => Product::factory()->create(['metadata' => ['audit_diagnostic_credits' => 30]])->id,
+        ]);
+
+        $subscription = Subscription::factory()->create([
+            'user_id' => $user->id,
+            'plan_id' => $currentPlan->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+            'tenant_id' => $tenant->id,
+            'quota_snapshot' => ['audit_diagnostic_credits' => 5],
+        ]);
+
+        $paymentProvider = \Mockery::mock(PaymentProviderInterface::class);
+        $paymentProvider->shouldReceive('changePlan')
+            ->once()
+            ->andReturnUsing(function (Subscription $subscription, Plan $plan): bool {
+                // What every gateway provider does today: plan_id only.
+                $subscription->update(['plan_id' => $plan->id]);
+
+                return true;
+            });
+
+        Event::fake();
+
+        $result = app(SubscriptionService::class)->changePlan($subscription, $paymentProvider, $newPlan->slug);
+
+        $this->assertTrue($result);
+        $this->assertSame(30, $subscription->fresh()->quota_snapshot['audit_diagnostic_credits']);
+    }
+
     public function test_change_plan_succeeds_when_new_plan_has_unlimited_users(): void
     {
         $tenant = $this->createTenant();

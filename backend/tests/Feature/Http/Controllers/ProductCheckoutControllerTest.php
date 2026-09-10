@@ -114,6 +114,47 @@ class ProductCheckoutControllerTest extends FeatureTest
         $this->assertNotEmpty(app(SessionService::class)->getCartDto()->items);
     }
 
+    /**
+     * A not-visible product (audit-report-unlock is the live case) can never
+     * have a PartnerProductOffering -- PartnerProductPricingTable only lists
+     * is_visible ones -- so this gate must exempt it exactly as
+     * CheckoutService::assertProductPurchasable() already does. Without the
+     * exemption, AuditReportController::unlock() lands every attributed buyer
+     * here and they can never unlock a report.
+     */
+    public function test_an_attributed_buyer_can_add_a_not_visible_product_with_no_offering_to_cart(): void
+    {
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
+        app(PartnerPricingResolver::class)->flush();
+
+        $partnerTenant = $this->activePartnerTenant();
+
+        $product = OneTimeProduct::factory()->create([
+            'slug' => 'not-visible-product-'.rand(1, 100000),
+            'is_active' => true,
+            'is_visible' => false,
+            'max_quantity' => 1,
+        ]);
+        OneTimeProductPrice::create([
+            'one_time_product_id' => $product->id,
+            'currency_id' => Currency::where('code', 'USD')->first()->id,
+            'price' => 4900,
+        ]);
+
+        $user = $this->createUser(null, [], [
+            'partner_tenant_id' => $partnerTenant->id,
+            'partner_attributed_at' => now(),
+        ]);
+        $this->actingAs($user);
+
+        $response = $this->get(route('buy.product', ['productSlug' => $product->slug]));
+
+        $response->assertRedirect(route('checkout.product'));
+        $response->assertSessionMissing('error');
+        $this->assertNotEmpty(app(SessionService::class)->getCartDto()->items);
+    }
+
     public function test_a_direct_buyer_is_unaffected_when_adding_any_product_to_cart(): void
     {
         $product = OneTimeProduct::factory()->create([
