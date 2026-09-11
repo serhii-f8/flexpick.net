@@ -6,6 +6,9 @@ class ReferralConstants
 {
     public const HTTP_PARAM_REFERRAL_CODE = 'rc';
 
+    /** The invite-only registration form's code field. */
+    public const REGISTRATION_CODE_FIELD = 'referral_code';
+
     public const TRIGGER_VERIFIED_REGISTRATION = 'verified_registration';
 
     public const TRIGGER_FIRST_PAYMENT = 'first_payment';

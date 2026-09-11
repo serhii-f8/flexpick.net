@@ -87,16 +87,16 @@ class PricingPageTest extends FeatureTest
         $response->assertRedirect(route('login'));
     }
 
-    public function test_single_audits_get_their_own_heading_below_the_plans(): void
+    public function test_single_audits_get_their_own_heading_ahead_of_the_subscription_panel(): void
     {
         $user = $this->createUser();
 
         $html = $this->actingAs($user)->get(route('pricing'))->assertOk()->getContent();
 
-        $this->assertStringContainsString(__('Or buy a single audit'), $html);
+        $this->assertStringContainsString(__('Buy a single audit'), $html);
         $this->assertLessThan(
-            strpos($html, __('Or buy a single audit')),
-            strpos($html, __('Plans & Pricing')),
+            strpos($html, __('Subscribe and keep auditing')),
+            strpos($html, __('Buy a single audit')),
         );
     }
 
@@ -184,6 +184,38 @@ class PricingPageTest extends FeatureTest
         // reached the meter-name branch rather than merely not crashing.
         $response->assertSee($product->name);
         $response->assertSee('0–7331');
+    }
+
+    public function test_both_catalog_tabs_render_with_one_time_products_first(): void
+    {
+        $user = $this->createUser();
+
+        $response = $this->actingAs($user)->get(route('pricing'))->assertOk();
+
+        $response->assertSeeInOrder([__('One-time products'), __('Subscriptions')]);
+    }
+
+    public function test_the_one_time_products_panel_is_the_one_visible_on_load(): void
+    {
+        $user = $this->createUser();
+
+        $html = $this->actingAs($user)->get(route('pricing'))->assertOk()->getContent();
+
+        $this->assertStringContainsString("catalog: 'products'", $html);
+        $this->assertMatchesRegularExpression('/id="catalog-plans"[^>]*x-cloak/', $html);
+        $this->assertDoesNotMatchRegularExpression('/id="catalog-products"[^>]*x-cloak/', $html);
+    }
+
+    public function test_the_free_plan_panel_stays_outside_both_catalog_tabs(): void
+    {
+        Product::factory()->create(['is_default' => true, 'name' => 'Free Forever '.uniqid()]);
+        $user = $this->createUser();
+
+        $html = $this->actingAs($user)->get(route('pricing'))->assertOk()->getContent();
+
+        $tabsEnd = strpos($html, '<!-- /fp-pricing-tabs -->');
+        $this->assertNotFalse($tabsEnd, 'The catalog tab container marker is missing.');
+        $this->assertGreaterThan($tabsEnd, strpos($html, __('Start for free')));
     }
 
     private function visiblePlan(array $metadata, string $name): Plan

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\ReferralRegistrationGate;
 use App\Services\TenantService;
 use App\Services\UserService;
 use App\Validator\RegisterValidator;
@@ -38,6 +39,7 @@ class RegisterController extends Controller
         protected RegisterValidator $registerValidator,
         protected UserService $userService,
         protected TenantService $tenantService,
+        protected ReferralRegistrationGate $referralRegistrationGate,
     ) {
         $this->middleware('guest');
     }
@@ -60,7 +62,7 @@ class RegisterController extends Controller
      */
     protected function validator(array $data)
     {
-        return $this->registerValidator->validate($data);
+        return $this->registerValidator->validate($data, inviteOnly: true);
     }
 
     /**
@@ -86,6 +88,8 @@ class RegisterController extends Controller
 
         return view('auth.register', [
             'isOtpLoginEnabled' => config('app.otp_login_enabled'),
+            'isInviteOnly' => $this->referralRegistrationGate->isActive(),
+            'requiresInvitationCode' => $this->referralRegistrationGate->requiresCodeInput(),
         ]);
     }
 }

@@ -3,6 +3,10 @@
         <div class="flex flex-col py-2 md:p-10 gap-4 justify-center h-full items-center">
             <div class="card w-full md:max-w-xl bg-base-100 border border-white/10 p-4 md:p-8">
 
+                @if($isInviteOnly)
+                    <x-auth.invitation-notice :requires-code="$requiresInvitationCode" />
+                @endif
+
                 @if($isOtpLoginEnabled)
                     <livewire:auth.register.one-time-password-registration />
                 @else

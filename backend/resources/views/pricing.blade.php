@@ -21,14 +21,50 @@
             @endguest
         </header>
 
-        <x-plans.all calculate-saving-rates="true" show-default-product="1"/>
-
-        <section class="fp-pricing-section">
-            <div class="fp-pricing-section-head">
-                <h2 class="fp-pricing-section-title">{{ __('Or buy a single audit') }}</h2>
-                <p class="fp-pricing-lead">{{ __('No subscription. One repository, one report, delivered to your inbox.') }}</p>
+        {{-- One-time products open first: most visitors want a single report, not a commitment. --}}
+        <div x-data="{ catalog: 'products' }">
+            <div class="fp-pricing-switch">
+                <div class="fp-switch" role="tablist" aria-label="{{ __('Catalog') }}">
+                    <button
+                        type="button"
+                        role="tab"
+                        id="catalog-tab-products"
+                        aria-controls="catalog-products"
+                        :aria-selected="catalog === 'products' ? 'true' : 'false'"
+                        @click="catalog = 'products'"
+                    >
+                        {{ __('One-time products') }}
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        id="catalog-tab-plans"
+                        aria-controls="catalog-plans"
+                        :aria-selected="catalog === 'plans' ? 'true' : 'false'"
+                        @click="catalog = 'plans'"
+                    >
+                        {{ __('Subscriptions') }}
+                    </button>
+                </div>
             </div>
-            <x-products.all sort-by="price" />
-        </section>
+
+            <section id="catalog-products" role="tabpanel" aria-labelledby="catalog-tab-products" x-show="catalog === 'products'">
+                <div class="fp-pricing-section-head">
+                    <h2 class="fp-pricing-section-title">{{ __('Buy a single audit') }}</h2>
+                    <p class="fp-pricing-lead">{{ __('No subscription. One repository, one report, delivered to your inbox.') }}</p>
+                </div>
+                <x-products.all sort-by="price" />
+            </section>
+
+            <section id="catalog-plans" role="tabpanel" aria-labelledby="catalog-tab-plans" x-show="catalog === 'plans'" x-cloak>
+                <div class="fp-pricing-section-head">
+                    <h2 class="fp-pricing-section-title">{{ __('Subscribe and keep auditing') }}</h2>
+                    <p class="fp-pricing-lead">{{ __('Recurring credits, re-audit trends and the lowest price per report.') }}</p>
+                </div>
+                <x-plans.all calculate-saving-rates="true" />
+            </section>
+        </div><!-- /fp-pricing-tabs -->
+
+        <x-plans.default-product />
     </div>
 </x-layouts.app>

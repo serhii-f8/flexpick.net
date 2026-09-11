@@ -27,6 +27,10 @@
                 </span>
             @enderror
 
+            @if (!empty($requiresInvitationCode))
+                <x-auth.invitation-code-field wire-model="referralCode" />
+            @endif
+
             <p class="mt-2 text-sm text-cream-200/60">
                 {{ __('We will send you a one-time login code to the email address provided.') }}
             </p>

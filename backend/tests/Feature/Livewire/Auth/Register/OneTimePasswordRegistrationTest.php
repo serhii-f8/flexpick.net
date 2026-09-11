@@ -56,7 +56,7 @@ class OneTimePasswordRegistrationTest extends FeatureTest
         $this->mockRegisterValidator
             ->shouldReceive('validate')
             ->once()
-            ->with($userFields)
+            ->with($userFields, true, true)
             ->andReturn($validator);
 
         $this->mockUserService
@@ -102,7 +102,7 @@ class OneTimePasswordRegistrationTest extends FeatureTest
         $this->mockRegisterValidator
             ->shouldReceive('validate')
             ->once()
-            ->with($userFields)
+            ->with($userFields, true, true)
             ->andReturn($validator);
 
         $this->mockUserService
@@ -135,7 +135,7 @@ class OneTimePasswordRegistrationTest extends FeatureTest
         $this->mockRegisterValidator
             ->shouldReceive('validate')
             ->once()
-            ->with($userFields)
+            ->with($userFields, true, true)
             ->andReturn($validator);
 
         $this->mockUserService
@@ -184,7 +184,7 @@ class OneTimePasswordRegistrationTest extends FeatureTest
         $this->mockRegisterValidator
             ->shouldReceive('validate')
             ->once()
-            ->with($userFields)
+            ->with($userFields, true, true)
             ->andReturn($validator);
 
         $this->mockUserService
@@ -234,7 +234,7 @@ class OneTimePasswordRegistrationTest extends FeatureTest
         $this->mockRegisterValidator
             ->shouldReceive('validate')
             ->once()
-            ->with($userFields)
+            ->with($userFields, true, true)
             ->andReturn($validator);
 
         $this->mockUserService

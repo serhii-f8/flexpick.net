@@ -87,6 +87,61 @@ class TrackReferralCodeTest extends FeatureTest
         $response->assertSessionHas(SessionConstants::REFERRAL_CODE, 'PERSISTENT1');
     }
 
+    public function test_a_valid_code_is_remembered_in_the_referral_cookie(): void
+    {
+        $this->withExceptionHandling();
+        config(['app.referral.enabled' => true]);
+        $referrer = User::factory()->create();
+        $code = app(ReferralService::class)->getOrCreateReferralCode($referrer)->code;
+
+        $response = $this->get('/login?rc='.$code);
+
+        $response->assertCookie(config('app.referral.cookie_name'), $code);
+        $cookie = collect($response->headers->getCookies())->first(fn ($c) => $c->getName() === config('app.referral.cookie_name'));
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertEqualsWithDelta(now()->addDays(365)->getTimestamp(), $cookie->getExpiresTime(), 120);
+    }
+
+    public function test_a_code_nobody_owns_is_not_remembered_in_the_referral_cookie(): void
+    {
+        $this->withExceptionHandling();
+        config(['app.referral.enabled' => true]);
+
+        $response = $this->get('/login?rc=REF-NOBODYOWNSTHIS');
+
+        $response->assertCookieMissing(config('app.referral.cookie_name'));
+    }
+
+    public function test_a_subresource_request_does_not_set_the_referral_cookie(): void
+    {
+        $this->withExceptionHandling();
+        config(['app.referral.enabled' => true]);
+        $referrer = User::factory()->create();
+        $code = app(ReferralService::class)->getOrCreateReferralCode($referrer)->code;
+
+        $response = $this->withHeaders(['Sec-Fetch-Dest' => 'image'])->get('/login?rc='.$code);
+
+        $response->assertCookieMissing(config('app.referral.cookie_name'));
+    }
+
+    /**
+     * Invite-only signup has to capture codes even for an operator who never
+     * turned the reward system on -- otherwise every referral link would land
+     * on a registration form demanding a code the visitor already clicked.
+     */
+    public function test_the_code_is_captured_when_only_invite_only_registration_is_enabled(): void
+    {
+        $this->withExceptionHandling();
+        config(['app.referral.enabled' => false, 'app.referral.only_registration' => true]);
+        $referrer = User::factory()->create();
+        $code = app(ReferralService::class)->getOrCreateReferralCode($referrer)->code;
+
+        $response = $this->get('/login?rc='.$code);
+
+        $response->assertSessionHas(SessionConstants::REFERRAL_CODE, $code);
+        $response->assertCookie(config('app.referral.cookie_name'), $code);
+    }
+
     private function partnerCode(): string
     {
         $tenant = $this->createTenant();

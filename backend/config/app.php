@@ -232,6 +232,12 @@ return [
 
     'referral' => [
         'enabled' => env('REFERRAL_ENABLED', false),
+        // Invite-only signup: no account is created without a referral code.
+        'only_registration' => env('REFERRAL_ONLY_REGISTRATION', false),
+        // Remembers a referral code for a visitor who does not register in the
+        // same session the link was clicked in (the session copy is short-lived).
+        'cookie_name' => env('REFERRAL_COOKIE_NAME', 'fp_referral'),
+        'cookie_lifetime_days' => (int) env('REFERRAL_COOKIE_LIFETIME_DAYS', 365),
         'trigger' => env('REFERRAL_TRIGGER', ReferralConstants::TRIGGER_FIRST_PAYMENT),
         'reward_type' => env('REFERRAL_REWARD_TYPE', ReferralConstants::REWARD_TYPE_COUPON),
         'discount_id' => env('REFERRAL_DISCOUNT_ID'),

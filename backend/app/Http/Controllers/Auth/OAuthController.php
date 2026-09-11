@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Constants\ReferralConstants;
 use App\Http\Controllers\Auth\Trait\RedirectAwareTrait;
 use App\Models\OauthLoginProvider;
 use App\Models\User;
@@ -47,7 +48,11 @@ class OAuthController extends RegisterController
         }
 
         $isRegistration = false;
-        DB::transaction(function () use ($provider, $oauthUser, &$isRegistration) {
+        // Invite-only signup closes this door too: an existing account always
+        // signs in, but a *new* one needs the same code the register form asks
+        // for -- otherwise one click on "Continue with Google" bypasses it.
+        $isBlockedByInviteOnly = false;
+        DB::transaction(function () use ($provider, $oauthUser, &$isRegistration, &$isBlockedByInviteOnly) {
             $user = User::where('email', $oauthUser->email)->first();
 
             if ($user) {
@@ -55,6 +60,12 @@ class OAuthController extends RegisterController
                     'name' => $oauthUser->name ?? $user->name ?? $oauthUser->nickname,
                 ]);
             } else {
+                if ($this->referralRegistrationGate->requiresCodeFor($oauthUser->getEmail())) {
+                    $isBlockedByInviteOnly = true;
+
+                    return;
+                }
+
                 $user = $this->userService->createUser([
                     'name' => $oauthUser->name ?? $oauthUser->nickname ?? '',
                     'email' => $oauthUser->email,
@@ -116,6 +127,12 @@ class OAuthController extends RegisterController
 
             Auth::login($user);
         });
+
+        if ($isBlockedByInviteOnly) {
+            return redirect()->route('register')->withErrors([
+                ReferralConstants::REGISTRATION_CODE_FIELD => __('An invitation code is required to create an account.'),
+            ]);
+        }
 
         if ($isRegistration) {
             return redirect()->route('registration.thank-you');

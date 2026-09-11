@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Constants\ReferralConstants;
 use App\Constants\SessionConstants;
 use App\Services\PartnerAttributionService;
+use App\Services\ReferralRegistrationGate;
 use App\Services\ReferralService;
 use Closure;
 use Illuminate\Http\Request;
@@ -23,11 +24,16 @@ class TrackReferralCode
     public function __construct(
         private ReferralService $referralService,
         private PartnerAttributionService $partnerAttributionService,
+        private ReferralRegistrationGate $referralRegistrationGate,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $this->referralService->isEnabled() || ! $request->has(ReferralConstants::HTTP_PARAM_REFERRAL_CODE)) {
+        // Invite-only signup needs the code captured even where the reward
+        // system is off: the register form's gate is fed from these stores.
+        $isCapturing = $this->referralService->isEnabled() || $this->referralRegistrationGate->isActive();
+
+        if (! $isCapturing || ! $request->has(ReferralConstants::HTTP_PARAM_REFERRAL_CODE)) {
             return $next($request);
         }
 
@@ -39,10 +45,19 @@ class TrackReferralCode
 
         session([SessionConstants::REFERRAL_CODE => $code]);
 
+        if (! auth()->guest() || ! $this->isTopLevelNavigation($request)) {
+            return $next($request);
+        }
+
+        // Outlives the session, so a visitor who clicks a referral link today
+        // can still register from it next week. Last touch wins, matching the
+        // session copy; the partner cookie below stays first-touch-wins.
+        if ($this->referralRegistrationGate->isValidCode($code)) {
+            $this->referralRegistrationGate->rememberCode($code);
+        }
+
         if (
-            auth()->guest()
-            && $this->isTopLevelNavigation($request)
-            && ! $this->partnerAttributionService->hasPartnerCookie($request)
+            ! $this->partnerAttributionService->hasPartnerCookie($request)
             && $this->partnerAttributionService->resolveTenantForCode($code) !== null
         ) {
             $this->partnerAttributionService->queueCookie($code);

@@ -38,6 +38,10 @@
         </span>
     @enderror
 
+    @if (!empty($requiresInvitationCode))
+        <x-auth.invitation-code-field />
+    @endif
+
     @if (config('app.recaptcha_enabled'))
         <div class="my-4">
             {!! htmlFormSnippet() !!}

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Constants\PartnerAttributionSource;
+use App\Constants\ReferralConstants;
 use App\Constants\SessionConstants;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
@@ -14,6 +15,7 @@ class UserService
     public function __construct(
         private ReferralService $referralService,
         private PartnerAttributionService $partnerAttributionService,
+        private ReferralRegistrationGate $referralRegistrationGate,
     ) {}
 
     public function createUser(array $data, bool $dispatchRegisterEvent = false): User
@@ -24,8 +26,10 @@ class UserService
             'password' => isset($data['password']) ? Hash::make($data['password']) : Hash::make(Str::random(32)),
         ]);
 
-        if (session()->has(SessionConstants::REFERRAL_CODE)) {
-            $this->referralService->trackReferral($user, session(SessionConstants::REFERRAL_CODE));
+        $referralCode = $this->resolveReferralCode($data);
+
+        if ($referralCode !== null) {
+            $this->referralService->trackReferral($user, $referralCode);
             session()->forget(SessionConstants::REFERRAL_CODE);
         }
 
@@ -37,6 +41,28 @@ class UserService
         }
 
         return $user;
+    }
+
+    /**
+     * A code typed into the invite-only registration form wins; otherwise the
+     * session copy, then the referral cookie (checked by the gate), so a link
+     * clicked weeks ago still credits its owner.
+     */
+    private function resolveReferralCode(array $data): ?string
+    {
+        $typed = $data[ReferralConstants::REGISTRATION_CODE_FIELD] ?? null;
+
+        if (is_string($typed) && $this->referralRegistrationGate->isValidCode($typed)) {
+            return $typed;
+        }
+
+        $fromSession = session(SessionConstants::REFERRAL_CODE);
+
+        if (is_string($fromSession) && $fromSession !== '') {
+            return $fromSession;
+        }
+
+        return $this->referralRegistrationGate->storedCode();
     }
 
     public function updateUserLastSeen(User $user)
