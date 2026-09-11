@@ -28,7 +28,7 @@
             @enderror
 
             @if (!empty($requiresInvitationCode))
-                <x-auth.invitation-code-field wire-model="referralCode" />
+                <x-auth.invitation-code-field wire:model="referralCode" />
             @endif
 
             <p class="mt-2 text-sm text-cream-200/60">

@@ -25,8 +25,22 @@ class InviteOnlyOneTimePasswordRegistrationTest extends FeatureTest
 
     public function test_the_form_asks_for_an_invitation_code(): void
     {
-        Livewire::test(OneTimePasswordRegistration::class)
-            ->assertSee(__('Invitation code'));
+        $html = Livewire::test(OneTimePasswordRegistration::class)
+            ->assertSee(__('Invitation code'))
+            ->html();
+
+        // A rendered, Livewire-bound <input> -- not the component tag echoed as text.
+        $this->assertMatchesRegularExpression('/<input[^>]*name="referral_code"[^>]*wire:model="referralCode"/', $html);
+        $this->assertStringNotContainsString('<x-input', $html);
+    }
+
+    public function test_the_form_does_not_ask_for_a_code_when_the_flag_is_off(): void
+    {
+        config(['app.referral.only_registration' => false]);
+
+        $html = Livewire::test(OneTimePasswordRegistration::class)->html();
+
+        $this->assertDoesNotMatchRegularExpression('/<input[^>]*name="referral_code"/', $html);
     }
 
     public function test_registration_is_rejected_without_a_code(): void

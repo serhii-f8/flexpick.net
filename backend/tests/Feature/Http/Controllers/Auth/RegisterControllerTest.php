@@ -36,7 +36,10 @@ class RegisterControllerTest extends FeatureTest
         $response = $this->get(route('register'));
 
         $response->assertSee(__('Invitation code'));
-        $response->assertSee('name="referral_code"', false);
+        // A rendered <input>, not the component tag echoed as text: Blade
+        // silently leaves an unparseable <x-…> tag in the output as-is.
+        $this->assertMatchesRegularExpression('/<input[^>]*name="referral_code"/', $response->getContent());
+        $this->assertStringNotContainsString('<x-input', $response->getContent());
     }
 
     public function test_the_register_page_does_not_ask_for_a_code_when_the_visitor_already_carries_one(): void
@@ -46,7 +49,7 @@ class RegisterControllerTest extends FeatureTest
 
         $response = $this->withSession([SessionConstants::REFERRAL_CODE => $code])->get(route('register'));
 
-        $response->assertDontSee('name="referral_code"', false);
+        $this->assertDoesNotMatchRegularExpression('/<input[^>]*name="referral_code"/', $response->getContent());
         $response->assertSee(__('Your invitation has been applied.'));
     }
 
@@ -56,7 +59,7 @@ class RegisterControllerTest extends FeatureTest
 
         $response = $this->get(route('register'));
 
-        $response->assertDontSee('name="referral_code"', false);
+        $this->assertDoesNotMatchRegularExpression('/<input[^>]*name="referral_code"/', $response->getContent());
     }
 
     public function test_registration_is_rejected_without_a_code_when_signup_is_invite_only(): void
