@@ -36,7 +36,7 @@ class AuditDemoSeederTest extends FeatureTest
         $this->assertSame(50, $entitlements->allowance($tenant, AuditTier::DEEP_AI));
         $this->assertSame(10, $entitlements->allowance($tenant, AuditTier::EXPERT));
 
-        $diagnosticQuota = $entitlements->quotaFor($user, $tenant, AuditTier::DIAGNOSTIC);
+        $diagnosticQuota = $entitlements->quotaFor($tenant, AuditTier::DIAGNOSTIC);
         $this->assertFalse($diagnosticQuota->isLifetime);
         $this->assertSame(100, $diagnosticQuota->limit);
         $this->assertSame(1, $user->subscriptions()->count());
@@ -44,15 +44,19 @@ class AuditDemoSeederTest extends FeatureTest
 
         // "Reset the limits": the one seeded report is dated last month, so
         // this month's allowance starts fully unused.
-        $this->assertSame(0, $entitlements->runsUsedThisMonth($user, AuditTier::DIAGNOSTIC));
+        $this->assertSame(0, $entitlements->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
 
-        // Idempotency: no duplicate users or requests.
+        // Idempotency: no duplicate users or requests. The seeded run belongs
+        // to the demo workspace, not just the demo user -- that is what the
+        // dashboard lists by.
         $this->assertSame(1, User::where('email', AuditDemoSeeder::EMAIL)->count());
         $this->assertSame(1, AuditRequest::where('email', AuditDemoSeeder::EMAIL)->count());
+        $this->assertSame(1, AuditRequest::forTenant($tenant)->count());
 
         // There's a finished, unlocked report ready to open immediately.
-        $sent = AuditRequest::where('email', AuditDemoSeeder::EMAIL)->where('status', 'sent')->first();
+        $sent = AuditRequest::forTenant($tenant)->where('status', 'sent')->first();
         $this->assertNotNull($sent);
+        $this->assertSame($tenant->id, $sent->tenant_id);
         $this->assertNotNull($sent->report);
         $this->assertNotNull($sent->report->unlocked_at);
     }

@@ -50,7 +50,7 @@ class AuditDemoSeeder extends Seeder
         $tenant = $this->tenantFor($user);
 
         $this->subscribeToPartnerPlan($user, $tenant);
-        $this->resetToOneFinishedReport($user);
+        $this->resetToOneFinishedReport($user, $tenant);
     }
 
     private function tenantFor(User $user): Tenant
@@ -114,7 +114,7 @@ class AuditDemoSeeder extends Seeder
      * `created_at >= now()->startOfMonth()`) -- the demo account walks in
      * with a full, untouched monthly quota.
      */
-    private function resetToOneFinishedReport(User $user): void
+    private function resetToOneFinishedReport(User $user, Tenant $tenant): void
     {
         AuditRequest::where('user_id', $user->id)->delete();
 
@@ -130,6 +130,7 @@ class AuditDemoSeeder extends Seeder
             'tier' => AuditTier::DIAGNOSTIC->value,
             'source' => 'dashboard',
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
         ]);
 
         $request->forceFill(['created_at' => now()->subMonth()])->save();

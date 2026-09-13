@@ -83,20 +83,6 @@ class AuditRequest extends Model
     }
 
     /**
-     * All audits owned by the given user: linked by id, or submitted with
-     * their email before they registered.
-     *
-     * @param  Builder<AuditRequest>  $query
-     * @return Builder<AuditRequest>
-     */
-    public function scopeForUser(Builder $query, User $user): Builder
-    {
-        return $query->where(function (Builder $query) use ($user): void {
-            $query->where('user_id', $user->id)->orWhere('email', $user->email);
-        });
-    }
-
-    /**
      * Queued past the queue threshold, or analyzing past the analyzing one.
      *
      * @param  Builder<AuditRequest>  $query
