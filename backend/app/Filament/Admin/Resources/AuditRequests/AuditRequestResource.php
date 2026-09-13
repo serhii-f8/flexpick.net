@@ -193,6 +193,10 @@ class AuditRequestResource extends Resource
                 TextColumn::make('created_at')->dateTime(config('app.datetime_format'))->sortable(),
                 TextColumn::make('name')->searchable(),
                 TextColumn::make('email')->searchable(),
+                TextColumn::make('tenant.name')
+                    ->label(__('Workspace'))
+                    ->placeholder(__('Unclaimed'))
+                    ->toggleable(),
                 TextColumn::make('repo_url')->limit(40)->searchable(),
                 TextColumn::make('tier')
                     ->label(__('Audit type'))
@@ -227,6 +231,11 @@ class AuditRequestResource extends Resource
             })
             ->defaultSort('created_at', 'desc')
             ->filters([
+                SelectFilter::make('tenant_id')
+                    ->label(__('Workspace'))
+                    ->relationship('tenant', 'name')
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('status')
                     ->multiple()
                     ->options(

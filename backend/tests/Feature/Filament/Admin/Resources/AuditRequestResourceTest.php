@@ -10,6 +10,7 @@ use App\Jobs\GenerateAuditReport;
 use App\Models\AuditEmailLog;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Models\Tenant;
 use App\Services\AuditRequestService;
 use Filament\Actions\DeleteAction;
 use Illuminate\Support\Facades\Queue;
@@ -169,6 +170,21 @@ class AuditRequestResourceTest extends FeatureTest
             ->test(ListAuditRequests::class)
             ->assertSet('activeTab', 'all')
             ->assertCountTableRecords(3);
+    }
+
+    public function test_the_list_shows_and_filters_by_workspace(): void
+    {
+        $tenant = Tenant::factory()->create(['name' => 'Acme Workspace']);
+        $mine = AuditRequest::factory()->create(['tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/app']);
+        $other = AuditRequest::factory()->create(['tenant_id' => null, 'repo_url' => 'https://github.com/nobody/app']);
+
+        $this->actingAs($this->createAdminUser());
+
+        Livewire::test(ListAuditRequests::class)
+            ->assertSee('Acme Workspace')
+            ->filterTable('tenant_id', $tenant->id)
+            ->assertCanSeeTableRecords([$mine])
+            ->assertCanNotSeeTableRecords([$other]);
     }
 
     public function test_the_table_shows_a_related_email_count(): void
