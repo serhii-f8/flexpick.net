@@ -28,7 +28,7 @@ class RecentAuditsWidget extends TableWidget
         return $table
             ->heading(__('Recent audits'))
             ->query(
-                AuditRequest::forUser(auth()->user())
+                AuditRequest::forTenant(Filament::getTenant())
                     ->with('report')
                     ->latest()
                     ->limit(5)
@@ -86,9 +86,7 @@ class RecentAuditsWidget extends TableWidget
      */
     private function previousScores(): array
     {
-        $user = auth()->user();
-
-        return AuditRequest::forUser($user)
+        return AuditRequest::forTenant(Filament::getTenant())
             ->with('report')
             ->whereNotNull('repo_url')
             ->latest()

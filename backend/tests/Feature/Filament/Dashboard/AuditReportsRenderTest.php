@@ -40,6 +40,7 @@ class AuditReportsRenderTest extends FeatureTest
         $report = AuditReport::factory()->create(['user_id' => $user->id]);
         $report->auditRequest->update([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'repo_url' => 'https://github.com/acme/held',
             'status' => AuditRequestStatus::EXPERT_REVIEW->value,
@@ -59,6 +60,7 @@ class AuditReportsRenderTest extends FeatureTest
         $report = AuditReport::factory()->create(['user_id' => $user->id]);
         $report->auditRequest->update([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'repo_url' => 'https://github.com/acme/deep',
             'tier' => AuditTier::DEEP_AI->value,
@@ -104,6 +106,7 @@ class AuditReportsRenderTest extends FeatureTest
         foreach ([[60, 10], [75, 0]] as [$score, $daysAgo]) {
             $request = AuditRequest::factory()->create([
                 'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
                 'repo_url' => 'https://github.com/acme/charted',
                 'created_at' => now()->subDays($daysAgo),
             ]);
@@ -128,6 +131,7 @@ class AuditReportsRenderTest extends FeatureTest
 
         $request = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/monthly-repo',
         ]);
         AuditReport::factory()->create(['audit_request_id' => $request->id, 'user_id' => $user->id]);
@@ -172,6 +176,7 @@ class AuditReportsRenderTest extends FeatureTest
 
         $request = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => $hostile,
             'status' => AuditRequestStatus::SENT->value,
         ]);
@@ -232,6 +237,7 @@ class AuditReportsRenderTest extends FeatureTest
 
         $request = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/re-run-target',
             'status' => AuditRequestStatus::SENT->value,
         ]);
@@ -283,6 +289,7 @@ class AuditReportsRenderTest extends FeatureTest
         // card to hold the calendar, so give it one here.
         $request = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/calendared',
         ]);
         AuditReport::factory()->create([
@@ -373,6 +380,7 @@ class AuditReportsRenderTest extends FeatureTest
         $report = AuditReport::factory()->create(['user_id' => $user->id]);
         $report->auditRequest->update([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'repo_url' => 'https://github.com/acme/short-name',
             'status' => AuditRequestStatus::SENT->value,

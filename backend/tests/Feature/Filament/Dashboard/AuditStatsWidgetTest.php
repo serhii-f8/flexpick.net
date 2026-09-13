@@ -25,9 +25,9 @@ class AuditStatsWidgetTest extends FeatureTest
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
 
         // statuses: 1 in progress, 1 completed, 1 failed
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::ANALYZING->value]);
-        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::SENT->value]);
-        AuditRequest::factory()->create(['user_id' => $user->id, 'status' => AuditRequestStatus::FAILED->value, 'source' => 'web']);
+        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tenant_id' => $tenant->id, 'tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::ANALYZING->value]);
+        AuditRequest::factory()->dashboardSource()->create(['user_id' => $user->id, 'tenant_id' => $tenant->id, 'tier' => AuditTier::DIAGNOSTIC->value, 'status' => AuditRequestStatus::SENT->value]);
+        AuditRequest::factory()->create(['user_id' => $user->id, 'tenant_id' => $tenant->id, 'status' => AuditRequestStatus::FAILED->value, 'source' => 'web']);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
@@ -46,6 +46,7 @@ class AuditStatsWidgetTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'status' => AuditRequestStatus::ANALYZING->value,
         ]);
 

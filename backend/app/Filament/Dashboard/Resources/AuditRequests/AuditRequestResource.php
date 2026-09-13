@@ -56,9 +56,9 @@ class AuditRequestResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            // @phpstan-ignore-next-line method.notFound (forUser is AuditRequest's own scope; Larastan can't see it through the parent's generic Builder<Model> return type)
-            ->forUser(auth()->user())
-            ->with('report');
+            // @phpstan-ignore-next-line method.notFound (forTenant is AuditRequest's own scope; Larastan can't see it through the parent's generic Builder<Model> return type)
+            ->forTenant(Filament::getTenant())
+            ->with(['report', 'user']);
     }
 
     public static function shouldRegisterNavigation(): bool
@@ -94,6 +94,10 @@ class AuditRequestResource extends Resource
                     ->extraAttributes(['class' => 'fp-repo'])
                     ->placeholder(__('No repository'))
                     ->searchable(),
+                TextColumn::make('user.name')
+                    ->label(__('Requested by'))
+                    ->default(fn (AuditRequest $record): string => $record->name)
+                    ->toggleable(),
                 TextColumn::make('tier')
                     ->label(__('Audit type'))
                     ->badge()

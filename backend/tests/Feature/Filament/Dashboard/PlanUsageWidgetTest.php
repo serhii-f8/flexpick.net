@@ -72,7 +72,7 @@ class PlanUsageWidgetTest extends FeatureTest
         $user = User::factory()->create();
         $tenant = $this->tenantFor($user);
         app(AuditEntitlementService::class)
-            ->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+            ->grantPurchasedCredit($tenant, AuditTier::DEEP_AI);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));

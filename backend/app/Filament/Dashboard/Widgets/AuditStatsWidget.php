@@ -4,6 +4,7 @@ namespace App\Filament\Dashboard\Widgets;
 
 use App\Constants\AuditRequestStatus;
 use App\Models\AuditRequest;
+use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -46,7 +47,7 @@ class AuditStatsWidget extends BaseWidget
 
     protected function getStats(): array
     {
-        $user = auth()->user();
+        $tenant = Filament::getTenant();
         $buckets = self::statusBuckets();
 
         $definitions = [
@@ -60,7 +61,7 @@ class AuditStatsWidget extends BaseWidget
         $stats = [];
 
         foreach ($definitions as $key => [$label, $color, $icon, $description]) {
-            $count = AuditRequest::forUser($user)->whereIn('status', $buckets[$key])->count();
+            $count = AuditRequest::forTenant($tenant)->whereIn('status', $buckets[$key])->count();
 
             // A wall of zeroes competes with the states that matter. Only
             // surface a bucket once it actually holds something.

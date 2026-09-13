@@ -11,7 +11,8 @@ use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
 use App\Models\AuditScheduleRun;
-use App\Models\UserParameter;
+use App\Models\Tenant;
+use App\Models\TenantParameter;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\ScheduleOccurrenceProjector;
 use App\Services\AuditReport\ScoreChartBuilder;
@@ -21,6 +22,7 @@ use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class AuditReports extends Page
@@ -83,9 +85,9 @@ class AuditReports extends Page
      *
      * So a user may only look up a repo they already have a claim to: the one
      * they are about to submit in their own launch form, or one carried by
-     * their own audit history or schedules. A refusal leaves the key unset, so
-     * the blade renders its "not yet fetched" branch exactly as before any
-     * lookup ran.
+     * their workspace's audit history or schedules. A refusal leaves the key
+     * unset, so the blade renders its "not yet fetched" branch exactly as
+     * before any lookup ran.
      */
     private function userMayLookUpBranchesFor(string $repoUrl): bool
     {
@@ -93,12 +95,18 @@ class AuditReports extends Page
             return true;
         }
 
-        $userId = auth()->id();
+        /** @var Tenant|null $tenant */
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return false;
+        }
+
         // Schedules are stored trimmed; requests keep whatever was submitted.
         $variants = [$repoUrl, $repoUrl.'/'];
 
-        return AuditRequest::query()->where('user_id', $userId)->whereIn('repo_url', $variants)->exists()
-            || AuditSchedule::query()->where('user_id', $userId)->whereIn('repo_url', $variants)->exists();
+        return AuditRequest::query()->forTenant($tenant)->whereIn('repo_url', $variants)->exists()
+            || AuditSchedule::query()->where('tenant_id', $tenant->id)->whereIn('repo_url', $variants)->exists();
     }
 
     public function prevCalendarMonth(): void
@@ -181,6 +189,7 @@ class AuditReports extends Page
 
         $branch = ($branch !== null && $branch !== '') ? $branch : null;
         $user = auth()->user();
+        /** @var Tenant|null $tenant */
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
 
@@ -231,6 +240,7 @@ class AuditReports extends Page
             'tier' => $selected->value,
             'funding' => $funding->value,
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
         ]);
 
         // An allowance or purchased-credit run is metered simply by existing
@@ -262,6 +272,8 @@ class AuditReports extends Page
     private function purchase(string $repoUrl, AuditTier $tier, ?string $branch = null): void
     {
         $user = auth()->user();
+        /** @var Tenant|null $tenant */
+        $tenant = Filament::getTenant();
         $slug = collect((array) config('pricing.tiers'))
             ->search(fn (array $definition): bool => ($definition['tier'] ?? null) === $tier->value);
 
@@ -282,10 +294,11 @@ class AuditReports extends Page
             'tier' => $tier->value,
             'funding' => AuditFunding::PURCHASE->value,
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
         ]);
 
-        UserParameter::updateOrCreate(
-            ['user_id' => $user->id, 'name' => HandleAuditTierOrder::INTENT_PARAM],
+        TenantParameter::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'name' => HandleAuditTierOrder::INTENT_PARAM],
             ['value' => $auditRequest->uuid],
         );
 
@@ -295,6 +308,7 @@ class AuditReports extends Page
     public function setSchedule(string $repoUrl, string $frequency, ?string $tier = null): void
     {
         $user = auth()->user();
+        /** @var Tenant|null $tenant */
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
         $selected = AuditTier::tryFrom($tier ?? AuditTier::DIAGNOSTIC->value) ?? AuditTier::DIAGNOSTIC;
@@ -306,7 +320,7 @@ class AuditReports extends Page
         $repoUrl = rtrim($repoUrl, '/');
 
         if ($frequency === 'off') {
-            AuditSchedule::query()->where('user_id', $user->id)->where('repo_url', $repoUrl)->delete();
+            AuditSchedule::query()->where('tenant_id', $tenant->id)->where('repo_url', $repoUrl)->delete();
             Notification::make()->title(__('Scheduled audits turned off'))->success()->send();
 
             return;
@@ -327,12 +341,13 @@ class AuditReports extends Page
             return;
         }
 
-        $existing = AuditSchedule::query()->where('user_id', $user->id)->where('repo_url', $repoUrl)->first();
+        $existing = AuditSchedule::query()->where('tenant_id', $tenant->id)->where('repo_url', $repoUrl)->first();
 
         AuditSchedule::updateOrCreate(
-            ['user_id' => $user->id, 'repo_url' => $repoUrl],
+            ['tenant_id' => $tenant->id, 'repo_url' => $repoUrl],
             [
-                'tenant_id' => $tenant->id,
+                // Created-by only; the schedule is the workspace's.
+                'user_id' => $user->id,
                 'frequency' => $frequency,
                 'tier' => $selected->value,
                 'day_of_week' => $frequency === 'weekly' ? ($existing->day_of_week ?? now()->dayOfWeek) : null,
@@ -345,11 +360,17 @@ class AuditReports extends Page
 
     public function setScheduleDay(string $repoUrl, int $dayOfWeek): void
     {
-        $user = auth()->user();
+        /** @var Tenant|null $tenant */
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return;
+        }
+
         $repoUrl = rtrim($repoUrl, '/');
 
         AuditSchedule::query()
-            ->where('user_id', $user->id)
+            ->where('tenant_id', $tenant->id)
             ->where('repo_url', $repoUrl)
             ->where('frequency', 'weekly')
             ->update(['day_of_week' => max(0, min(6, $dayOfWeek))]);
@@ -357,11 +378,17 @@ class AuditReports extends Page
 
     public function setScheduleMonthDay(string $repoUrl, int $dayOfMonth): void
     {
-        $user = auth()->user();
+        /** @var Tenant|null $tenant */
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return;
+        }
+
         $repoUrl = rtrim($repoUrl, '/');
 
         AuditSchedule::query()
-            ->where('user_id', $user->id)
+            ->where('tenant_id', $tenant->id)
             ->where('repo_url', $repoUrl)
             ->where('frequency', 'monthly')
             ->update(['day_of_month' => max(1, min(31, $dayOfMonth))]);
@@ -369,31 +396,39 @@ class AuditReports extends Page
 
     public function setScheduleBranch(string $repoUrl, ?string $branch): void
     {
-        $user = auth()->user();
+        /** @var Tenant|null $tenant */
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return;
+        }
+
         $repoUrl = rtrim($repoUrl, '/');
 
         AuditSchedule::query()
-            ->where('user_id', $user->id)
+            ->where('tenant_id', $tenant->id)
             ->where('repo_url', $repoUrl)
             ->update(['branch' => ($branch !== null && $branch !== '') ? $branch : null]);
     }
 
     public function getViewData(): array
     {
-        $user = auth()->user();
+        /** @var Tenant|null $tenant */
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
         $chartBuilder = app(ScoreChartBuilder::class);
         $projector = app(ScheduleOccurrenceProjector::class);
 
-        $reports = $user->auditReports()
+        $reports = AuditReport::query()
+            // @phpstan-ignore-next-line method.notFound (forTenant is AuditRequest's own scope; Larastan can't see it through whereHas's generic Builder<Model> closure argument)
+            ->whereHas('auditRequest', fn (Builder $query) => $query->forTenant($tenant))
             ->with('auditRequest')
             ->latest()
             ->get();
 
         $quotas = $entitlements->quotas($tenant);
 
-        $schedules = AuditSchedule::query()->where('user_id', $user->id)
+        $schedules = AuditSchedule::query()->where('tenant_id', $tenant->id)
             ->get()
             ->keyBy(fn (AuditSchedule $s): string => rtrim($s->repo_url, '/'));
 

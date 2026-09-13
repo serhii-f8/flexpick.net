@@ -36,10 +36,11 @@ class AuditReportsTierSelectionTest extends FeatureTest
         $this->assertSame(AuditTier::DIAGNOSTIC, $request->tier);
         $this->assertSame(AuditFunding::ALLOWANCE, $request->funding);
         $this->assertSame('dashboard', $request->source);
+        $this->assertSame($tenant->id, $request->tenant_id);
         $this->assertSame(
             4,
             app(AuditEntitlementService::class)
-                ->remainingRuns($user, $tenant, AuditTier::DIAGNOSTIC),
+                ->remainingRuns($tenant, AuditTier::DIAGNOSTIC),
         );
         Queue::assertPushed(GenerateAuditReport::class);
     }
@@ -71,7 +72,7 @@ class AuditReportsTierSelectionTest extends FeatureTest
         $this->assertSame(
             2,
             app(AuditEntitlementService::class)
-                ->remainingRuns($user, $tenant, AuditTier::DEEP_AI),
+                ->remainingRuns($tenant, AuditTier::DEEP_AI),
         );
     }
 

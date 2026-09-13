@@ -259,24 +259,6 @@ parameters:
 			path: app/Filament/Admin/Widgets/AuditsByPlanWidget.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$auditRequest\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Filament/Dashboard/Pages/AuditReports.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Filament/Dashboard/Pages/AuditReports.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$payload\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Filament/Dashboard/Pages/AuditReports.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1

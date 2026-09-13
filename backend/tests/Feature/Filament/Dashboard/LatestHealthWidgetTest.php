@@ -21,6 +21,7 @@ class LatestHealthWidgetTest extends FeatureTest
 
         $older = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/health',
             'status' => AuditRequestStatus::SENT->value,
             'created_at' => now()->subDays(7),
@@ -34,6 +35,7 @@ class LatestHealthWidgetTest extends FeatureTest
 
         $newer = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/health',
             'status' => AuditRequestStatus::SENT->value,
         ]);
@@ -79,6 +81,7 @@ class LatestHealthWidgetTest extends FeatureTest
 
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/pending',
             'status' => AuditRequestStatus::ANALYZING->value,
         ]);

@@ -14,7 +14,7 @@ use Tests\Feature\FeatureTest;
 
 class RecentAuditsWidgetTest extends FeatureTest
 {
-    public function test_shows_last_five_own_audits_only(): void
+    public function test_shows_last_five_workspace_audits_only(): void
     {
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create();
@@ -23,12 +23,16 @@ class RecentAuditsWidgetTest extends FeatureTest
         foreach (range(1, 6) as $i) {
             AuditRequest::factory()->create([
                 'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
                 'repo_url' => "https://github.com/acme/recent-{$i}",
                 'status' => AuditRequestStatus::SENT->value,
                 'created_at' => now()->subDays(7 - $i),
             ]);
         }
-        AuditRequest::factory()->create(['repo_url' => 'https://github.com/acme/foreign-recent']);
+        AuditRequest::factory()->create([
+            'tenant_id' => Tenant::factory()->create()->id,
+            'repo_url' => 'https://github.com/acme/foreign-recent',
+        ]);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
@@ -50,6 +54,7 @@ class RecentAuditsWidgetTest extends FeatureTest
 
         $older = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/app',
             'created_at' => now()->subDays(7),
         ]);
@@ -62,6 +67,7 @@ class RecentAuditsWidgetTest extends FeatureTest
 
         $newer = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/app',
         ]);
         AuditReport::factory()->create([

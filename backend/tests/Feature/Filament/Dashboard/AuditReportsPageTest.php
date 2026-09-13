@@ -45,6 +45,7 @@ class AuditReportsPageTest extends FeatureTest
         $request = AuditRequest::where('user_id', $user->id)->firstOrFail();
         $this->assertSame('dashboard', $request->source);
         $this->assertSame($user->id, $request->user_id);
+        $this->assertSame($tenant->id, $request->tenant_id);
         $this->assertSame(AuditRequestStatus::QUEUED->value, $request->status);
         $this->assertNotNull($request->email_verified_at);
         $this->assertFalse($request->free_run);
@@ -62,7 +63,7 @@ class AuditReportsPageTest extends FeatureTest
         Queue::fake([GenerateAuditReport::class]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user); // no subscription
-        AuditRequest::factory()->count(3)->freeRun()->create(['email' => $user->email]);
+        AuditRequest::factory()->count(3)->freeRun()->create(['tenant_id' => $tenant->id, 'email' => $user->email]);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
@@ -97,7 +98,7 @@ class AuditReportsPageTest extends FeatureTest
         $request = AuditRequest::where('user_id', $user->id)->firstOrFail();
         $this->assertSame('dashboard', $request->source);
         $this->assertTrue($request->free_run, 'A dashboard run without a subscription must consume a free run.');
-        $this->assertSame(1, app(AuditEntitlementService::class)->freeRunsUsed($user->email));
+        $this->assertSame(1, app(AuditEntitlementService::class)->freeRunsUsed($tenant));
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
@@ -109,10 +110,11 @@ class AuditReportsPageTest extends FeatureTest
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_deep_ai_credits' => 1]);
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'tier' => AuditTier::DEEP_AI->value,
             'funding' => AuditFunding::ALLOWANCE->value,
         ]);
-        app(AuditEntitlementService::class)->grantPurchasedCredit($user, AuditTier::DEEP_AI);
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DEEP_AI);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
@@ -124,7 +126,7 @@ class AuditReportsPageTest extends FeatureTest
 
         $request = AuditRequest::where('user_id', $user->id)->where('repo_url', 'https://github.com/acme/my-app')->firstOrFail();
         $this->assertSame(AuditFunding::PURCHASE, $request->funding);
-        $this->assertSame(0, app(AuditEntitlementService::class)->purchasedCreditBalance($user, AuditTier::DEEP_AI));
+        $this->assertSame(0, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
@@ -183,6 +185,7 @@ class AuditReportsPageTest extends FeatureTest
 
         $this->assertDatabaseHas('audit_schedules', [
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/app',
             'frequency' => 'weekly',
         ]);
@@ -191,7 +194,7 @@ class AuditReportsPageTest extends FeatureTest
             ->test(AuditReports::class)
             ->call('setSchedule', 'https://github.com/acme/app', 'off');
 
-        $this->assertDatabaseMissing('audit_schedules', ['user_id' => $user->id]);
+        $this->assertDatabaseMissing('audit_schedules', ['tenant_id' => $tenant->id]);
     }
 
     /**
@@ -206,6 +209,7 @@ class AuditReportsPageTest extends FeatureTest
 
         $heldRequest = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'tier' => AuditTier::EXPERT->value,
             'status' => AuditRequestStatus::EXPERT_REVIEW->value,
             'repo_url' => 'https://github.com/acme/held-repo',
@@ -214,6 +218,7 @@ class AuditReportsPageTest extends FeatureTest
 
         $sentRequest = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'status' => AuditRequestStatus::SENT->value,
             'repo_url' => 'https://github.com/acme/sent-repo',
         ]);
@@ -236,6 +241,7 @@ class AuditReportsPageTest extends FeatureTest
         foreach ([[60, 7], [68, 0]] as [$score, $daysAgo]) {
             $request = AuditRequest::factory()->create([
                 'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
                 'repo_url' => 'https://github.com/acme/app',
                 'status' => AuditRequestStatus::SENT->value,
                 'created_at' => now()->subDays($daysAgo),
@@ -483,8 +489,8 @@ class AuditReportsPageTest extends FeatureTest
     }
 
     /**
-     * The lookup is entitled by the user's own audit history: this repo has an
-     * AuditRequest of theirs, which is exactly the state that renders the
+     * The lookup is entitled by the workspace's audit history: this repo has
+     * an AuditRequest of theirs, which is exactly the state that renders the
      * per-repo branch <select> whose x-init calls this method.
      */
     public function test_load_branches_populates_branches_by_repo_from_the_github_client(): void
@@ -492,7 +498,7 @@ class AuditReportsPageTest extends FeatureTest
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
-        AuditRequest::factory()->create(['user_id' => $user->id, 'repo_url' => 'https://github.com/acme/app']);
+        AuditRequest::factory()->create(['user_id' => $user->id, 'tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/app']);
 
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('dashboard'));
@@ -523,10 +529,11 @@ class AuditReportsPageTest extends FeatureTest
         $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
 
         // Someone else's repo: not in this user's repoUrl input, and not on
-        // any AuditRequest or AuditSchedule of theirs.
+        // any AuditRequest or AuditSchedule of their workspace.
         $stranger = User::factory()->create();
         AuditRequest::factory()->create([
             'user_id' => $stranger->id,
+            'tenant_id' => $this->createTenantFor($stranger)->id,
             'repo_url' => 'https://github.com/victim/secret',
         ]);
 

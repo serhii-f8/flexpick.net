@@ -8,7 +8,7 @@ use App\Constants\AuditTier;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Listeners\Order\HandleAuditTierOrder;
 use App\Models\AuditRequest;
-use App\Models\UserParameter;
+use App\Models\TenantParameter;
 use App\Services\AuditReport\AuditEntitlementService;
 use Database\Seeders\AuditMonetizationSeeder;
 use Illuminate\Support\Facades\Queue;
@@ -40,9 +40,10 @@ class AuditReportsPurchaseTest extends FeatureTest
         $this->assertSame(AuditFunding::PURCHASE, $request->funding);
         $this->assertSame('https://github.com/acme/app', $request->repo_url);
 
+        $this->assertSame($tenant->id, $request->tenant_id);
         $this->assertSame(
             $request->uuid,
-            UserParameter::where('user_id', $user->id)
+            TenantParameter::where('tenant_id', $tenant->id)
                 ->where('name', HandleAuditTierOrder::INTENT_PARAM)
                 ->value('value'),
         );
@@ -74,7 +75,7 @@ class AuditReportsPurchaseTest extends FeatureTest
         $this->assertSame(
             1,
             app(AuditEntitlementService::class)
-                ->runsUsedThisMonth($user, AuditTier::DEEP_AI),
+                ->runsUsedThisMonth($tenant, AuditTier::DEEP_AI),
         );
     }
 }

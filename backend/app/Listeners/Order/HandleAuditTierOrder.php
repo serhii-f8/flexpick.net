@@ -11,8 +11,8 @@ use App\Models\AuditRequest;
 use App\Models\OneTimeProduct;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Models\TenantParameter;
 use App\Models\User;
-use App\Models\UserParameter;
 use App\Services\AuditReport\AuditEntitlementService;
 
 /**
@@ -102,16 +102,17 @@ class HandleAuditTierOrder
      *
      * The stored intent uuid can miss even though the customer did start a
      * dashboard checkout: an overlapping checkout overwrites the single
-     * intent row per user, the purge job deletes stale awaiting_payment rows,
-     * or a guest's row simply ages out mid-checkout. When the uuid lookup
-     * misses, fall back to the buyer's most recent awaiting_payment request
-     * at the ordered tier -- the dashboard purchase flow only ever leaves one
-     * such row per tier, so it is still the request they meant to pay for.
+     * intent row per workspace, the purge job deletes stale awaiting_payment
+     * rows, or a guest's row simply ages out mid-checkout. When the uuid
+     * lookup misses, fall back to the workspace's most recent awaiting_payment
+     * request at the ordered tier -- the dashboard purchase flow only ever
+     * leaves one such row per tier, so it is still the request they meant to
+     * pay for.
      */
     private function intentRequestFor(Order $order, string $tierValue): ?AuditRequest
     {
-        $intent = UserParameter::query()
-            ->where('user_id', $order->user_id)
+        $intent = TenantParameter::query()
+            ->where('tenant_id', $order->tenant_id)
             ->where('name', self::INTENT_PARAM)
             ->first();
 
@@ -126,7 +127,7 @@ class HandleAuditTierOrder
         }
 
         $request ??= AuditRequest::query()
-            ->where('user_id', $order->user_id)
+            ->where('tenant_id', $order->tenant_id)
             ->where('tier', $tierValue)
             ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value)
             ->latest('id')

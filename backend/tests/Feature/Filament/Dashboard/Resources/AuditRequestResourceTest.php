@@ -18,14 +18,20 @@ use Tests\Feature\FeatureTest;
 
 class AuditRequestResourceTest extends FeatureTest
 {
-    public function test_list_shows_own_audits_only(): void
+    /**
+     * The list is the workspace's: a run a member launched, a pre-signup
+     * request claimed into the workspace (no user_id yet), and nothing that
+     * belongs to another workspace -- or to none.
+     */
+    public function test_list_shows_workspace_audits_only(): void
     {
         $user = User::factory()->create(['email' => 'list-owner@example.com']);
         $tenant = $this->createTenantFor($user);
 
-        AuditRequest::factory()->create(['user_id' => $user->id, 'repo_url' => 'https://github.com/acme/mine-by-id']);
-        AuditRequest::factory()->create(['user_id' => null, 'email' => 'list-owner@example.com', 'repo_url' => 'https://github.com/acme/mine-by-email']);
-        AuditRequest::factory()->create(['repo_url' => 'https://github.com/acme/not-mine']);
+        AuditRequest::factory()->create(['user_id' => $user->id, 'tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/mine-by-id']);
+        AuditRequest::factory()->create(['user_id' => null, 'tenant_id' => $tenant->id, 'email' => 'list-owner@example.com', 'repo_url' => 'https://github.com/acme/mine-claimed']);
+        AuditRequest::factory()->create(['tenant_id' => Tenant::factory()->create()->id, 'repo_url' => 'https://github.com/acme/not-mine']);
+        AuditRequest::factory()->create(['email' => 'list-owner@example.com', 'repo_url' => 'https://github.com/acme/not-mine-unclaimed']);
 
         $this->actingAs($user);
 
@@ -33,8 +39,28 @@ class AuditRequestResourceTest extends FeatureTest
             ->assertSuccessful();
 
         $response->assertSee('mine-by-id');
-        $response->assertSee('mine-by-email');
+        $response->assertSee('mine-claimed');
         $response->assertDontSee('not-mine');
+    }
+
+    public function test_list_names_the_member_who_requested_each_audit(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $teammate = User::factory()->create(['name' => 'Teammate Requester']);
+        $tenant->users()->attach($teammate);
+
+        AuditRequest::factory()->create(['user_id' => $teammate->id, 'tenant_id' => $tenant->id, 'repo_url' => 'https://github.com/acme/by-teammate']);
+        AuditRequest::factory()->create(['user_id' => null, 'tenant_id' => $tenant->id, 'name' => 'Guest Submitter', 'repo_url' => 'https://github.com/acme/by-guest']);
+
+        $this->actingAs($user);
+
+        $this->get(AuditRequestResource::getUrl('index', [], true, 'dashboard', tenant: $tenant))
+            ->assertSuccessful()
+            ->assertSee(__('Requested by'))
+            ->assertSee('Teammate Requester')
+            // A claimed pre-signup request has no member yet; fall back to the submitted name.
+            ->assertSee('Guest Submitter');
     }
 
     public function test_list_shows_the_tier_and_price_each_audit_ran_at(): void
@@ -44,11 +70,13 @@ class AuditRequestResourceTest extends FeatureTest
 
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/tier-deep',
             'tier' => AuditTier::DEEP_AI->value,
         ]);
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/tier-free',
             'tier' => AuditTier::DIAGNOSTIC->value,
         ]);
@@ -67,7 +95,7 @@ class AuditRequestResourceTest extends FeatureTest
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
-        $foreign = AuditRequest::factory()->create();
+        $foreign = AuditRequest::factory()->create(['tenant_id' => Tenant::factory()->create()->id]);
 
         $this->actingAs($user);
         $this->expectException(ModelNotFoundException::class);
@@ -81,6 +109,7 @@ class AuditRequestResourceTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $audit = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'status' => AuditRequestStatus::FAILED->value,
             'failure_reason' => 'Clone timed out after 120s',
         ]);
@@ -98,6 +127,7 @@ class AuditRequestResourceTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $audit = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'status' => AuditRequestStatus::AWAITING_ACCESS->value,
         ]);
 
@@ -114,6 +144,7 @@ class AuditRequestResourceTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $audit = AuditRequest::factory()->verified()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'status' => AuditRequestStatus::SENT->value,
         ]);
         AuditReport::factory()->create(['audit_request_id' => $audit->id, 'user_id' => $user->id]);
@@ -134,6 +165,7 @@ class AuditRequestResourceTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $audit = AuditRequest::factory()->verified()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'status' => AuditRequestStatus::EXPERT_REVIEW->value,
         ]);
         AuditReport::factory()->create(['audit_request_id' => $audit->id, 'user_id' => $user->id]);
@@ -156,6 +188,7 @@ class AuditRequestResourceTest extends FeatureTest
 
         $audit = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'status' => AuditRequestStatus::SENT->value,
         ]);
         AuditReport::factory()->create([
@@ -236,6 +269,7 @@ class AuditRequestResourceTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $audit = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/short-list-name',
             'status' => AuditRequestStatus::SENT->value,
         ]);
@@ -258,6 +292,7 @@ class AuditRequestResourceTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $audit = AuditRequest::factory()->verified()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'repo_url' => 'https://github.com/acme/view-title',
             'status' => AuditRequestStatus::SENT->value,
         ]);
@@ -287,6 +322,7 @@ class AuditRequestResourceTest extends FeatureTest
         $tenant = $this->createTenantFor($user);
         $audit = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
         ]);
 

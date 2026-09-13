@@ -37,10 +37,10 @@ class LatestHealthWidget extends Widget
 
     protected function getViewData(): array
     {
-        $user = auth()->user();
+        $tenant = Filament::getTenant();
 
         /** @var AuditRequest|null $latest */
-        $latest = AuditRequest::forUser($user)
+        $latest = AuditRequest::forTenant($tenant)
             ->with('report')
             ->latest()
             ->first();
@@ -72,7 +72,7 @@ class LatestHealthWidget extends Widget
             ];
         }
 
-        $history = AuditRequest::forUser($user)
+        $history = AuditRequest::forTenant($tenant)
             ->with('report')
             ->whereIn('repo_url', [rtrim($latest->repo_url, '/'), rtrim($latest->repo_url, '/').'/'])
             ->oldest()
