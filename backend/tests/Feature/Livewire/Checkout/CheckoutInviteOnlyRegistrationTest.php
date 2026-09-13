@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\PaymentProviders\PaymentProviderInterface;
 use App\Services\PaymentProviders\PaymentService;
 use App\Services\SessionService;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Mockery;
 use Mockery\MockInterface;
@@ -38,24 +39,27 @@ class CheckoutInviteOnlyRegistrationTest extends FeatureTest
 
     public function test_a_cold_guest_cannot_register_at_checkout_without_a_code(): void
     {
+        $email = $this->uniqueEmail('cold');
+
         Livewire::test(ProductCheckoutForm::class)
             ->set('name', 'Cold Visitor')
-            ->set('email', 'cold@example.com')
+            ->set('email', $email)
             ->set('password', 'password')
             ->set('paymentProvider', 'paymore')
             ->call('checkout')
             ->assertHasErrors(['referral_code']);
 
-        $this->assertDatabaseMissing('users', ['email' => 'cold@example.com']);
+        $this->assertDatabaseMissing('users', ['email' => $email]);
     }
 
     public function test_a_typed_valid_code_lets_a_guest_register_at_checkout(): void
     {
         $this->referralCode('PARTNER1');
+        $email = $this->uniqueEmail('invited');
 
         Livewire::test(ProductCheckoutForm::class)
             ->set('name', 'Invited Visitor')
-            ->set('email', 'invited@example.com')
+            ->set('email', $email)
             ->set('password', 'password')
             ->set('referralCode', 'PARTNER1')
             ->set('paymentProvider', 'paymore')
@@ -63,25 +67,26 @@ class CheckoutInviteOnlyRegistrationTest extends FeatureTest
             ->assertHasNoErrors()
             ->assertRedirect('http://paymore.com/checkout');
 
-        $this->assertDatabaseHas('users', ['email' => 'invited@example.com']);
+        $this->assertDatabaseHas('users', ['email' => $email]);
     }
 
     public function test_a_referred_visitor_carrying_a_session_code_never_sees_the_field(): void
     {
         $this->referralCode('PARTNER2');
         session([SessionConstants::REFERRAL_CODE => 'PARTNER2']);
+        $email = $this->uniqueEmail('referred');
 
         Livewire::test(ProductCheckoutForm::class)
             ->assertViewHas('requiresInvitationCode', false)
             ->set('name', 'Referred Visitor')
-            ->set('email', 'referred@example.com')
+            ->set('email', $email)
             ->set('password', 'password')
             ->set('paymentProvider', 'paymore')
             ->call('checkout')
             ->assertHasNoErrors()
             ->assertRedirect('http://paymore.com/checkout');
 
-        $this->assertDatabaseHas('users', ['email' => 'referred@example.com']);
+        $this->assertDatabaseHas('users', ['email' => $email]);
     }
 
     public function test_the_field_is_offered_to_a_cold_guest(): void
@@ -94,17 +99,28 @@ class CheckoutInviteOnlyRegistrationTest extends FeatureTest
     public function test_the_gate_is_inert_when_the_flag_is_off(): void
     {
         config(['app.referral.only_registration' => false]);
+        $email = $this->uniqueEmail('anyone');
 
         Livewire::test(ProductCheckoutForm::class)
             ->assertViewHas('requiresInvitationCode', false)
             ->set('name', 'Anyone')
-            ->set('email', 'anyone@example.com')
+            ->set('email', $email)
             ->set('password', 'password')
             ->set('paymentProvider', 'paymore')
             ->call('checkout')
             ->assertHasNoErrors();
 
-        $this->assertDatabaseHas('users', ['email' => 'anyone@example.com']);
+        $this->assertDatabaseHas('users', ['email' => $email]);
+    }
+
+    /**
+     * The suite shares one database across classes, and RegisterControllerTest
+     * and ReferralRegistrationGateTest register the same fixture addresses;
+     * a literal here would collide with theirs in a full run.
+     */
+    private function uniqueEmail(string $prefix): string
+    {
+        return $prefix.'-'.Str::random(6).'@example.com';
     }
 
     private function product(): OneTimeProduct

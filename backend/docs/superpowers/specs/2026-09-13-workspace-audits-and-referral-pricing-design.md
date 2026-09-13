@@ -1,6 +1,6 @@
 # Workspace-Owned Audits, Referral → Pricing, FlexPick Branding
 
-Status: Approved (design), ready for implementation planning
+Status: Implemented
 Date: 2026-09-13
 Branch: `growth-retention`
 Builds on: `2026-09-07-partner-catalog-restriction-design.md` §2 (which
@@ -283,3 +283,14 @@ Feature:
 - Re-homing audits between workspaces.
 - Any change to the anonymous landing-page audit funnel beyond the renamed
   email-keyed entitlement methods.
+
+---
+
+## E. Implementation notes (2026-09-13)
+
+- `AuditReport::isViewableBy()` guards `download()` only; `show()` remains signed-URL-only (A.7 amended).
+- `SendAuditUnlockReminders` creates no requests; untouched (A.6 amended).
+- The run page (`AuditReports`) lists reports and schedules by tenant; `audit_schedules.user_id` is kept as created-by.
+- Landing-page submissions by an already-registered user are stamped with their primary workspace at creation (A.4 amended); the claim listener only claims for actual members of the tenant.
+- The dashboard purchase flow pins the checkout to the workspace the intent was written on (`buy.product?tenant=<uuid>`); `HandleAuditTierOrder` additionally falls back to the buyer's own awaiting-payment request across their workspaces.
+- Deploy: `php artisan migrate` (three new migrations; the third backfills data, is idempotent, and deletes in-flight `audit_tier_intent` rows by design). After the first production migrate, spot-check `tenant_parameters` totals for any customer in more than one workspace (credits are summed onto the primary tenant only). No asset rebuild needed.
