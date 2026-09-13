@@ -15,10 +15,11 @@ class RegisterValidator
 
     /**
      * @param  bool  $inviteOnly  Enforce REFERRAL_ONLY_REGISTRATION. Opt-in per
-     *                            caller: the public register forms pass true; the
-     *                            checkout forms, which also register guests, do
-     *                            not -- a buyer is never turned away for lacking
-     *                            an invitation.
+     *                            caller: every form that creates an account for
+     *                            a visitor (register, OTP register, checkout)
+     *                            passes true. Internal callers that create users
+     *                            on someone's behalf (guest report unlock) leave
+     *                            it off.
      */
     public function validate(array $fields, bool $passwordConfirmed = true, bool $inviteOnly = false)
     {

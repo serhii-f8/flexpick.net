@@ -609,7 +609,7 @@ class ProductCheckoutFormTest extends FeatureTest
         $validator = Mockery::mock(Validator::class);
         $validator->shouldReceive('fails')->andReturn(false);
         $mockRegisterValidator->shouldReceive('validate')
-            ->with(['name' => $name, 'email' => $email], false)
+            ->with(['name' => $name, 'email' => $email], false, true)
             ->andReturn($validator);
 
         $mockOtpService = Mockery::mock(OneTimePasswordService::class);
@@ -847,7 +847,7 @@ class ProductCheckoutFormTest extends FeatureTest
         $validator = Mockery::mock(Validator::class);
         $validator->shouldReceive('fails')->andReturn(false);
         $mockRegisterValidator->shouldReceive('validate')
-            ->with(['name' => $name, 'email' => $email, 'g-recaptcha-response' => $recaptcha], false)
+            ->with(['name' => $name, 'email' => $email, 'g-recaptcha-response' => $recaptcha], false, true)
             ->andReturn($validator);
 
         $mockOtpService = Mockery::mock(OneTimePasswordService::class);

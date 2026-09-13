@@ -52,6 +52,10 @@
         {{ $message }}
     </span>
     @enderror
+
+    @if (!empty($requiresInvitationCode))
+        <x-auth.invitation-code-field wire:model="referralCode" />
+    @endif
 @endif
 
 @include('livewire.auth.partials.recaptcha')

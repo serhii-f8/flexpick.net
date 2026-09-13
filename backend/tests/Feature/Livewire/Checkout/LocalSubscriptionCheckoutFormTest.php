@@ -485,7 +485,7 @@ class LocalSubscriptionCheckoutFormTest extends FeatureTest
         $validator = Mockery::mock(Validator::class);
         $validator->shouldReceive('fails')->andReturn(false);
         $mockRegisterValidator->shouldReceive('validate')
-            ->with(['name' => $name, 'email' => $email], false)
+            ->with(['name' => $name, 'email' => $email], false, true)
             ->andReturn($validator);
 
         $mockOtpService = Mockery::mock(OneTimePasswordService::class);
@@ -649,7 +649,7 @@ class LocalSubscriptionCheckoutFormTest extends FeatureTest
         $validator = Mockery::mock(Validator::class);
         $validator->shouldReceive('fails')->andReturn(false);
         $mockRegisterValidator->shouldReceive('validate')
-            ->with($userFields, false)
+            ->with($userFields, false, true)
             ->andReturn($validator);
 
         $mockOtpService = Mockery::mock(OneTimePasswordService::class);

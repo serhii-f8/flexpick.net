@@ -146,6 +146,7 @@ class ProductCheckoutForm extends CheckoutForm
             'requiresPayment' => $this->requiresPayment($totals),
             'otpEnabled' => config('app.otp_login_enabled'),
             'otpVerified' => $this->otpVerified,
+            'requiresInvitationCode' => $this->requiresInvitationCode(),
         ]);
     }
 

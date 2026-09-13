@@ -3,6 +3,7 @@
 namespace App\Livewire\Checkout;
 
 use App\Constants\PaymentProviderConstants;
+use App\Constants\ReferralConstants;
 use App\Exceptions\LoginException;
 use App\Exceptions\NoPaymentProvidersAvailableException;
 use App\Models\User;
@@ -10,6 +11,7 @@ use App\Services\LoginService;
 use App\Services\OneTimePasswordService;
 use App\Services\PaymentProviders\PaymentProviderInterface;
 use App\Services\PaymentProviders\PaymentService;
+use App\Services\ReferralRegistrationGate;
 use App\Services\UserService;
 use App\Validator\LoginValidator;
 use App\Validator\RegisterValidator;
@@ -34,6 +36,9 @@ class CheckoutForm extends Component
 
     public $oneTimePassword;
 
+    /** Typed invitation code, only rendered while invite-only signup is on. */
+    public string $referralCode = '';
+
     public bool $showOtpForm = false;
 
     protected bool $otpVerified = false;
@@ -53,6 +58,12 @@ class CheckoutForm extends Component
             'otpEnabled' => config('app.otp_login_enabled'),
             'otpVerified' => $this->otpVerified,
         ]);
+    }
+
+    /** Whether the signup half of the form must ask for an invitation code. */
+    protected function requiresInvitationCode(): bool
+    {
+        return app(ReferralRegistrationGate::class)->requiresCodeInput();
     }
 
     public function handleLoginOrRegistration(
@@ -140,18 +151,20 @@ class CheckoutForm extends Component
             $fields[recaptchaFieldName()] = $this->recaptcha;
         }
 
-        $validator = $registerValidator->validate($fields, passwordConfirmed: false);
+        $fields = $this->withInvitationCode($fields);
+
+        $validator = $registerValidator->validate($fields, passwordConfirmed: false, inviteOnly: true);
 
         if ($validator->fails()) {
             $this->resetReCaptcha();
             throw new ValidationException($validator);
         }
 
-        $user = $userService->createUser([
+        $user = $userService->createUser($this->withInvitationCode([
             'name' => $this->name,
             'email' => $this->email,
             'password' => $this->password,
-        ], true);
+        ]), true);
 
         auth()->login($user);
 
@@ -233,17 +246,19 @@ class CheckoutForm extends Component
                 $fields[recaptchaFieldName()] = $this->recaptcha;
             }
 
-            $validator = $registerValidator->validate($fields, passwordConfirmed: false);
+            $fields = $this->withInvitationCode($fields);
+
+            $validator = $registerValidator->validate($fields, passwordConfirmed: false, inviteOnly: true);
 
             if ($validator->fails()) {
                 $this->resetReCaptcha();
                 throw new ValidationException($validator);
             }
 
-            $user = $userService->createUser([
+            $user = $userService->createUser($this->withInvitationCode([
                 'name' => $this->name,
                 'email' => $this->email,
-            ], true);
+            ]), true);
         }
 
         if (! $oneTimePasswordService->sendCode($user)) {
@@ -342,5 +357,20 @@ class CheckoutForm extends Component
             $providers,
             fn ($provider): bool => $provider->getSlug() === PaymentProviderConstants::OFFLINE_SLUG,
         ));
+    }
+
+    /**
+     * The checkout form registers guests too, so it enforces invite-only
+     * signup exactly like /register. A referred visitor already carries the
+     * code in session or cookie and is let through by the gate without
+     * typing anything; a cold visitor is asked for one.
+     */
+    private function withInvitationCode(array $fields): array
+    {
+        if (app(ReferralRegistrationGate::class)->isActive()) {
+            $fields[ReferralConstants::REGISTRATION_CODE_FIELD] = $this->referralCode;
+        }
+
+        return $fields;
     }
 }

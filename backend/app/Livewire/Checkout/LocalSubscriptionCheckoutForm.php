@@ -64,6 +64,7 @@ class LocalSubscriptionCheckoutForm extends CheckoutForm
             'totals' => $totals,
             'otpEnabled' => config('app.otp_login_enabled'),
             'otpVerified' => $this->otpVerified,
+            'requiresInvitationCode' => $this->requiresInvitationCode(),
         ]);
     }
 

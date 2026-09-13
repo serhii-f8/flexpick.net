@@ -69,6 +69,7 @@ class SubscriptionCheckoutForm extends CheckoutForm
             'isTrialSkipped' => ! $canUserHaveSubscriptionTrial,
             'otpEnabled' => config('app.otp_login_enabled'),
             'otpVerified' => $this->otpVerified,
+            'requiresInvitationCode' => $this->requiresInvitationCode(),
         ]);
     }
 

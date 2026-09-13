@@ -791,7 +791,7 @@ class ConvertLocalSubscriptionCheckoutFormTest extends FeatureTest
         $mockRegisterValidator
             ->shouldReceive('validate')
             ->once()
-            ->with($userFields, false)
+            ->with($userFields, false, true)
             ->andReturn($validator);
 
         $mockUserService

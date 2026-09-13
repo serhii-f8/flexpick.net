@@ -66,6 +66,7 @@ class ConvertLocalSubscriptionCheckoutForm extends CheckoutForm
             'isTenantPickerEnabled' => false,
             'otpEnabled' => config('app.otp_login_enabled'),
             'otpVerified' => $this->otpVerified,
+            'requiresInvitationCode' => $this->requiresInvitationCode(),
         ]);
     }
 
