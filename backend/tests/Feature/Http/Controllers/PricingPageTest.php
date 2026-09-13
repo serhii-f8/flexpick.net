@@ -79,12 +79,25 @@ class PricingPageTest extends FeatureTest
         $response->assertDontSee(__('Buying a plan here starts a brand-new workspace.'));
     }
 
-    public function test_guest_is_redirected_to_login(): void
+    public function test_a_guest_can_view_pricing_and_is_offered_sign_up(): void
     {
-        $this->withExceptionHandling();
         $response = $this->get(route('pricing'));
 
-        $response->assertRedirect(route('login'));
+        $response->assertStatus(200);
+        $response->assertSee(__('Plans & Pricing'));
+        $response->assertSee(__('Sign up'));
+        $response->assertSee(route('register'), false);
+        $response->assertSee(route('login'), false);
+    }
+
+    public function test_a_signed_in_user_is_not_offered_sign_up(): void
+    {
+        $user = $this->createUser();
+
+        $response = $this->actingAs($user)->get(route('pricing'));
+
+        $response->assertStatus(200);
+        $response->assertDontSee(__('Sign up'));
     }
 
     public function test_single_audits_get_their_own_heading_ahead_of_the_subscription_panel(): void

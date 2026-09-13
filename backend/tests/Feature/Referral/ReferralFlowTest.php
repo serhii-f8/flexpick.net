@@ -303,9 +303,7 @@ class ReferralFlowTest extends FeatureTest
 
         $link = $referralService->getReferralLink($user);
 
-        $this->assertStringContainsString('rc=', $link);
-        $this->assertStringNotContainsString('referralCode', $link);
-        $this->assertStringContainsString(url('/'), $link);
+        $this->assertStringStartsWith(route('pricing').'?', $link);
     }
 
     public function test_referral_stats_are_accurate(): void

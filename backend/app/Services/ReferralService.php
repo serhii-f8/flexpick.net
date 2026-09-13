@@ -275,6 +275,8 @@ class ReferralService
     {
         $referralCode = $this->getOrCreateReferralCode($user);
 
-        return url()->query('/', [ReferralConstants::HTTP_PARAM_REFERRAL_CODE => $referralCode->code]);
+        // Lands on the catalog, not the home redirect: a referred visitor
+        // should see what they can buy before they are asked to sign up.
+        return url()->query(route('pricing'), [ReferralConstants::HTTP_PARAM_REFERRAL_CODE => $referralCode->code]);
     }
 }

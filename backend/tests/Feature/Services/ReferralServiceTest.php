@@ -429,6 +429,6 @@ class ReferralServiceTest extends FeatureTest
         $referralCode = $user->fresh()->referralCode;
 
         $this->assertNotNull($referralCode);
-        $this->assertEquals(url('/?'.ReferralConstants::HTTP_PARAM_REFERRAL_CODE.'='.$referralCode->code), $link);
+        $this->assertEquals(route('pricing').'?'.ReferralConstants::HTTP_PARAM_REFERRAL_CODE.'='.$referralCode->code, $link);
     }
 }

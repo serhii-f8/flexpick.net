@@ -12,12 +12,15 @@
             </p>
 
             @guest
-                <p class="mt-4 text-sm">
-                    <x-link href="{{ route('register') }}">{{ __('Create an account') }}</x-link>
-                    {{ __('or') }}
-                    <x-link href="{{ route('login') }}">{{ __('log in') }}</x-link>
-                    {{ __('to manage your subscription.') }}
-                </p>
+                <div class="mt-6 flex flex-wrap items-center justify-center gap-4">
+                    <x-button-link.primary href="{{ route('register') }}" class="text-lg py-3! px-6">
+                        {{ __('Sign up') }}
+                    </x-button-link.primary>
+                    <p class="m-0 text-sm">
+                        {{ __('Already have an account?') }}
+                        <x-link href="{{ route('login') }}">{{ __('Log in') }}</x-link>
+                    </p>
+                </div>
             @endguest
         </header>
 
