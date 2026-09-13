@@ -21,7 +21,7 @@ class ListAuditRequests extends ListRecords
                 ->label(__('Run new audit'))
                 ->url(fn (): string => AuditReports::getUrl())
                 ->visible(fn (): bool => collect(
-                    app(AuditEntitlementService::class)->quotas(auth()->user(), Filament::getTenant())
+                    app(AuditEntitlementService::class)->quotas(Filament::getTenant())
                 )->contains(fn (TierQuota $quota): bool => $quota->hasRuns() || $quota->purchasable())),
         ];
     }

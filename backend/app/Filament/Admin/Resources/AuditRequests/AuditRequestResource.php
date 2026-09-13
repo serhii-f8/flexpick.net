@@ -281,7 +281,7 @@ class AuditRequestResource extends Resource
                         // them twice (their quota AND their card) and leave
                         // the audit_tier_intent UserParameter dangling so a
                         // later payment misses this request.
-                        if ($record->funding !== AuditFunding::PURCHASE && $entitlements->hasFreeRun($record->email)) {
+                        if ($record->funding !== AuditFunding::PURCHASE && $entitlements->hasFreeRunForEmail($record->email)) {
                             $entitlements->consumeFreeRun($record);
                         }
 

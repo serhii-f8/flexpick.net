@@ -30,13 +30,9 @@ class LatestHealthWidget extends Widget
 
     public static function canView(): bool
     {
-        $user = auth()->user();
+        $tenant = Filament::getTenant();
 
-        if (! $user) {
-            return false;
-        }
-
-        return app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
+        return auth()->check() && $tenant !== null && app(AuditEntitlementService::class)->hasAuditAccess($tenant);
     }
 
     protected function getViewData(): array

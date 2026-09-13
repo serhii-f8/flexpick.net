@@ -31,30 +31,26 @@ class AuditRequestForUserScopeTest extends FeatureTest
 
         // Free-run quota alone → access. This is what lets a directly
         // registered user reach the dashboard audit UI at all.
-        $bare = $this->createUser();
-        $this->assertTrue($entitlements->hasAuditAccess($bare, null));
+        $bare = Tenant::factory()->create();
+        $this->assertTrue($entitlements->hasAuditAccess($bare));
 
-        // Has an audit → access regardless of tenant
-        $withAudit = $this->createUser();
-        AuditRequest::factory()->create(['user_id' => $withAudit->id]);
-        $this->assertTrue($entitlements->hasAuditAccess($withAudit, null));
+        // Has an audit → access regardless of quota
+        $withAudit = Tenant::factory()->create();
+        AuditRequest::factory()->create(['tenant_id' => $withAudit->id]);
+        $this->assertTrue($entitlements->hasAuditAccess($withAudit));
 
         // With the free quota removed, the remaining arms govern on their own.
         config(['audit.free_reports_limit' => 0]);
 
-        // No audits, no free runs, no tenant → still access, because every
-        // tier is priced and a user who can buy a run can reach the UI.
-        $this->assertTrue($entitlements->hasAuditAccess($bare, null));
+        // No audits, no free runs, no allowance → still access, because every
+        // tier is priced and a workspace that can buy a run can reach the UI.
+        $this->assertTrue($entitlements->hasAuditAccess($bare));
 
         // Empty the catalog and there is genuinely nothing left to grant it.
         config(['pricing.tiers' => []]);
-        $this->assertFalse($entitlements->hasAuditAccess($bare, null));
-
-        // Tenant without allowance and nothing to buy → no access
-        $tenant = Tenant::factory()->create();
-        $this->assertFalse($entitlements->hasAuditAccess($bare, $tenant));
+        $this->assertFalse($entitlements->hasAuditAccess($bare));
 
         // An existing audit still grants access without any quota
-        $this->assertTrue($entitlements->hasAuditAccess($withAudit, null));
+        $this->assertTrue($entitlements->hasAuditAccess($withAudit));
     }
 }

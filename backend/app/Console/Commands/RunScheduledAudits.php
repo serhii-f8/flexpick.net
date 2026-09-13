@@ -26,7 +26,7 @@ class RunScheduledAudits extends Command
 
         foreach ($due as $schedule) {
             $tier = $schedule->tier;
-            $quota = $entitlements->quotaFor($schedule->user, $schedule->tenant, $tier);
+            $quota = $entitlements->quotaFor($schedule->tenant, $tier);
 
             if (! $quota->hasRuns()) {
                 // Never downgrade to a cheaper tier and never auto-charge:

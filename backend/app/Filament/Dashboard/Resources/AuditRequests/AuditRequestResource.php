@@ -63,13 +63,9 @@ class AuditRequestResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        $user = auth()->user();
+        $tenant = Filament::getTenant();
 
-        if (! $user) {
-            return false;
-        }
-
-        return app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
+        return auth()->check() && $tenant !== null && app(AuditEntitlementService::class)->hasAuditAccess($tenant);
     }
 
     public static function canCreate(): bool

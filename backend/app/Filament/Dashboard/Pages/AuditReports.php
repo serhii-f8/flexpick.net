@@ -123,12 +123,11 @@ class AuditReports extends Page
      */
     private function defaultTier(): AuditTier
     {
-        $user = auth()->user();
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
 
         foreach ([AuditTier::DEEP_AI, AuditTier::EXPERT, AuditTier::DIAGNOSTIC] as $tier) {
-            if ($entitlements->remainingRuns($user, $tenant, $tier) > 0) {
+            if ($entitlements->remainingRuns($tenant, $tier) > 0) {
                 return $tier;
             }
         }
@@ -162,7 +161,9 @@ class AuditReports extends Page
         // Share the one gate with the audit widgets and the Audits resource.
         // This page previously demanded a finished report, which hid it from
         // users whose first audit was still running.
-        return app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
+        $tenant = Filament::getTenant();
+
+        return $tenant !== null && app(AuditEntitlementService::class)->hasAuditAccess($tenant);
     }
 
     public function launchAudit(?string $repoUrl = null, ?string $tier = null, ?string $branch = null): void
@@ -199,7 +200,7 @@ class AuditReports extends Page
             return;
         }
 
-        $quota = $entitlements->quotaFor($user, $tenant, $selected);
+        $quota = $entitlements->quotaFor($tenant, $selected);
 
         if (! $quota->hasRuns()) {
             if ($quota->purchasable()) {
@@ -217,7 +218,7 @@ class AuditReports extends Page
             return;
         }
 
-        $funding = $entitlements->consume($user, $tenant, $selected, $quota);
+        $funding = $entitlements->consume($tenant, $selected, $quota);
 
         $auditRequest = AuditRequest::create([
             'name' => $user->name,
@@ -316,7 +317,7 @@ class AuditReports extends Page
         // a hint and this method is the gate -- the same rule already
         // applied to launchAudit(). A schedule is a subscriber feature; the
         // one-off free-run quota must never back a recurring run.
-        if ($entitlements->quotaFor($user, $tenant, $selected)->isLifetime) {
+        if ($entitlements->quotaFor($tenant, $selected)->isLifetime) {
             Notification::make()
                 ->title(__('Choose an audit type'))
                 ->body(__('Scheduled audits cannot run on the free-run tier.'))
@@ -390,7 +391,7 @@ class AuditReports extends Page
             ->latest()
             ->get();
 
-        $quotas = $entitlements->quotas($user, $tenant);
+        $quotas = $entitlements->quotas($tenant);
 
         $schedules = AuditSchedule::query()->where('user_id', $user->id)
             ->get()

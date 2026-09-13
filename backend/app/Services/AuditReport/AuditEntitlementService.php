@@ -9,11 +9,21 @@ use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
-use App\Models\User;
-use App\Models\UserParameter;
+use App\Models\TenantParameter;
 use App\Services\SubscriptionService;
 use Illuminate\Support\Collection;
 
+/**
+ * Who may run an audit, and out of which pool.
+ *
+ * Every quota is a *workspace* quota: plan allowance (metered monthly),
+ * purchased one-time credits (never expire) and the lifetime free-run
+ * quota all live on the Tenant, so every member draws from the same pool
+ * and sees the same remaining counts. The only email-keyed arm left is
+ * the anonymous landing-page funnel (`*ForEmail`), where no workspace
+ * exists yet; those rows are claimed into the visitor's first workspace by
+ * ClaimAuditRequestsForTenant and count there from then on.
+ */
 class AuditEntitlementService
 {
     public const BONUS_PARAM = 'audit_bonus_free_runs';
@@ -34,22 +44,15 @@ class AuditEntitlementService
         private SubscriptionService $subscriptionService,
     ) {}
 
-    public function freeRunsLimit(string $email): int
+    // -- Anonymous funnel (no workspace yet) --------------------------------
+
+    /** The configured quota only: a bonus belongs to a workspace, not an inbox. */
+    public function freeRunsLimitForEmail(string $email): int
     {
-        $bonus = 0;
-
-        $userId = User::where('email', $email)->value('id');
-        if ($userId !== null) {
-            $bonus = (int) UserParameter::query()
-                ->where('user_id', $userId)
-                ->where('name', self::BONUS_PARAM)
-                ->value('value');
-        }
-
-        return (int) config('audit.free_reports_limit') + $bonus;
+        return (int) config('audit.free_reports_limit');
     }
 
-    public function freeRunsUsed(string $email): int
+    public function freeRunsUsedForEmail(string $email): int
     {
         return AuditRequest::query()
             ->where('email', $email)
@@ -57,9 +60,29 @@ class AuditEntitlementService
             ->count();
     }
 
-    public function hasFreeRun(string $email): bool
+    public function hasFreeRunForEmail(string $email): bool
     {
-        return $this->freeRunsUsed($email) < $this->freeRunsLimit($email);
+        return $this->freeRunsUsedForEmail($email) < $this->freeRunsLimitForEmail($email);
+    }
+
+    // -- Workspace ---------------------------------------------------------
+
+    public function freeRunsLimit(Tenant $tenant): int
+    {
+        return (int) config('audit.free_reports_limit') + $this->tenantParameter($tenant, self::BONUS_PARAM);
+    }
+
+    public function freeRunsUsed(Tenant $tenant): int
+    {
+        return AuditRequest::query()
+            ->forTenant($tenant)
+            ->where('free_run', true)
+            ->count();
+    }
+
+    public function hasFreeRun(Tenant $tenant): bool
+    {
+        return $this->freeRunsUsed($tenant) < $this->freeRunsLimit($tenant);
     }
 
     /** Spends a free run. Sets both markers so metering and the lifetime
@@ -138,32 +161,31 @@ class AuditEntitlementService
      * Keyed on `funding`, not `source`: a checkout intent awaiting payment and
      * a purchased run are both dashboard-sourced but neither spends quota.
      */
-    public function runsUsedThisMonth(User $user, AuditTier $tier): int
+    public function runsUsedThisMonth(Tenant $tenant, AuditTier $tier): int
     {
         return AuditRequest::query()
-            ->where('user_id', $user->id)
+            ->forTenant($tenant)
             ->where('funding', AuditFunding::ALLOWANCE->value)
             ->where('tier', $tier->value)
             ->where('created_at', '>=', now()->startOfMonth())
             ->count();
     }
 
-    public function remainingRuns(User $user, ?Tenant $tenant, AuditTier $tier): int
+    public function remainingRuns(Tenant $tenant, AuditTier $tier): int
     {
-        return $this->quotaFor($user, $tenant, $tier)->remaining();
+        return $this->quotaFor($tenant, $tier)->remaining();
     }
 
-    public function quotaFor(User $user, ?Tenant $tenant, AuditTier $tier): TierQuota
+    public function quotaFor(Tenant $tenant, AuditTier $tier): TierQuota
     {
-        // Diagnostic defaults to the per-email lifetime free-run count, but a
-        // tenant whose plan grants a monthly Diagnostic allowance (every
-        // paid plan does) uses that instead -- same metered
-        // semantics every other tier already has, so nothing downstream
-        // needs to know Diagnostic is special-cased at all once this is
-        // decided.
+        // Diagnostic defaults to the workspace's lifetime free-run count, but
+        // a plan that grants a monthly Diagnostic allowance (every paid plan
+        // does) uses that instead -- same metered semantics every other tier
+        // already has, so nothing downstream needs to know Diagnostic is
+        // special-cased at all once this is decided.
         $subscriptionAllowance = $this->allowance($tenant, $tier);
         $isLifetime = $tier === AuditTier::DIAGNOSTIC && $subscriptionAllowance === 0;
-        $baseLimit = $isLifetime ? $this->freeRunsLimit($user->email) : $subscriptionAllowance;
+        $baseLimit = $isLifetime ? $this->freeRunsLimit($tenant) : $subscriptionAllowance;
 
         return new TierQuota(
             tier: $tier,
@@ -172,8 +194,8 @@ class AuditEntitlementService
             // monthly, so it always widens the limit rather than resetting
             // with the calendar -- see consume()/spendPurchasedCredit() for
             // how it's actually drawn down.
-            limit: $baseLimit + $this->purchasedCreditBalance($user, $tier),
-            used: $isLifetime ? $this->freeRunsUsed($user->email) : $this->runsUsedThisMonth($user, $tier),
+            limit: $baseLimit + $this->purchasedCreditBalance($tenant, $tier),
+            used: $isLifetime ? $this->freeRunsUsed($tenant) : $this->runsUsedThisMonth($tenant, $tier),
             isLifetime: $isLifetime,
             priceCents: $this->tierPriceCents($tier),
         );
@@ -184,39 +206,26 @@ class AuditEntitlementService
         return 'audit_purchased_credits_'.$tier->value;
     }
 
-    public function purchasedCreditBalance(User $user, AuditTier $tier): int
+    public function purchasedCreditBalance(Tenant $tenant, AuditTier $tier): int
     {
-        return (int) UserParameter::query()
-            ->where('user_id', $user->id)
-            ->where('name', $this->purchasedCreditParam($tier))
-            ->value('value');
+        return $this->tenantParameter($tenant, $this->purchasedCreditParam($tier));
     }
 
     /**
      * Grants a one-time, never-expiring credit for the tier -- what a
      * one-time tier product purchase resolves to when there's no dashboard
      * intent or prior diagnostic to run it against immediately (see
-     * HandleAuditTierOrder). Spent later via consume(), whenever the
-     * customer submits a run for any repo -- not tied to the purchase.
+     * HandleAuditTierOrder). Spent later via consume(), whenever any member
+     * submits a run for any repo -- not tied to the purchase.
      */
-    public function grantPurchasedCredit(User $user, AuditTier $tier, int $quantity = 1): void
+    public function grantPurchasedCredit(Tenant $tenant, AuditTier $tier, int $quantity = 1): void
     {
-        $param = UserParameter::query()->firstOrCreate(
-            ['user_id' => $user->id, 'name' => $this->purchasedCreditParam($tier)],
-            ['value' => 0],
-        );
-
-        $param->update(['value' => ((int) $param->value) + $quantity]);
+        $this->adjustTenantParameter($tenant, $this->purchasedCreditParam($tier), $quantity);
     }
 
-    public function spendPurchasedCredit(User $user, AuditTier $tier): void
+    public function spendPurchasedCredit(Tenant $tenant, AuditTier $tier): void
     {
-        $param = UserParameter::query()->firstOrCreate(
-            ['user_id' => $user->id, 'name' => $this->purchasedCreditParam($tier)],
-            ['value' => 0],
-        );
-
-        $param->update(['value' => max(0, ((int) $param->value) - 1)]);
+        $this->adjustTenantParameter($tenant, $this->purchasedCreditParam($tier), -1);
     }
 
     /**
@@ -228,26 +237,26 @@ class AuditEntitlementService
      * purchased credit never expires, so spending the credit before the
      * allowance would waste it for nothing.
      */
-    public function consume(User $user, ?Tenant $tenant, AuditTier $tier, TierQuota $quota): AuditFunding
+    public function consume(Tenant $tenant, AuditTier $tier, TierQuota $quota): AuditFunding
     {
-        if ($quota->isLifetime && $this->hasFreeRun($user->email)) {
+        if ($quota->isLifetime && $this->hasFreeRun($tenant)) {
             return AuditFunding::FREE;
         }
 
-        if (! $quota->isLifetime && $this->runsUsedThisMonth($user, $tier) < $this->allowance($tenant, $tier)) {
+        if (! $quota->isLifetime && $this->runsUsedThisMonth($tenant, $tier) < $this->allowance($tenant, $tier)) {
             return AuditFunding::ALLOWANCE;
         }
 
-        $this->spendPurchasedCredit($user, $tier);
+        $this->spendPurchasedCredit($tenant, $tier);
 
         return AuditFunding::PURCHASE;
     }
 
     /** @return list<TierQuota> */
-    public function quotas(User $user, ?Tenant $tenant): array
+    public function quotas(Tenant $tenant): array
     {
         return array_map(
-            fn (AuditTier $tier): TierQuota => $this->quotaFor($user, $tenant, $tier),
+            fn (AuditTier $tier): TierQuota => $this->quotaFor($tenant, $tier),
             AuditTier::cases(),
         );
     }
@@ -257,37 +266,36 @@ class AuditEntitlementService
         return $tier->priceCents();
     }
 
-    public function hasAuditAccess(User $user, ?Tenant $tenant): bool
+    public function hasAuditAccess(Tenant $tenant): bool
     {
-        if (AuditRequest::forUser($user)->exists()) {
+        if (AuditRequest::forTenant($tenant)->exists()) {
             return true;
         }
 
-        // A user who signs up directly has neither a prior request nor a
-        // subscription, but still holds the free-run quota. Omitting this
-        // deadlocks them: the dashboard UI that creates their first request
-        // stays hidden precisely because they have no request yet.
-        if ($this->hasFreeRun($user->email)) {
+        // A fresh workspace has neither a prior request nor a subscription,
+        // but still holds the free-run quota. Omitting this deadlocks it:
+        // the dashboard UI that creates the first request stays hidden
+        // precisely because there is no request yet.
+        if ($this->hasFreeRun($tenant)) {
             return true;
         }
 
         // Any metered tier with a nonzero allowance grants access -- a tenant
         // holding only Expert credits must not be locked out of the nav.
-        if ($tenant !== null) {
-            foreach (array_keys(self::QUOTA_KEYS) as $tierValue) {
-                if ($this->allowance($tenant, AuditTier::from($tierValue)) > 0) {
-                    return true;
-                }
+        foreach (array_keys(self::QUOTA_KEYS) as $tierValue) {
+            if ($this->allowance($tenant, AuditTier::from($tierValue)) > 0) {
+                return true;
             }
         }
 
-        // Finally, a tier the user can simply buy is itself access. With the
-        // free quota at its production default of zero, this is the arm that
-        // keeps a fresh direct signup out of a deadlock: no request, no free
-        // run and no subscription used to hide the entire dashboard audit UI,
-        // including the only in-app route to a checkout. A plain config
-        // lookup (not quotaFor()) -- purchasable() is priceCents !== null,
-        // and quotaFor() would re-run hasFreeRun()'s queries for no reason.
+        // Finally, a tier the workspace can simply buy is itself access. With
+        // the free quota at its production default of zero, this is the arm
+        // that keeps a fresh direct signup out of a deadlock: no request, no
+        // free run and no subscription used to hide the entire dashboard
+        // audit UI, including the only in-app route to a checkout. A plain
+        // config lookup (not quotaFor()) -- purchasable() is
+        // priceCents !== null, and quotaFor() would re-run hasFreeRun()'s
+        // queries for no reason.
         foreach (AuditTier::cases() as $tier) {
             if ($tier->priceCents() !== null) {
                 return true;
@@ -295,5 +303,24 @@ class AuditEntitlementService
         }
 
         return false;
+    }
+
+    private function tenantParameter(Tenant $tenant, string $name): int
+    {
+        return (int) TenantParameter::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('name', $name)
+            ->value('value');
+    }
+
+    /** Never dips below zero: a spend on an empty balance is a no-op. */
+    private function adjustTenantParameter(Tenant $tenant, string $name, int $delta): void
+    {
+        $param = TenantParameter::query()->firstOrCreate(
+            ['tenant_id' => $tenant->id, 'name' => $name],
+            ['value' => '0'],
+        );
+
+        $param->update(['value' => (string) max(0, ((int) $param->value) + $delta)]);
     }
 }

@@ -10,6 +10,7 @@ use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
 use App\Models\OneTimeProduct;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Models\UserParameter;
 use App\Services\AuditReport\AuditEntitlementService;
@@ -145,14 +146,14 @@ class HandleAuditTierOrder
 
     private function grantPurchasedCredit(Order $order, string $tierValue): void
     {
-        $user = User::find($order->user_id);
+        $tenant = Tenant::find($order->tenant_id);
         $tier = AuditTier::tryFrom($tierValue);
 
-        if ($user === null || $tier === null) {
+        if ($tenant === null || $tier === null) {
             return;
         }
 
-        $this->entitlementService->grantPurchasedCredit($user, $tier);
+        $this->entitlementService->grantPurchasedCredit($tenant, $tier);
     }
 
     /** @return list<string> */

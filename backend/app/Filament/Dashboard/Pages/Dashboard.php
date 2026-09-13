@@ -31,10 +31,11 @@ class Dashboard extends BaseDashboard
                 ->icon('heroicon-o-play')
                 ->url(fn (): string => AuditReports::getUrl())
                 ->visible(function (): bool {
-                    $user = auth()->user();
+                    $tenant = Filament::getTenant();
 
-                    return $user !== null
-                        && app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
+                    return auth()->check()
+                        && $tenant !== null
+                        && app(AuditEntitlementService::class)->hasAuditAccess($tenant);
                 }),
         ];
     }

@@ -104,7 +104,7 @@ class AuditRequestService
             return;
         }
 
-        if (! $this->entitlements->hasFreeRun($auditRequest->email)) {
+        if (! $this->entitlements->hasFreeRunForEmail($auditRequest->email)) {
             $auditRequest->update(['status' => AuditRequestStatus::AWAITING_PAYMENT->value]);
             $this->funnel->record(AuditFunnelRecorder::STAGE_AWAITING_PAYMENT, $auditRequest);
             $this->auditMailer->send(new AuditQuotaExhausted($auditRequest, $this->purchaseRunUrl($auditRequest)), $auditRequest->email, $auditRequest);

@@ -21,18 +21,13 @@ class PlanUsageWidget extends Widget
 
     public static function canView(): bool
     {
-        $user = auth()->user();
+        $tenant = Filament::getTenant();
 
-        if (! $user) {
-            return false;
-        }
-
-        return app(AuditEntitlementService::class)->hasAuditAccess($user, Filament::getTenant());
+        return auth()->check() && $tenant !== null && app(AuditEntitlementService::class)->hasAuditAccess($tenant);
     }
 
     protected function getViewData(): array
     {
-        $user = auth()->user();
         $tenant = Filament::getTenant();
         $entitlements = app(AuditEntitlementService::class);
 
@@ -41,7 +36,7 @@ class PlanUsageWidget extends Widget
             ->findActiveTenantSubscriptions($tenant)
             ->first();
 
-        $quotas = $entitlements->quotas($user, $tenant);
+        $quotas = $entitlements->quotas($tenant);
         $metered = collect($quotas)->reject(fn (TierQuota $quota): bool => $quota->isLifetime);
 
         $bars = [];
