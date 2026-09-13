@@ -51,8 +51,8 @@ return [
          * Default attributes for Seller::class
          */
         'attributes' => [
-            'name' => 'SaaSykit Company Inc.',
-            'address' => 'SaaSy Street 123',
+            'name' => 'FlexPick',
+            'address' => '',
             'code' => '',
             'vat' => '',
             'phone' => '',

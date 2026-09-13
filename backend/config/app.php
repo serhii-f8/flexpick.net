@@ -16,7 +16,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'SaaSykit'),
+    'name' => env('APP_NAME', 'FlexPick'),
 
     'description' => env('APP_DESCRIPTION', ''),
 

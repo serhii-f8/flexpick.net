@@ -65,4 +65,15 @@ class LayoutBrandingTest extends FeatureTest
         $this->assertStringContainsString('images/logo-dark.png', $html);
         $this->assertStringNotContainsStringIgnoringCase('saasykit', $html);
     }
+
+    public function test_no_public_page_mentions_the_boilerplate_vendor(): void
+    {
+        foreach ([route('pricing'), route('login'), route('register'), '/terms-of-service', '/privacy-policy'] as $url) {
+            $this->get($url)->assertOk()->assertDontSee('SaaSykit', false);
+        }
+
+        $this->assertFileDoesNotExist(resource_path('views/coming-soon/horizontal.blade.php'));
+        $this->assertSame('FlexPick', config('app.name'));
+        $this->assertStringNotContainsString('SaaSykit', (string) config('invoices.seller.attributes.name'));
+    }
 }
