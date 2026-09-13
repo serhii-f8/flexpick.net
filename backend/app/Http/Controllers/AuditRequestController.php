@@ -7,11 +7,12 @@ use App\Http\Requests\StoreAuditRequestRequest;
 use App\Jobs\RouteVerifiedAuditRequest;
 use App\Listeners\Order\HandleAuditTierOrder;
 use App\Models\AuditRequest;
-use App\Models\UserParameter;
+use App\Models\TenantParameter;
 use App\Services\AuditGuestAccountService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\AuditReportService;
 use App\Services\AuditRequestService;
+use App\Services\PrimaryTenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\URL;
 
@@ -76,7 +77,7 @@ class AuditRequestController extends Controller
      * deactivated on every seed, and checkout only resolves active products, so
      * every one of these links would 404 at the till.
      */
-    public function purchaseRun(AuditRequest $auditRequest, AuditGuestAccountService $guestAccounts)
+    public function purchaseRun(AuditRequest $auditRequest, AuditGuestAccountService $guestAccounts, PrimaryTenantResolver $primaryTenants)
     {
         abort_unless($auditRequest->status === AuditRequestStatus::AWAITING_PAYMENT->value, 404);
 
@@ -101,11 +102,19 @@ class AuditRequestController extends Controller
 
         // HandleAuditTierOrder::intentRequestFor() matches this uuid against an
         // awaiting_payment request at the ordered tier, which is precisely this
-        // request, and runs it once the order completes.
-        UserParameter::updateOrCreate(
-            ['user_id' => $user->id, 'name' => HandleAuditTierOrder::INTENT_PARAM],
-            ['value' => $auditRequest->uuid],
-        );
+        // request, and runs it once the order completes. A fresh guest account
+        // has no workspace yet: checkout creates one, ClaimAuditRequestsForTenant
+        // stamps this request with it, and the listener's awaiting-payment
+        // fallback finds it -- so the intent is only written when there is
+        // already a workspace to key it on.
+        $tenant = $primaryTenants->resolve($user);
+
+        if ($tenant !== null) {
+            TenantParameter::updateOrCreate(
+                ['tenant_id' => $tenant->id, 'name' => HandleAuditTierOrder::INTENT_PARAM],
+                ['value' => $auditRequest->uuid],
+            );
+        }
 
         return redirect()->route('buy.product', ['productSlug' => $slug]);
     }

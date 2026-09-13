@@ -12,7 +12,6 @@ use App\Models\OneTimeProduct;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantParameter;
-use App\Models\User;
 use App\Services\AuditReport\AuditEntitlementService;
 
 /**
@@ -81,6 +80,7 @@ class HandleAuditTierOrder
                 'branch' => $source->branch,
                 'message' => $source->message,
                 'user_id' => $source->user_id,
+                'tenant_id' => $order->tenant_id,
                 'tier' => $tierValue,
                 'source' => $source->source,
                 'status' => AuditRequestStatus::QUEUED->value,
@@ -166,20 +166,19 @@ class HandleAuditTierOrder
     }
 
     /**
-     * The buyer's most recent diagnostic run, matched by the order's user —
-     * linked by id, or submitted with their email before they registered
-     * (AuditRequest::scopeForUser).
+     * The workspace's most recent diagnostic run -- any member's, since the
+     * report belongs to the workspace (AuditRequest::scopeForTenant).
      */
     private function sourceRequestFor(Order $order): ?AuditRequest
     {
-        $user = User::find($order->user_id);
+        $tenant = Tenant::find($order->tenant_id);
 
-        if ($user === null) {
+        if ($tenant === null) {
             return null;
         }
 
         return AuditRequest::query()
-            ->forUser($user)
+            ->forTenant($tenant)
             ->where('tier', AuditTier::DIAGNOSTIC->value)
             ->latest('id')
             ->first();

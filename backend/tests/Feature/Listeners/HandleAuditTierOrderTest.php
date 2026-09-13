@@ -12,8 +12,8 @@ use App\Models\AuditRequest;
 use App\Models\OneTimeProduct;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Models\TenantParameter;
 use App\Models\User;
-use App\Models\UserParameter;
 use App\Services\AuditReport\AuditEntitlementService;
 use Database\Seeders\AuditMonetizationSeeder;
 use Illuminate\Support\Facades\Queue;
@@ -27,15 +27,17 @@ class HandleAuditTierOrderTest extends FeatureTest
         Queue::fake();
 
         $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'tier' => AuditTier::DIAGNOSTIC->value,
             'repo_url' => 'https://github.com/acme/app',
             'status' => AuditRequestStatus::SENT->value,
         ]);
 
-        $this->completeOrderFor($user, 'audit-deep-ai');
+        $this->completeOrderFor($user, 'audit-deep-ai', $tenant);
 
         $upgraded = AuditRequest::where('user_id', $user->id)
             ->where('tier', AuditTier::DEEP_AI->value)
@@ -52,8 +54,10 @@ class HandleAuditTierOrderTest extends FeatureTest
         Queue::fake();
 
         $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'tier' => AuditTier::DIAGNOSTIC->value,
             'repo_url' => 'https://github.com/acme/app',
@@ -61,7 +65,7 @@ class HandleAuditTierOrderTest extends FeatureTest
             'status' => AuditRequestStatus::SENT->value,
         ]);
 
-        $this->completeOrderFor($user, 'audit-deep-ai');
+        $this->completeOrderFor($user, 'audit-deep-ai', $tenant);
 
         $upgraded = AuditRequest::where('user_id', $user->id)
             ->where('tier', AuditTier::DEEP_AI->value)
@@ -75,14 +79,16 @@ class HandleAuditTierOrderTest extends FeatureTest
         Queue::fake();
 
         $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
         $diagnostic = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'tier' => AuditTier::DIAGNOSTIC->value,
             'repo_url' => 'https://github.com/acme/app',
         ]);
 
-        $this->completeOrderFor($user, 'audit-deep-ai');
+        $this->completeOrderFor($user, 'audit-deep-ai', $tenant);
 
         $this->assertSame(AuditTier::DIAGNOSTIC, $diagnostic->fresh()->tier);
     }
@@ -118,13 +124,14 @@ class HandleAuditTierOrderTest extends FeatureTest
     {
         Queue::fake();
         $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
 
-        $this->completeOrderFor($user, 'audit-deep-ai');
+        $this->completeOrderFor($user, 'audit-deep-ai', $tenant);
 
         $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count(), 'Nothing can run yet -- no repo was ever named.');
         $this->assertSame(
             1,
-            app(AuditEntitlementService::class)->purchasedCreditBalance($user, AuditTier::DEEP_AI),
+            app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI),
             'The purchase must still be worth something: a spendable credit for that tier.',
         );
         Queue::assertNotPushed(GenerateAuditReport::class);
@@ -135,13 +142,15 @@ class HandleAuditTierOrderTest extends FeatureTest
         Queue::fake();
 
         $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'tier' => AuditTier::DIAGNOSTIC->value,
         ]);
 
-        $this->completeOrderFor($user, 'audit-deep-ai');
+        $this->completeOrderFor($user, 'audit-deep-ai', $tenant);
 
         $upgraded = AuditRequest::where('user_id', $user->id)
             ->where('tier', AuditTier::DEEP_AI->value)
@@ -156,13 +165,15 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->seed(AuditMonetizationSeeder::class);
 
         $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'tier' => AuditTier::DIAGNOSTIC->value,
         ]);
 
-        $order = $this->orderFor($user, 'audit-deep-ai');
+        $order = $this->orderFor($user, 'audit-deep-ai', $tenant);
         app(HandleAuditTierOrder::class)->handle(new Ordered($order));
 
         $run = AuditRequest::where('tier', AuditTier::DEEP_AI->value)->where('user_id', $user->id)->firstOrFail();
@@ -170,7 +181,7 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->assertTrue($run->prepaid);
         $this->assertSame(AuditFunding::PURCHASE, $run->funding);
         $this->assertSame(0, app(AuditEntitlementService::class)
-            ->runsUsedThisMonth($user, AuditTier::DEEP_AI));
+            ->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
@@ -180,29 +191,32 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->seed(AuditMonetizationSeeder::class);
 
         $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
         // A diagnostic must exist so a wrongful clone via the fallback path
         // is actually possible — otherwise the "still only one deep_ai row"
         // assertion below would pass even if the intent guard were removed.
         AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'tier' => AuditTier::DIAGNOSTIC->value,
         ]);
         $intended = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'repo_url' => 'https://github.com/acme/intended',
             'tier' => AuditTier::DEEP_AI->value,
             'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
             'funding' => AuditFunding::PURCHASE->value,
         ]);
-        UserParameter::create([
-            'user_id' => $user->id,
+        TenantParameter::create([
+            'tenant_id' => $tenant->id,
             'name' => HandleAuditTierOrder::INTENT_PARAM,
             'value' => $intended->uuid,
         ]);
 
-        $order = $this->orderFor($user, 'audit-deep-ai');
+        $order = $this->orderFor($user, 'audit-deep-ai', $tenant);
         app(HandleAuditTierOrder::class)->handle(new Ordered($order));
 
         $intended->refresh();
@@ -210,7 +224,7 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->assertSame(AuditRequestStatus::QUEUED->value, $intended->status);
         $this->assertTrue($intended->prepaid);
         $this->assertSame(1, AuditRequest::where('tier', AuditTier::DEEP_AI->value)->where('user_id', $user->id)->count());
-        $this->assertNull(UserParameter::where('user_id', $user->id)->where('name', HandleAuditTierOrder::INTENT_PARAM)->first());
+        $this->assertNull(TenantParameter::where('tenant_id', $tenant->id)->where('name', HandleAuditTierOrder::INTENT_PARAM)->first());
     }
 
     /**
@@ -228,17 +242,19 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->seed(AuditMonetizationSeeder::class);
 
         $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
 
         // The intent parameter points at a uuid that no longer resolves to
         // any request -- e.g. the row it named was purged or overwritten.
-        UserParameter::create([
-            'user_id' => $user->id,
+        TenantParameter::create([
+            'tenant_id' => $tenant->id,
             'name' => HandleAuditTierOrder::INTENT_PARAM,
             'value' => (string) Str::uuid(),
         ]);
 
         $target = AuditRequest::factory()->create([
             'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
             'email' => $user->email,
             'repo_url' => 'https://github.com/acme/fallback-target',
             'tier' => AuditTier::DEEP_AI->value,
@@ -246,7 +262,7 @@ class HandleAuditTierOrderTest extends FeatureTest
             'funding' => AuditFunding::PURCHASE->value,
         ]);
 
-        $order = $this->orderFor($user, 'audit-deep-ai');
+        $order = $this->orderFor($user, 'audit-deep-ai', $tenant);
         app(HandleAuditTierOrder::class)->handle(new Ordered($order));
 
         $target->refresh();
@@ -257,13 +273,63 @@ class HandleAuditTierOrderTest extends FeatureTest
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
-    private function orderFor(User $user, string $slug): Order
+    public function test_the_purchased_run_is_owned_by_the_orders_workspace(): void
+    {
+        Queue::fake();
+        $user = $this->createUser();
+        $tenant = $this->tenantFor($user);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'repo_url' => 'https://github.com/example/owned',
+        ]);
+
+        $this->completeOrderFor($user, 'audit-deep-ai', $tenant);
+
+        // Scoped by repo_url, not just tier -- FeatureTest does not roll back
+        // between tests, so an unscoped ->where('tier', ...)->first() would
+        // pick up an earlier test's deep_ai row instead of this one's.
+        $run = AuditRequest::where('tier', AuditTier::DEEP_AI->value)
+            ->where('repo_url', 'https://github.com/example/owned')
+            ->firstOrFail();
+        $this->assertSame($tenant->id, $run->tenant_id);
+    }
+
+    public function test_a_teammates_diagnostic_is_a_valid_source_for_the_order(): void
+    {
+        Queue::fake();
+        $alice = $this->createUser();
+        $tenant = $this->tenantFor($alice);
+        $bob = $this->createUser();
+        $tenant->users()->attach($bob);
+        AuditRequest::factory()->create([
+            'user_id' => $alice->id,
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'repo_url' => 'https://github.com/example/team',
+        ]);
+
+        $this->completeOrderFor($bob, 'audit-deep-ai', $tenant);
+
+        $this->assertSame(1, AuditRequest::where('tier', AuditTier::DEEP_AI->value)->where('repo_url', 'https://github.com/example/team')->count());
+    }
+
+    private function tenantFor(User $user): Tenant
+    {
+        $tenant = Tenant::factory()->create(['created_by' => $user->id]);
+        $tenant->users()->attach($user);
+
+        return $tenant;
+    }
+
+    private function orderFor(User $user, string $slug, ?Tenant $tenant = null): Order
     {
         $product = OneTimeProduct::where('slug', $slug)->firstOrFail();
 
         $order = Order::factory()->create([
             'user_id' => $user->id,
-            'tenant_id' => Tenant::factory()->create()->id,
+            'tenant_id' => ($tenant ?? $this->tenantFor($user))->id,
         ]);
 
         $order->items()->create([
@@ -285,7 +351,7 @@ class HandleAuditTierOrderTest extends FeatureTest
      * directly — some assertions here depend on the event's other
      * registered listeners actually running.
      */
-    private function completeOrderFor(User $user, string $slug): void
+    private function completeOrderFor(User $user, string $slug, ?Tenant $tenant = null): void
     {
         $product = OneTimeProduct::firstOrCreate(
             ['slug' => $slug],
@@ -294,7 +360,7 @@ class HandleAuditTierOrderTest extends FeatureTest
 
         $order = Order::factory()->create([
             'user_id' => $user->id,
-            'tenant_id' => Tenant::factory()->create()->id,
+            'tenant_id' => ($tenant ?? $this->tenantFor($user))->id,
         ]);
         $order->items()->create([
             'one_time_product_id' => $product->id,

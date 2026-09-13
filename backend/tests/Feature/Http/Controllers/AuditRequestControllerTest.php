@@ -3,8 +3,14 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
+use App\Listeners\Order\HandleAuditTierOrder;
 use App\Mail\Audit\AuditVerifyEmail;
 use App\Models\AuditRequest;
+use App\Models\Tenant;
+use App\Models\TenantParameter;
+use App\Models\User;
+use App\Services\AuditRequestService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Tests\Feature\FeatureTest;
@@ -85,5 +91,54 @@ class AuditRequestControllerTest extends FeatureTest
             'name' => 'Dup', 'email' => 'dup@example.com',
             'repo_url' => 'https://github.com/example/repo',
         ])->assertStatus(429);
+    }
+
+    /**
+     * A logged-in user always already has a workspace (SaaSykit provisions
+     * one at signup), so purchaseRun() can key the checkout intent on it
+     * directly -- and must not fall back to the retired per-user parameter.
+     */
+    public function test_purchase_run_writes_the_intent_to_the_users_workspace_not_a_user_parameter(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user = $this->createUser($tenant);
+        $this->actingAs($user);
+
+        $request = AuditRequest::factory()->verified()->create([
+            'email' => $user->email,
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
+
+        $response = $this->get(app(AuditRequestService::class)->purchaseRunUrl($request));
+
+        $response->assertRedirect(route('buy.product', ['productSlug' => 'audit-diagnostic']));
+        $this->assertSame($request->uuid, TenantParameter::where('tenant_id', $tenant->id)
+            ->where('name', HandleAuditTierOrder::INTENT_PARAM)->value('value'));
+        $this->assertDatabaseMissing('user_parameters', ['user_id' => $user->id, 'name' => HandleAuditTierOrder::INTENT_PARAM]);
+    }
+
+    /**
+     * A brand-new guest gets an account on the spot, but not a workspace --
+     * that is provisioned at checkout, not here. Writing the intent against
+     * a workspace that does not exist yet would just be a no-op that looks
+     * like it worked, so purchaseRun() must skip it entirely until a real
+     * workspace exists to key it on (see the extra item on Task 10).
+     */
+    public function test_purchase_run_for_a_fresh_guest_creates_an_account_but_writes_no_intent(): void
+    {
+        $request = AuditRequest::factory()->verified()->create([
+            'email' => 'fresh-guest@example.com',
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+        ]);
+
+        $response = $this->get(app(AuditRequestService::class)->purchaseRunUrl($request));
+
+        $user = User::where('email', 'fresh-guest@example.com')->firstOrFail();
+        $this->assertAuthenticatedAs($user);
+        $response->assertRedirect(route('buy.product', ['productSlug' => 'audit-diagnostic']));
+        $this->assertDatabaseMissing('user_parameters', ['user_id' => $user->id, 'name' => HandleAuditTierOrder::INTENT_PARAM]);
+        $this->assertDatabaseMissing('tenant_parameters', ['name' => HandleAuditTierOrder::INTENT_PARAM, 'value' => $request->uuid]);
     }
 }

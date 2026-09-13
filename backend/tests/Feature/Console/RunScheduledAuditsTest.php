@@ -39,6 +39,7 @@ class RunScheduledAuditsTest extends FeatureTest
 
         $this->assertSame(AuditTier::DEEP_AI, $request->tier);
         $this->assertSame(AuditFunding::ALLOWANCE, $request->funding);
+        $this->assertSame($tenant->id, $request->tenant_id);
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
@@ -124,7 +125,7 @@ class RunScheduledAuditsTest extends FeatureTest
         $this->assertSame(AuditTier::DIAGNOSTIC, $request->tier);
         $this->assertSame(AuditFunding::FREE, $request->funding);
         $this->assertTrue($request->free_run);
-        $this->assertSame(1, app(AuditEntitlementService::class)->freeRunsUsed($user->email));
+        $this->assertSame(1, app(AuditEntitlementService::class)->freeRunsUsed($tenant));
         Queue::assertPushed(GenerateAuditReport::class);
     }
 

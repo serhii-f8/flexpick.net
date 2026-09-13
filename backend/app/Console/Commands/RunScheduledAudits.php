@@ -61,6 +61,7 @@ class RunScheduledAudits extends Command
                     ? AuditFunding::FREE->value
                     : AuditFunding::ALLOWANCE->value,
                 'user_id' => $schedule->user->id,
+                'tenant_id' => $schedule->tenant_id,
             ]);
 
             // An allowance run is metered simply by existing at its tier. A

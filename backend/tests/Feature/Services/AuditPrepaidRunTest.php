@@ -57,12 +57,12 @@ class AuditPrepaidRunTest extends FeatureTest
     }
 
     /** Builds an order for a catalog tier product seeded by AuditMonetizationSeeder. */
-    private function tierOrderFor(User $user, string $slug): Order
+    private function tierOrderFor(User $user, string $slug, ?Tenant $tenant = null): Order
     {
         $product = OneTimeProduct::where('slug', $slug)->firstOrFail();
         $order = Order::factory()->create([
             'user_id' => $user->id,
-            'tenant_id' => Tenant::factory()->create()->id,
+            'tenant_id' => ($tenant ?? Tenant::factory()->create())->id,
         ]);
         $order->items()->create([
             'one_time_product_id' => $product->id,
@@ -102,9 +102,10 @@ class AuditPrepaidRunTest extends FeatureTest
         $user = User::where('email', 'prepaid-run@example.com')->firstOrFail();
         $this->assertAuthenticatedAs($user);
 
-        // The tier listener owns this intent now, not the retired unlock one.
-        $this->assertSame($request->uuid, UserParameter::where('user_id', $user->id)
-            ->where('name', HandleAuditTierOrder::INTENT_PARAM)->value('value'));
+        // A brand-new guest has no workspace yet at purchaseRun time, so no
+        // intent is written anywhere -- see AuditRequestController::purchaseRun().
+        $this->assertDatabaseMissing('user_parameters', ['user_id' => $user->id, 'name' => HandleAuditTierOrder::INTENT_PARAM]);
+        $this->assertDatabaseMissing('tenant_parameters', ['name' => HandleAuditTierOrder::INTENT_PARAM, 'value' => $request->uuid]);
 
         $response->assertRedirect(route('buy.product', ['productSlug' => 'audit-diagnostic']));
 
@@ -131,7 +132,16 @@ class AuditPrepaidRunTest extends FeatureTest
         $this->get(app(AuditRequestService::class)->purchaseRunUrl($request));
         $user = User::where('email', 'prepaid-tier-run@example.com')->firstOrFail();
 
-        Ordered::dispatch($this->tierOrderFor($user, 'audit-diagnostic'));
+        // No intent was written at purchaseRun time (the guest had no
+        // workspace yet). By the time checkout completes, the guest's first
+        // workspace exists and ClaimAuditRequestsForTenant has already
+        // stamped this request with it -- stand that in directly, since
+        // this test only exercises the listener, not the full checkout flow.
+        $tenant = Tenant::factory()->create(['created_by' => $user->id]);
+        $tenant->users()->attach($user);
+        $request->update(['tenant_id' => $tenant->id]);
+
+        Ordered::dispatch($this->tierOrderFor($user, 'audit-diagnostic', $tenant));
 
         $request->refresh();
         $this->assertSame(AuditRequestStatus::QUEUED->value, $request->status);
