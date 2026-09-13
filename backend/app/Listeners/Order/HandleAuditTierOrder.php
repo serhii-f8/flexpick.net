@@ -108,6 +108,13 @@ class HandleAuditTierOrder
      * request at the ordered tier -- the dashboard purchase flow only ever
      * leaves one such row per tier, so it is still the request they meant to
      * pay for.
+     *
+     * Last, the order may simply be on a different workspace than the intent:
+     * checkout pins the order to the intent's workspace (`?tenant=` on
+     * buy.product), but a buyer who belongs to several can still re-pick at
+     * the till. Their own awaiting_payment request at the tier, on whichever
+     * of their workspaces it sits, is still what they paid for -- and it
+     * keeps that workspace, since that is where it was asked for.
      */
     private function intentRequestFor(Order $order, string $tierValue): ?AuditRequest
     {
@@ -116,31 +123,37 @@ class HandleAuditTierOrder
             ->where('name', self::INTENT_PARAM)
             ->first();
 
+        $awaiting = AuditRequest::query()
+            ->where('tier', $tierValue)
+            ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value);
+
         $request = null;
 
         if ($intent !== null) {
-            $request = AuditRequest::query()
-                ->where('uuid', $intent->value)
-                ->where('tier', $tierValue)
-                ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value)
-                ->first();
+            $request = (clone $awaiting)->where('uuid', $intent->value)->first();
         }
 
-        $request ??= AuditRequest::query()
-            ->where('tenant_id', $order->tenant_id)
-            ->where('tier', $tierValue)
-            ->where('status', AuditRequestStatus::AWAITING_PAYMENT->value)
-            ->latest('id')
-            ->first();
+        $request ??= (clone $awaiting)->where('tenant_id', $order->tenant_id)->latest('id')->first();
+
+        // Guarded: `where('user_id', null)` would be IS NULL and match every
+        // anonymous landing-page row.
+        if ($request === null && $order->user_id !== null) {
+            $request = (clone $awaiting)->where('user_id', $order->user_id)->latest('id')->first();
+        }
 
         if ($request === null) {
             return null;
         }
 
-        // Only delete the intent row when a request was actually consumed --
-        // a miss should not erase a marker that a later attempt might still
-        // resolve.
+        // Only delete intent rows when a request was actually consumed -- a
+        // miss should not erase a marker that a later attempt might still
+        // resolve. The consumed request's own marker may sit on another
+        // workspace than the order's, so clear it by value as well.
         $intent?->delete();
+        TenantParameter::query()
+            ->where('name', self::INTENT_PARAM)
+            ->where('value', $request->uuid)
+            ->delete();
 
         return $request;
     }

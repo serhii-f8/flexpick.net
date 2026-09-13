@@ -12,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\TenantParameter;
 use App\Services\SubscriptionService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Who may run an audit, and out of which pool.
@@ -313,14 +314,27 @@ class AuditEntitlementService
             ->value('value');
     }
 
-    /** Never dips below zero: a spend on an empty balance is a no-op. */
+    /**
+     * Never dips below zero: a spend on an empty balance is a no-op. The row
+     * is locked for the read-modify-write so two members spending the same
+     * credit at once, or a grant racing a spend, cannot lose an update.
+     */
     private function adjustTenantParameter(Tenant $tenant, string $name, int $delta): void
     {
-        $param = TenantParameter::query()->firstOrCreate(
-            ['tenant_id' => $tenant->id, 'name' => $name],
-            ['value' => '0'],
-        );
+        DB::transaction(function () use ($tenant, $name, $delta): void {
+            $param = TenantParameter::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('name', $name)
+                ->lockForUpdate()
+                ->first();
 
-        $param->update(['value' => (string) max(0, ((int) $param->value) + $delta)]);
+            $param ??= TenantParameter::query()->create([
+                'tenant_id' => $tenant->id,
+                'name' => $name,
+                'value' => '0',
+            ]);
+
+            $param->update(['value' => (string) max(0, ((int) $param->value) + $delta)]);
+        });
     }
 }

@@ -106,17 +106,20 @@ class AuditRequestController extends Controller
         // has no workspace yet: checkout creates one, ClaimAuditRequestsForTenant
         // stamps this request with it, and the listener's awaiting-payment
         // fallback finds it -- so the intent is only written when there is
-        // already a workspace to key it on.
+        // already a workspace to key it on. When there is one, checkout is
+        // pinned to it (`tenant`) so the order lands where the intent is.
         $tenant = $primaryTenants->resolve($user);
 
-        if ($tenant !== null) {
-            TenantParameter::updateOrCreate(
-                ['tenant_id' => $tenant->id, 'name' => HandleAuditTierOrder::INTENT_PARAM],
-                ['value' => $auditRequest->uuid],
-            );
+        if ($tenant === null) {
+            return redirect()->route('buy.product', ['productSlug' => $slug]);
         }
 
-        return redirect()->route('buy.product', ['productSlug' => $slug]);
+        TenantParameter::updateOrCreate(
+            ['tenant_id' => $tenant->id, 'name' => HandleAuditTierOrder::INTENT_PARAM],
+            ['value' => $auditRequest->uuid],
+        );
+
+        return redirect()->route('buy.product', ['productSlug' => $slug, 'tenant' => $tenant->uuid]);
     }
 
     private function label(string $status): string

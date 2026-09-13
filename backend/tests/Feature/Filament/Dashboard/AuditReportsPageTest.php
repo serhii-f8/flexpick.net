@@ -72,7 +72,8 @@ class AuditReportsPageTest extends FeatureTest
         Livewire::actingAs($user)
             ->test(AuditReports::class)
             ->call('launchAudit', 'https://github.com/acme/my-app')
-            ->assertRedirect(route('buy.product', ['productSlug' => 'audit-diagnostic']));
+            // Pinned to this workspace -- see ProductCheckoutController::addToCart().
+            ->assertRedirect(route('buy.product', ['productSlug' => 'audit-diagnostic', 'tenant' => $tenant->uuid]));
 
         $request = AuditRequest::where('user_id', $user->id)->sole();
         $this->assertSame(AuditRequestStatus::AWAITING_PAYMENT->value, $request->status);

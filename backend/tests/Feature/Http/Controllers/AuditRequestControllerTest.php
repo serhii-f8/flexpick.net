@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\AuditRequestService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Tests\Feature\FeatureTest;
 
 class AuditRequestControllerTest extends FeatureTest
@@ -94,6 +95,53 @@ class AuditRequestControllerTest extends FeatureTest
     }
 
     /**
+     * Audits belong to workspaces, and the only claim triggers are
+     * TenantCreated / UserJoinedTenant -- which never fire again for someone
+     * who already has a workspace. So a landing-page submission from an
+     * already-registered customer must be stamped with their primary
+     * workspace up front, or it sits "Unclaimed" in the admin forever and
+     * never shows in their dashboard.
+     */
+    public function test_a_public_submission_by_a_registered_user_is_stamped_with_their_primary_workspace(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user = $this->createUser($tenant, [], ['email' => 'member-'.Str::random(6).'@example.com']);
+
+        $this->postJson(route('audit-requests.store'), [
+            'name' => 'Member',
+            // Case-insensitive: the form does not normalise what the visitor types.
+            'email' => strtoupper($user->email),
+            'repo_url' => 'https://github.com/example/member-repo',
+        ])->assertStatus(201);
+
+        $this->assertSame($tenant->id, AuditRequest::where('repo_url', 'https://github.com/example/member-repo')->firstOrFail()->tenant_id);
+    }
+
+    public function test_a_public_submission_by_a_registered_user_with_no_workspace_stays_unclaimed(): void
+    {
+        $user = $this->createUser(null, [], ['email' => 'loner-'.Str::random(6).'@example.com']);
+
+        $this->postJson(route('audit-requests.store'), [
+            'name' => 'Loner',
+            'email' => $user->email,
+            'repo_url' => 'https://github.com/example/loner-repo',
+        ])->assertStatus(201);
+
+        $this->assertNull(AuditRequest::where('repo_url', 'https://github.com/example/loner-repo')->firstOrFail()->tenant_id);
+    }
+
+    public function test_a_public_submission_by_an_unknown_email_stays_unclaimed(): void
+    {
+        $this->postJson(route('audit-requests.store'), [
+            'name' => 'Stranger',
+            'email' => 'stranger-'.Str::random(6).'@example.com',
+            'repo_url' => 'https://github.com/example/stranger-repo',
+        ])->assertStatus(201);
+
+        $this->assertNull(AuditRequest::where('repo_url', 'https://github.com/example/stranger-repo')->firstOrFail()->tenant_id);
+    }
+
+    /**
      * A logged-in user always already has a workspace (SaaSykit provisions
      * one at signup), so purchaseRun() can key the checkout intent on it
      * directly -- and must not fall back to the retired per-user parameter.
@@ -112,7 +160,9 @@ class AuditRequestControllerTest extends FeatureTest
 
         $response = $this->get(app(AuditRequestService::class)->purchaseRunUrl($request));
 
-        $response->assertRedirect(route('buy.product', ['productSlug' => 'audit-diagnostic']));
+        // The checkout is pinned to the workspace the intent was written on
+        // -- see ProductCheckoutController::addToCart().
+        $response->assertRedirect(route('buy.product', ['productSlug' => 'audit-diagnostic', 'tenant' => $tenant->uuid]));
         $this->assertSame($request->uuid, TenantParameter::where('tenant_id', $tenant->id)
             ->where('name', HandleAuditTierOrder::INTENT_PARAM)->value('value'));
         $this->assertDatabaseMissing('user_parameters', ['user_id' => $user->id, 'name' => HandleAuditTierOrder::INTENT_PARAM]);

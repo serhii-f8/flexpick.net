@@ -288,7 +288,7 @@ class AuditRequestResource extends Resource
                         // already paid for or being paid for -- spending the
                         // customer's free quota on it here would both charge
                         // them twice (their quota AND their card) and leave
-                        // the audit_tier_intent UserParameter dangling so a
+                        // the audit_tier_intent TenantParameter dangling so a
                         // later payment misses this request.
                         if ($record->funding !== AuditFunding::PURCHASE && $entitlements->hasFreeRunForEmail($record->email)) {
                             $entitlements->consumeFreeRun($record);

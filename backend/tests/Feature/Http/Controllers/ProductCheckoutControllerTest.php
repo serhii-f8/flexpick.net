@@ -4,6 +4,7 @@ namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\PaymentProviderConstants;
 use App\Constants\SubscriptionStatus;
+use App\Constants\TenancyPermissionConstants;
 use App\Models\Currency;
 use App\Models\OneTimeProduct;
 use App\Models\OneTimeProductPrice;
@@ -174,6 +175,84 @@ class ProductCheckoutControllerTest extends FeatureTest
 
         $response->assertRedirect(route('checkout.product'));
         $this->assertNotEmpty(app(SessionService::class)->getCartDto()->items);
+    }
+
+    /**
+     * The dashboard's tier purchase writes its checkout intent on the
+     * workspace selected in the dashboard, but this action clears the cart
+     * and ProductTenantPicker then defaults the order to the user's FIRST
+     * orderable workspace. For a member of several, the order -- and the
+     * run HandleAuditTierOrder starts from it -- would land on the wrong
+     * one. The intent writer names its workspace with `?tenant=`, and that
+     * pins the cart.
+     */
+    public function test_a_tenant_query_parameter_pins_the_cart_to_that_workspace(): void
+    {
+        $product = $this->orderableProduct();
+        $first = $this->createTenant();
+        $second = $this->createTenant();
+        $user = $this->createUser($first, [TenancyPermissionConstants::PERMISSION_CREATE_ORDERS]);
+        $second->users()->attach($user);
+        $user->tenants()->where('tenant_id', $second->id)->first()->pivot
+            ->givePermissionTo(TenancyPermissionConstants::PERMISSION_CREATE_ORDERS);
+        $this->actingAs($user);
+
+        $response = $this->get(route('buy.product', ['productSlug' => $product->slug, 'tenant' => $second->uuid]));
+
+        $response->assertRedirect(route('checkout.product'));
+        $cart = app(SessionService::class)->getCartDto();
+        $this->assertSame($second->uuid, $cart->tenantUuid);
+        $this->assertFalse($cart->shouldCreateNewTenant);
+    }
+
+    /**
+     * The uuid comes off the query string, so it is never trusted: a
+     * workspace the user is not a member of, or is a member of without the
+     * create-orders permission, is ignored and the picker's default applies.
+     */
+    public function test_a_tenant_the_user_may_not_order_for_is_ignored(): void
+    {
+        $product = $this->orderableProduct();
+        $own = $this->createTenant();
+        $stranger = $this->createTenant();
+        $memberWithoutPermission = $this->createTenant();
+        $user = $this->createUser($own, [TenancyPermissionConstants::PERMISSION_CREATE_ORDERS]);
+        $memberWithoutPermission->users()->attach($user);
+        $this->actingAs($user);
+
+        foreach ([$stranger->uuid, $memberWithoutPermission->uuid, 'not-a-uuid'] as $uuid) {
+            $response = $this->get(route('buy.product', ['productSlug' => $product->slug, 'tenant' => $uuid]));
+
+            $response->assertRedirect(route('checkout.product'));
+            $this->assertNull(app(SessionService::class)->getCartDto()->tenantUuid, "'{$uuid}' must not be honoured.");
+        }
+    }
+
+    public function test_a_guest_with_a_tenant_query_parameter_is_unaffected(): void
+    {
+        $product = $this->orderableProduct();
+        $tenant = $this->createTenant();
+
+        $response = $this->get(route('buy.product', ['productSlug' => $product->slug, 'tenant' => $tenant->uuid]));
+
+        $response->assertRedirect(route('checkout.product'));
+        $this->assertNull(app(SessionService::class)->getCartDto()->tenantUuid);
+    }
+
+    private function orderableProduct(): OneTimeProduct
+    {
+        $product = OneTimeProduct::factory()->create([
+            'slug' => 'pinned-tenant-product-'.rand(1, 100000),
+            'is_active' => true,
+            'max_quantity' => 1,
+        ]);
+        OneTimeProductPrice::create([
+            'one_time_product_id' => $product->id,
+            'currency_id' => Currency::where('code', 'USD')->first()->id,
+            'price' => 100,
+        ]);
+
+        return $product;
     }
 
     public function test_checkout_loads()

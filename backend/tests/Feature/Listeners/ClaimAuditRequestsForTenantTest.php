@@ -15,6 +15,7 @@ class ClaimAuditRequestsForTenantTest extends FeatureTest
     {
         $user = User::factory()->create(['email' => 'claim@example.com']);
         $tenant = Tenant::factory()->create(['created_by' => $user->id]);
+        $tenant->users()->attach($user);
         $byId = AuditRequest::factory()->create(['user_id' => $user->id, 'email' => 'other@example.com']);
         $byEmail = AuditRequest::factory()->create(['user_id' => null, 'email' => 'Claim@Example.com']);
         $stranger = AuditRequest::factory()->create(['user_id' => null, 'email' => 'stranger@example.com']);
@@ -30,6 +31,7 @@ class ClaimAuditRequestsForTenantTest extends FeatureTest
     {
         $user = User::factory()->create();
         $tenant = Tenant::factory()->create();
+        $tenant->users()->attach($user);
         $request = AuditRequest::factory()->create(['user_id' => $user->id]);
 
         UserJoinedTenant::dispatch($user, $tenant);
@@ -42,10 +44,28 @@ class ClaimAuditRequestsForTenantTest extends FeatureTest
         $user = User::factory()->create();
         $first = Tenant::factory()->create();
         $second = Tenant::factory()->create();
+        $second->users()->attach($user);
         $request = AuditRequest::factory()->create(['user_id' => $user->id, 'tenant_id' => $first->id]);
 
         UserJoinedTenant::dispatch($user, $second);
 
         $this->assertSame($first->id, $request->fresh()->tenant_id);
+    }
+
+    /**
+     * The admin panel's CreateTenant page fires TenantCreated with the
+     * operator as `tenantCreator`, and the operator is not a member of the
+     * customer's new workspace. Without a membership check the listener
+     * would move the operator's own unclaimed audits into it.
+     */
+    public function test_tenant_created_with_a_non_member_creator_claims_nothing(): void
+    {
+        $operator = User::factory()->create();
+        $customerTenant = Tenant::factory()->create(['created_by' => $operator->id]);
+        $operators = AuditRequest::factory()->create(['user_id' => $operator->id, 'email' => $operator->email]);
+
+        TenantCreated::dispatch($customerTenant, $operator);
+
+        $this->assertNull($operators->fresh()->tenant_id);
     }
 }

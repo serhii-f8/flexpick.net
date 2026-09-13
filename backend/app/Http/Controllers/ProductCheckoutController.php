@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Dto\CartItemDto;
+use App\Models\Tenant;
 use App\Services\DiscountService;
 use App\Services\OneTimeProductService;
 use App\Services\PartnerPricingResolver;
 use App\Services\SessionService;
+use App\Services\TenantCreationService;
+use Illuminate\Http\Request;
 
 class ProductCheckoutController extends Controller
 {
@@ -15,6 +18,7 @@ class ProductCheckoutController extends Controller
         private OneTimeProductService $productService,
         private SessionService $sessionService,
         private PartnerPricingResolver $partnerPricingResolver,
+        private TenantCreationService $tenantCreationService,
     ) {}
 
     public function productCheckout()
@@ -28,7 +32,7 @@ class ProductCheckoutController extends Controller
         return view('checkout.product');
     }
 
-    public function addToCart(string $productSlug, int $quantity = 1)
+    public function addToCart(Request $request, string $productSlug, int $quantity = 1)
     {
         $product = $this->productService->getProductWithPriceBySlug($productSlug);
 
@@ -59,6 +63,21 @@ class ProductCheckoutController extends Controller
 
         $cartDto = $this->sessionService->clearCartDto();  // use getCartDto() instead of clearCartDto() when allowing full cart checkout with multiple items
 
+        // A dashboard tier purchase (AuditReports::purchase(),
+        // AuditRequestController::purchaseRun()) writes its checkout intent on
+        // one workspace and names it here with `?tenant=`. Without that pin,
+        // ProductTenantPicker defaults the order to the user's FIRST orderable
+        // workspace, and for a member of several HandleAuditTierOrder would
+        // run -- or credit -- the wrong one. The uuid comes off the query
+        // string, so it is only honoured when this user may order for that
+        // workspace; anything else falls through to the picker's default.
+        $pinnedTenant = $this->pinnedTenant($request);
+
+        if ($pinnedTenant !== null) {
+            $cartDto->tenantUuid = $pinnedTenant->uuid;
+            $cartDto->shouldCreateNewTenant = false;
+        }
+
         if ($quantity < 1) {
             $quantity = 1;
         }
@@ -87,6 +106,18 @@ class ProductCheckoutController extends Controller
         $this->sessionService->saveCartDto($cartDto);
 
         return redirect()->route('checkout.product');
+    }
+
+    private function pinnedTenant(Request $request): ?Tenant
+    {
+        $user = auth()->user();
+        $uuid = $request->query('tenant');
+
+        if ($user === null || ! is_string($uuid) || $uuid === '') {
+            return null;
+        }
+
+        return $this->tenantCreationService->findUserTenantForNewOrderByUuid($user, $uuid);
     }
 
     public function productCheckoutSuccess()

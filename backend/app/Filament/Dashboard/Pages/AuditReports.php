@@ -302,7 +302,10 @@ class AuditReports extends Page
             ['value' => $auditRequest->uuid],
         );
 
-        $this->redirect(route('buy.product', ['productSlug' => $slug]));
+        // Name the workspace so checkout pins the order to it rather than the
+        // picker's default (the user's first orderable workspace), which for a
+        // member of several is not necessarily this one.
+        $this->redirect(route('buy.product', ['productSlug' => $slug, 'tenant' => $tenant->uuid]));
     }
 
     public function setSchedule(string $repoUrl, string $frequency, ?string $tier = null): void

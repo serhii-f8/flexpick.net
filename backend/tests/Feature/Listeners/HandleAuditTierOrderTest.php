@@ -273,6 +273,99 @@ class HandleAuditTierOrderTest extends FeatureTest
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
+    /**
+     * The bug this guards against: Alice belongs to workspaces A (her first)
+     * and B, starts a Deep AI purchase for a repo from B's dashboard, and the
+     * checkout puts the order on A anyway (ProductTenantPicker's default is
+     * the FIRST orderable workspace). The intent row lives on B, so A's lookup
+     * misses, and the fallback would clone A's latest diagnostic -- a run of
+     * the wrong repository, charged to the wrong workspace -- while B's
+     * awaiting_payment row sits until purged. The buyer's own awaiting_payment
+     * request is still what they paid for, whichever workspace it sits on.
+     */
+    public function test_an_order_on_another_of_the_buyers_workspaces_still_runs_the_request_they_paid_for(): void
+    {
+        Queue::fake();
+        $this->seed(AuditMonetizationSeeder::class);
+
+        $alice = $this->createUser();
+        $first = $this->tenantFor($alice);
+        $second = $this->tenantFor($alice);
+        // A diagnostic on the ordered workspace, so a wrongful clone via the
+        // fallback path is actually possible.
+        AuditRequest::factory()->create([
+            'user_id' => $alice->id,
+            'tenant_id' => $first->id,
+            'email' => $alice->email,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'repo_url' => 'https://github.com/acme/first-workspace-repo',
+        ]);
+        $intended = AuditRequest::factory()->create([
+            'user_id' => $alice->id,
+            'tenant_id' => $second->id,
+            'email' => $alice->email,
+            'repo_url' => 'https://github.com/acme/second-workspace-repo',
+            'tier' => AuditTier::DEEP_AI->value,
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+        TenantParameter::create([
+            'tenant_id' => $second->id,
+            'name' => HandleAuditTierOrder::INTENT_PARAM,
+            'value' => $intended->uuid,
+        ]);
+
+        $order = $this->orderFor($alice, 'audit-deep-ai', $first);
+        app(HandleAuditTierOrder::class)->handle(new Ordered($order));
+
+        $intended->refresh();
+
+        $this->assertSame(AuditRequestStatus::QUEUED->value, $intended->status);
+        $this->assertTrue($intended->prepaid);
+        $this->assertSame($second->id, $intended->tenant_id, 'The request stays on the workspace it was asked for.');
+        $this->assertSame(
+            0,
+            AuditRequest::where('tier', AuditTier::DEEP_AI->value)->where('repo_url', 'https://github.com/acme/first-workspace-repo')->count(),
+            'The ordered workspace\'s diagnostic must not be cloned.',
+        );
+        $this->assertSame(0, app(AuditEntitlementService::class)->purchasedCreditBalance($first, AuditTier::DEEP_AI));
+        $this->assertNull(TenantParameter::where('tenant_id', $second->id)->where('name', HandleAuditTierOrder::INTENT_PARAM)->first());
+        Queue::assertPushed(GenerateAuditReport::class, 1);
+    }
+
+    /**
+     * The user_id fallback is the buyer's own request only: a teammate's
+     * awaiting_payment row on the same workspace is not what this buyer
+     * asked for, and must not be run on their card.
+     */
+    public function test_the_buyer_fallback_does_not_run_a_teammates_awaiting_payment_request_on_another_workspace(): void
+    {
+        Queue::fake();
+        $this->seed(AuditMonetizationSeeder::class);
+
+        $alice = $this->createUser();
+        $bob = $this->createUser();
+        $ordered = $this->tenantFor($alice);
+        $other = $this->tenantFor($bob);
+        $other->users()->attach($alice);
+        $bobs = AuditRequest::factory()->create([
+            'user_id' => $bob->id,
+            'tenant_id' => $other->id,
+            'email' => $bob->email,
+            'repo_url' => 'https://github.com/acme/bobs-repo',
+            'tier' => AuditTier::DEEP_AI->value,
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $order = $this->orderFor($alice, 'audit-deep-ai', $ordered);
+        app(HandleAuditTierOrder::class)->handle(new Ordered($order));
+
+        $this->assertSame(AuditRequestStatus::AWAITING_PAYMENT->value, $bobs->fresh()->status);
+        $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($ordered, AuditTier::DEEP_AI));
+        Queue::assertNotPushed(GenerateAuditReport::class);
+    }
+
     public function test_the_purchased_run_is_owned_by_the_orders_workspace(): void
     {
         Queue::fake();

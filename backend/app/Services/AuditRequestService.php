@@ -13,6 +13,7 @@ use App\Mail\Audit\AuditRequestReceived;
 use App\Mail\Audit\AuditVerifyEmail;
 use App\Mail\Audit\NewAuditRequestAdminNotification;
 use App\Models\AuditRequest;
+use App\Models\User;
 use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditFunnelRecorder;
@@ -28,6 +29,7 @@ class AuditRequestService
         private RepositoryCloner $cloner,
         private AuditFunnelRecorder $funnel,
         private AuditMailer $auditMailer,
+        private PrimaryTenantResolver $primaryTenants,
     ) {}
 
     public function submit(array $data, array $meta = []): AuditRequest
@@ -53,6 +55,7 @@ class AuditRequestService
             'marketing_consent' => $consented,
             'consented_at' => $consented ? now() : null,
             'meta' => $meta,
+            'tenant_id' => $this->primaryTenantIdForEmail($data['email']),
         ]);
 
         $this->funnel->record(AuditFunnelRecorder::STAGE_SUBMITTED, $auditRequest);
@@ -60,6 +63,25 @@ class AuditRequestService
         $this->auditMailer->send(new AuditVerifyEmail($auditRequest, $this->verificationUrl($auditRequest)), $auditRequest->email, $auditRequest);
 
         return $auditRequest;
+    }
+
+    /**
+     * A landing-page submission is normally tenantless until the visitor's
+     * first workspace claims it (ClaimAuditRequestsForTenant). Someone who
+     * already has a workspace never triggers that claim again, so their row
+     * is stamped up front -- with the same primary-workspace rule the claim
+     * would have used. Unknown email, or a user with no workspace yet: null,
+     * and the claim listener takes it from there.
+     */
+    private function primaryTenantIdForEmail(string $email): ?int
+    {
+        $user = User::query()->whereRaw('LOWER(email) = ?', [strtolower($email)])->first();
+
+        if ($user === null) {
+            return null;
+        }
+
+        return $this->primaryTenants->resolve($user)?->id;
     }
 
     public function verificationUrl(AuditRequest $auditRequest): string
