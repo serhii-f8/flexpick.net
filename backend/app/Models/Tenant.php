@@ -41,6 +41,16 @@ class Tenant extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function auditRequests(): HasMany
+    {
+        return $this->hasMany(AuditRequest::class);
+    }
+
+    public function parameters(): HasMany
+    {
+        return $this->hasMany(TenantParameter::class);
+    }
+
     public function partnerReferredUsers(): HasMany
     {
         return $this->hasMany(User::class, 'partner_tenant_id');

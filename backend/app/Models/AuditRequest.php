@@ -29,7 +29,7 @@ class AuditRequest extends Model
 
     protected $fillable = [
         'name', 'email', 'repo_url', 'branch', 'message', 'status', 'failure_reason', 'meta', 'metrics',
-        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'funding', 'source', 'tier', 'user_id', 'prepaid',
+        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'funding', 'source', 'tier', 'user_id', 'tenant_id', 'prepaid',
         'manually_paid', 'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
         'risk_files', 'deep_review_input_tokens', 'deep_review_output_tokens', 'deep_review_ms',
@@ -68,6 +68,19 @@ class AuditRequest extends Model
     protected $attributes = [
         'tier' => AuditTier::DIAGNOSTIC->value,
     ];
+
+    /**
+     * All audits owned by the workspace. Ownership is the tenant the run was
+     * made for, never the member who clicked -- every member sees the same
+     * history and spends the same quota.
+     *
+     * @param  Builder<AuditRequest>  $query
+     * @return Builder<AuditRequest>
+     */
+    public function scopeForTenant(Builder $query, Tenant $tenant): Builder
+    {
+        return $query->where('tenant_id', $tenant->id);
+    }
 
     /**
      * All audits owned by the given user: linked by id, or submitted with
@@ -204,6 +217,14 @@ class AuditRequest extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return BelongsTo<Tenant, $this>
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     /** @return HasMany<AuditFindingGroup, $this> */
