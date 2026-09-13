@@ -7,6 +7,7 @@ use App\Mail\Audit\AuditReportReady;
 use App\Models\AuditFindingGroup;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Models\Tenant;
 use App\Services\AuditReport\AuditReportService;
 use App\Services\AuditReport\ScoreCalculator;
 use Illuminate\Support\Facades\Mail;
@@ -104,13 +105,31 @@ class AuditReportControllerTest extends FeatureTest
         $response->assertDontSee(__('This report link has expired'));
     }
 
-    public function test_download_requires_ownership(): void
+    public function test_download_is_allowed_for_workspace_members_and_denied_to_outsiders(): void
     {
         $this->withExceptionHandling();
         Storage::disk('local')->put('audit-reports/owned.pdf', '%PDF-1.4');
         $owner = $this->createUser();
+        $teammate = $this->createUser();
         $stranger = $this->createUser();
+        $tenant = Tenant::factory()->create(['created_by' => $owner->id]);
+        $tenant->users()->attach([$owner->id, $teammate->id]);
         $report = AuditReport::factory()->create(['user_id' => $owner->id, 'pdf_path' => 'audit-reports/owned.pdf']);
+        $report->auditRequest->update(['tenant_id' => $tenant->id]);
+
+        $this->actingAs($stranger)->get(route('reports.download', $report))->assertStatus(403);
+        $this->actingAs($teammate)->get(route('reports.download', $report))->assertStatus(200);
+        $this->actingAs($owner)->get(route('reports.download', $report))->assertStatus(200);
+    }
+
+    public function test_download_of_an_unclaimed_report_falls_back_to_the_personal_owner_rule(): void
+    {
+        $this->withExceptionHandling();
+        Storage::disk('local')->put('audit-reports/unclaimed.pdf', '%PDF-1.4');
+        $owner = $this->createUser(null, [], ['email' => 'owner@example.com']);
+        $stranger = $this->createUser();
+        $report = AuditReport::factory()->create(['user_id' => null, 'pdf_path' => 'audit-reports/unclaimed.pdf']);
+        $report->auditRequest->update(['tenant_id' => null, 'user_id' => null, 'email' => 'Owner@Example.com']);
 
         $this->actingAs($stranger)->get(route('reports.download', $report))->assertStatus(403);
         $this->actingAs($owner)->get(route('reports.download', $report))->assertStatus(200);

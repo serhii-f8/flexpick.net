@@ -12,6 +12,7 @@ use App\Services\AuditReport\AuditReportService;
 use App\Services\AuditReport\ScoreCalculator;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\Feature\FeatureTest;
 
 class AuditReportUnlockTest extends FeatureTest
@@ -100,5 +101,18 @@ class AuditReportUnlockTest extends FeatureTest
         $this->assertNull($retried->unlocked_at);
         $this->assertNull($retried->unlock_order_id);
         $this->assertNull($retried->pdf_path);
+    }
+
+    public function test_unlocking_as_a_guest_creates_a_workspace_that_claims_the_request(): void
+    {
+        config(['app.create_tenant_on_user_registration' => true]);
+        $report = AuditReport::factory()->locked()->create();
+        $report->auditRequest->update(['email' => 'guest@example.com', 'email_verified_at' => now(), 'tenant_id' => null]);
+
+        $this->get(URL::temporarySignedRoute('reports.unlock', now()->addDay(), ['auditReport' => $report->uuid]));
+
+        $user = User::where('email', 'guest@example.com')->firstOrFail();
+        $tenant = $user->tenants()->firstOrFail();
+        $this->assertSame($tenant->id, $report->auditRequest->fresh()->tenant_id);
     }
 }

@@ -59,4 +59,26 @@ class AuditReport extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /**
+     * Who may open the file behind an authenticated route. A workspace report
+     * is any member's; a report whose request was never claimed into a
+     * workspace (landing-page funnel, not yet registered) keeps the personal
+     * rule. Admins triage everyone's runs from the admin panel.
+     */
+    public function isViewableBy(User $user): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $request = $this->auditRequest;
+
+        if ($request->tenant_id !== null) {
+            return $user->tenants()->where('tenants.id', $request->tenant_id)->exists();
+        }
+
+        return $this->user_id === $user->id
+            || strtolower((string) $request->email) === strtolower((string) $user->email);
+    }
 }
