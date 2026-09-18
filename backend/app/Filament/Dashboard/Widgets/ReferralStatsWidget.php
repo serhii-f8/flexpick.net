@@ -3,7 +3,10 @@
 namespace App\Filament\Dashboard\Widgets;
 
 use App\Filament\Dashboard\Resources\Referrals\ReferralResource;
+use App\Services\CurrencyService;
+use App\Services\PartnerMarginService;
 use App\Services\ReferralService;
+use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -31,6 +34,12 @@ class ReferralStatsWidget extends BaseWidget
                 ->color('success'),
             Stat::make(__('Rewards Earned'), $stats['total_rewards'])
                 ->description(__('Total rewards you\'ve received'))
+                ->color('success'),
+            Stat::make(__('Margin earned'), money(
+                app(PartnerMarginService::class)->earnedMargin(Filament::getTenant()),
+                app(CurrencyService::class)->getCurrency()->code,
+            ))
+                ->description(__('Your share of every approved order from the customers you referred'))
                 ->color('success'),
         ];
     }
