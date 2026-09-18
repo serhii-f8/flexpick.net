@@ -12,7 +12,7 @@ class LayoutBrandingTest extends FeatureTest
      */
     public function test_app_layout_pages_render_flexpick_branding_on_dark_canvas(): void
     {
-        $response = $this->get(route('pricing'));
+        $response = $this->asReferredGuest()->get(route('pricing'));
         $response->assertOk();
         $response->assertSee('data-brand="flexpick"', false);
         $response->assertSee('bg-ink', false);
@@ -68,8 +68,8 @@ class LayoutBrandingTest extends FeatureTest
 
     public function test_no_public_page_mentions_the_boilerplate_vendor(): void
     {
-        foreach ([route('pricing'), route('login'), route('register'), '/terms-of-service', '/privacy-policy'] as $url) {
-            $this->get($url)->assertOk()->assertDontSee('SaaSykit', false);
+        foreach ([route('pricing'), route('pricing.invite-only'), route('login'), route('register'), '/terms-of-service', '/privacy-policy'] as $url) {
+            $this->asReferredGuest()->get($url)->assertOk()->assertDontSee('SaaSykit', false);
         }
 
         $this->assertFileDoesNotExist(resource_path('views/coming-soon/horizontal.blade.php'));

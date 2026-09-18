@@ -6,11 +6,18 @@ use Tests\Feature\FeatureTest;
 
 class HomeControllerTest extends FeatureTest
 {
-    public function test_guest_is_redirected_to_pricing(): void
+    public function test_a_referred_guest_is_redirected_to_pricing(): void
+    {
+        $response = $this->asReferredGuest()->get(route('home'));
+
+        $response->assertRedirect(route('pricing'));
+    }
+
+    public function test_a_guest_nobody_referred_is_redirected_to_the_invite_only_page(): void
     {
         $response = $this->get(route('home'));
 
-        $response->assertRedirect(route('pricing'));
+        $response->assertRedirect(route('pricing.invite-only'));
     }
 
     public function test_user_with_tenant_is_redirected_to_dashboard(): void
@@ -26,7 +33,7 @@ class HomeControllerTest extends FeatureTest
 
     public function test_user_without_tenant_is_redirected_to_pricing(): void
     {
-        $user = $this->createUser();
+        $user = $this->createReferredUser();
         $this->actingAs($user);
 
         $response = $this->get(route('home'));

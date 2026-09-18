@@ -3,16 +3,13 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\PaymentProviderConstants;
-use App\Constants\SubscriptionStatus;
 use App\Constants\TenancyPermissionConstants;
 use App\Models\Currency;
 use App\Models\OneTimeProduct;
 use App\Models\OneTimeProductPrice;
 use App\Models\PartnerProductOffering;
 use App\Models\PaymentProvider;
-use App\Models\Plan;
 use App\Models\Product;
-use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Services\PartnerPricingResolver;
 use App\Services\SessionService;
@@ -20,18 +17,34 @@ use Tests\Feature\FeatureTest;
 
 class ProductCheckoutControllerTest extends FeatureTest
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Checkout only opens to referred buyers, and a referred buyer can
+        // only buy what their partner resells through the Offline provider.
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
+        app(PartnerPricingResolver::class)->flush();
+    }
+
     private function activePartnerTenant(): Tenant
     {
-        $tenant = $this->createTenant();
-        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
-        Subscription::factory()->create([
-            'tenant_id' => $tenant->id,
-            'plan_id' => Plan::factory()->create(['product_id' => $product->id])->id,
-            'status' => SubscriptionStatus::ACTIVE->value,
-            'ends_at' => now()->addDays(30),
+        return $this->createActivePartnerTenant();
+    }
+
+    /** Puts the product on the partner's shelf so a buyer they referred can add it to the cart. */
+    private function offeredBy(OneTimeProduct $product, Tenant $partnerTenant, int $price = 9900): OneTimeProduct
+    {
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'one_time_product_id' => $product->id,
+            'price' => $price,
+            'quota_overrides' => [],
+            'is_enabled' => true,
         ]);
 
-        return $tenant;
+        return $product;
     }
 
     /**
@@ -156,8 +169,11 @@ class ProductCheckoutControllerTest extends FeatureTest
         $this->assertNotEmpty(app(SessionService::class)->getCartDto()->items);
     }
 
-    public function test_a_direct_buyer_is_unaffected_when_adding_any_product_to_cart(): void
+    public function test_a_direct_buyer_is_turned_away_before_the_cart_is_touched(): void
     {
+        // There is no base-price sale: a buyer nobody referred never reaches
+        // this action, so nothing lands in their cart either.
+        $this->withExceptionHandling();
         $product = OneTimeProduct::factory()->create([
             'slug' => 'direct-buyer-product-'.rand(1, 100000),
             'is_active' => true,
@@ -173,8 +189,8 @@ class ProductCheckoutControllerTest extends FeatureTest
 
         $response = $this->get(route('buy.product', ['productSlug' => $product->slug]));
 
-        $response->assertRedirect(route('checkout.product'));
-        $this->assertNotEmpty(app(SessionService::class)->getCartDto()->items);
+        $response->assertForbidden();
+        $this->assertEmpty(app(SessionService::class)->getCartDto()->items);
     }
 
     /**
@@ -188,10 +204,11 @@ class ProductCheckoutControllerTest extends FeatureTest
      */
     public function test_a_tenant_query_parameter_pins_the_cart_to_that_workspace(): void
     {
-        $product = $this->orderableProduct();
+        $partner = $this->activePartnerTenant();
+        $product = $this->offeredBy($this->orderableProduct(), $partner);
         $first = $this->createTenant();
         $second = $this->createTenant();
-        $user = $this->createUser($first, [TenancyPermissionConstants::PERMISSION_CREATE_ORDERS]);
+        $user = $this->createReferredUser($partner, $first, [TenancyPermissionConstants::PERMISSION_CREATE_ORDERS]);
         $second->users()->attach($user);
         $user->tenants()->where('tenant_id', $second->id)->first()->pivot
             ->givePermissionTo(TenancyPermissionConstants::PERMISSION_CREATE_ORDERS);
@@ -212,11 +229,12 @@ class ProductCheckoutControllerTest extends FeatureTest
      */
     public function test_a_tenant_the_user_may_not_order_for_is_ignored(): void
     {
-        $product = $this->orderableProduct();
+        $partner = $this->activePartnerTenant();
+        $product = $this->offeredBy($this->orderableProduct(), $partner);
         $own = $this->createTenant();
         $stranger = $this->createTenant();
         $memberWithoutPermission = $this->createTenant();
-        $user = $this->createUser($own, [TenancyPermissionConstants::PERMISSION_CREATE_ORDERS]);
+        $user = $this->createReferredUser($partner, $own, [TenancyPermissionConstants::PERMISSION_CREATE_ORDERS]);
         $memberWithoutPermission->users()->attach($user);
         $this->actingAs($user);
 
@@ -230,10 +248,11 @@ class ProductCheckoutControllerTest extends FeatureTest
 
     public function test_a_guest_with_a_tenant_query_parameter_is_unaffected(): void
     {
-        $product = $this->orderableProduct();
+        $partner = $this->activePartnerTenant();
+        $product = $this->offeredBy($this->orderableProduct(), $partner);
         $tenant = $this->createTenant();
 
-        $response = $this->get(route('buy.product', ['productSlug' => $product->slug, 'tenant' => $tenant->uuid]));
+        $response = $this->asReferredGuest($partner)->get(route('buy.product', ['productSlug' => $product->slug, 'tenant' => $tenant->uuid]));
 
         $response->assertRedirect(route('checkout.product'));
         $this->assertNull(app(SessionService::class)->getCartDto()->tenantUuid);
@@ -257,6 +276,7 @@ class ProductCheckoutControllerTest extends FeatureTest
 
     public function test_checkout_loads()
     {
+        $partner = $this->activePartnerTenant();
         $product = OneTimeProduct::factory()->create([
             'slug' => 'product-slug-5'.rand(1, 1000),
             'is_active' => true,
@@ -269,7 +289,9 @@ class ProductCheckoutControllerTest extends FeatureTest
             'price' => 100,
         ]);
 
-        $response = $this->followingRedirects()->get(route('buy.product', [
+        $this->offeredBy($product, $partner);
+
+        $response = $this->asReferredGuest($partner)->followingRedirects()->get(route('buy.product', [
             'productSlug' => $product->slug,
         ]));
 
@@ -281,6 +303,7 @@ class ProductCheckoutControllerTest extends FeatureTest
 
     public function test_checkout_quantity()
     {
+        $partner = $this->activePartnerTenant();
         $product = OneTimeProduct::factory()->create([
             'slug' => 'product-slug-5'.rand(1, 100),
             'is_active' => true,
@@ -293,7 +316,9 @@ class ProductCheckoutControllerTest extends FeatureTest
             'price' => 100,
         ]);
 
-        $response = $this->followingRedirects()->get(route('buy.product', [
+        $this->offeredBy($product, $partner);
+
+        $response = $this->asReferredGuest($partner)->followingRedirects()->get(route('buy.product', [
             'productSlug' => $product->slug,
         ]));
 

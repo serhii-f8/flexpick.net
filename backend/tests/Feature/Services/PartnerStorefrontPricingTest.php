@@ -4,6 +4,7 @@ namespace Tests\Feature\Services;
 
 use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
+use App\Constants\ReferralConstants;
 use App\Constants\SubscriptionStatus;
 use App\Models\OneTimeProduct;
 use App\Models\OneTimeProductPrice;
@@ -17,6 +18,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\CurrencyService;
 use App\Services\PartnerPricingResolver;
+use App\Services\ReferralService;
 use Tests\Feature\FeatureTest;
 
 /**
@@ -147,23 +149,45 @@ class PartnerStorefrontPricingTest extends FeatureTest
         $response->assertSee(money(7900, app(CurrencyService::class)->getCurrency()->code));
     }
 
-    public function test_the_pricing_page_shows_base_price_to_an_unattributed_customer(): void
+    public function test_the_pricing_page_renders_the_partner_price_on_the_first_referral_link_visit(): void
     {
-        // A distinctive base price (no other method in this class uses 4901;
-        // the rest default to 4900) so seeing it proves this test's own plan
-        // rendered, rather than a $49.00 plan left over from an earlier
-        // method in this FeatureTest class (which seeds once and never
-        // truncates between methods).
-        $plan = $this->visiblePlan(basePrice: 4901);
+        // A guest arriving through a partner link has no fp_rc cookie yet --
+        // it is queued on this very response. The partner price must still
+        // render now, not only after a refresh.
+        config(['app.referral.enabled' => true]);
+        $partnerTenant = $this->activePartnerTenant();
+        $member = $this->createUser($partnerTenant);
+        $code = app(ReferralService::class)->getOrCreateReferralCode($member)->code;
+        $plan = $this->visiblePlan(basePrice: 4902);
+        PartnerPlanOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $plan->id,
+            'price' => 7902,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        app(PartnerPricingResolver::class)->flush();
+
+        $response = $this->get(route('pricing', [ReferralConstants::HTTP_PARAM_REFERRAL_CODE => $code]));
+
+        $response->assertOk();
+        $response->assertSee(money(7902, app(CurrencyService::class)->getCurrency()->code));
+        $response->assertDontSee(money(4902, app(CurrencyService::class)->getCurrency()->code));
+    }
+
+    public function test_the_pricing_page_is_closed_to_an_unattributed_customer(): void
+    {
+        // Base prices are never quoted to anyone: a customer nobody referred
+        // is turned away before a single card renders (RequirePartnerAttribution).
+        $this->withExceptionHandling();
+        $this->visiblePlan(basePrice: 4901);
         $user = $this->createUser();
         app(PartnerPricingResolver::class)->flush();
 
         $response = $this->actingAs($user)->get(route('pricing'));
 
-        $response->assertOk();
-        $response->assertSee(money(4901, app(CurrencyService::class)->getCurrency()->code));
-        // An unattributed customer must never see a partner price, including
-        // one configured for another test's partner tenant earlier in this class.
+        $response->assertForbidden();
+        $response->assertDontSee(money(4901, app(CurrencyService::class)->getCurrency()->code));
         $response->assertDontSee(money(7900, app(CurrencyService::class)->getCurrency()->code));
     }
 

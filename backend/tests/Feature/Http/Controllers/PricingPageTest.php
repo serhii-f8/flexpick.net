@@ -17,15 +17,41 @@ use App\Models\Plan;
 use App\Models\PlanPrice;
 use App\Models\Product;
 use App\Models\Subscription;
+use App\Models\Tenant;
 use App\Services\CurrencyService;
 use App\Services\PartnerPricingResolver;
 use Tests\Feature\FeatureTest;
 
 class PricingPageTest extends FeatureTest
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The storefront only opens to referred buyers, and a referred buyer
+        // only sees what their partner resells through the Offline provider.
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
+            ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
+        app(PartnerPricingResolver::class)->flush();
+    }
+
+    /** Puts the plan on the partner's shelf so a buyer they referred can see it. */
+    private function offeredBy(Plan $plan, Tenant $partnerTenant, int $price = 9900): Plan
+    {
+        PartnerPlanOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $plan->id,
+            'price' => $price,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+
+        return $plan;
+    }
+
     public function test_authenticated_user_can_view_pricing(): void
     {
-        $user = $this->createUser();
+        $user = $this->createReferredUser();
 
         $response = $this->actingAs($user)->get(route('pricing'));
 
@@ -43,9 +69,10 @@ class PricingPageTest extends FeatureTest
      */
     public function test_a_customer_with_a_non_self_service_subscription_sees_the_new_workspace_warning(): void
     {
-        $this->visiblePlan([], 'Any Visible Plan');
+        $partner = $this->createActivePartnerTenant();
+        $this->offeredBy($this->visiblePlan([], 'Any Visible Plan'), $partner);
         $tenant = $this->createTenant();
-        $user = $this->createUser($tenant);
+        $user = $this->createReferredUser($partner, $tenant);
         Subscription::factory()->create([
             'tenant_id' => $tenant->id,
             'plan_id' => Plan::factory()->create(['is_active' => true])->id,
@@ -64,7 +91,7 @@ class PricingPageTest extends FeatureTest
     {
         $this->visiblePlan([], 'Any Visible Plan');
         $tenant = $this->createTenant();
-        $user = $this->createUser($tenant);
+        $user = $this->createReferredUser(null, $tenant);
         Subscription::factory()->create([
             'tenant_id' => $tenant->id,
             'plan_id' => Plan::factory()->create(['is_active' => true])->id,
@@ -81,7 +108,7 @@ class PricingPageTest extends FeatureTest
 
     public function test_a_guest_can_view_pricing_and_is_offered_sign_up(): void
     {
-        $response = $this->get(route('pricing'));
+        $response = $this->asReferredGuest()->get(route('pricing'));
 
         $response->assertStatus(200);
         $response->assertSee(__('Plans & Pricing'));
@@ -92,7 +119,7 @@ class PricingPageTest extends FeatureTest
 
     public function test_a_signed_in_user_is_not_offered_sign_up(): void
     {
-        $user = $this->createUser();
+        $user = $this->createReferredUser();
 
         $response = $this->actingAs($user)->get(route('pricing'));
 
@@ -102,7 +129,7 @@ class PricingPageTest extends FeatureTest
 
     public function test_single_audits_get_their_own_heading_ahead_of_the_subscription_panel(): void
     {
-        $user = $this->createUser();
+        $user = $this->createReferredUser();
 
         $html = $this->actingAs($user)->get(route('pricing'))->assertOk()->getContent();
 
@@ -169,7 +196,7 @@ class PricingPageTest extends FeatureTest
      */
     public function test_the_pricing_page_survives_a_tiered_usage_based_plan_with_no_meter(): void
     {
-        $user = $this->createUser();
+        $user = $this->createReferredUser();
         $product = Product::factory()->create(['name' => 'Meterless '.uniqid()]);
         $plan = Plan::factory()->create([
             'product_id' => $product->id,
@@ -192,16 +219,16 @@ class PricingPageTest extends FeatureTest
 
         $response = $this->actingAs($user)->get(route('pricing'));
 
+        // The Offline provider cannot bill usage-based plans, so no partner
+        // can resell one and no buyer ever sees its card any more; the page
+        // merely has to survive the plan existing.
         $response->assertStatus(200);
-        // The card renders the product name, and the tier line proves we actually
-        // reached the meter-name branch rather than merely not crashing.
-        $response->assertSee($product->name);
-        $response->assertSee('0–7331');
+        $response->assertDontSee($product->name);
     }
 
     public function test_both_catalog_tabs_render_with_one_time_products_first(): void
     {
-        $user = $this->createUser();
+        $user = $this->createReferredUser();
 
         $response = $this->actingAs($user)->get(route('pricing'))->assertOk();
 
@@ -210,7 +237,7 @@ class PricingPageTest extends FeatureTest
 
     public function test_the_one_time_products_panel_is_the_one_visible_on_load(): void
     {
-        $user = $this->createUser();
+        $user = $this->createReferredUser();
 
         $html = $this->actingAs($user)->get(route('pricing'))->assertOk()->getContent();
 
@@ -222,7 +249,7 @@ class PricingPageTest extends FeatureTest
     public function test_the_free_plan_panel_stays_outside_both_catalog_tabs(): void
     {
         Product::factory()->create(['is_default' => true, 'name' => 'Free Forever '.uniqid()]);
-        $user = $this->createUser();
+        $user = $this->createReferredUser();
 
         $html = $this->actingAs($user)->get(route('pricing'))->assertOk()->getContent();
 
@@ -246,9 +273,10 @@ class PricingPageTest extends FeatureTest
 
     public function test_packages_are_grouped_under_their_tier_headings_in_tier_order(): void
     {
-        $this->visiblePlan(['audit_tier_group' => 'expert'], 'Zed Expert Pack');
-        $this->visiblePlan(['audit_tier_group' => 'diagnostic'], 'Alpha Diagnostic Pack');
-        $user = $this->createUser($this->createTenant());
+        $partner = $this->createActivePartnerTenant();
+        $this->offeredBy($this->visiblePlan(['audit_tier_group' => 'expert'], 'Zed Expert Pack'), $partner);
+        $this->offeredBy($this->visiblePlan(['audit_tier_group' => 'diagnostic'], 'Alpha Diagnostic Pack'), $partner);
+        $user = $this->createReferredUser($partner, $this->createTenant());
 
         $response = $this->actingAs($user)->get(route('pricing'))->assertOk();
 
@@ -262,8 +290,9 @@ class PricingPageTest extends FeatureTest
 
     public function test_plans_without_a_tier_render_in_a_trailing_unlabelled_grid(): void
     {
-        $this->visiblePlan([], 'Loose Legacy Plan');
-        $user = $this->createUser($this->createTenant());
+        $partner = $this->createActivePartnerTenant();
+        $this->offeredBy($this->visiblePlan([], 'Loose Legacy Plan'), $partner);
+        $user = $this->createReferredUser($partner, $this->createTenant());
 
         $response = $this->actingAs($user)->get(route('pricing'))->assertOk();
 
@@ -320,22 +349,14 @@ class PricingPageTest extends FeatureTest
         $response->assertDontSee('Not Configured Package');
     }
 
-    public function test_a_direct_customer_still_sees_every_visible_plan(): void
+    public function test_a_direct_customer_is_turned_away_from_the_storefront(): void
     {
-        $product = Product::factory()->create(['name' => 'Any Product']);
-        $plan = Plan::factory()->create([
-            'product_id' => $product->id,
-            'type' => PlanType::FLAT_RATE->value,
-            'is_active' => true,
-            'is_visible' => true,
-        ]);
-        $plan->prices()->create(['currency_id' => app(CurrencyService::class)->getCurrency()->id, 'price' => 4900]);
-
+        // There is no such thing as a base-price sale: a customer nobody
+        // referred does not get to see the catalog at all.
+        $this->withExceptionHandling();
         $customer = $this->createUser();
 
-        $response = $this->actingAs($customer)->get(route('pricing'));
-
-        $response->assertSee('Any Product');
+        $this->actingAs($customer)->get(route('pricing'))->assertForbidden();
     }
 
     public function test_an_attributed_customer_with_nothing_enabled_sees_the_empty_state(): void

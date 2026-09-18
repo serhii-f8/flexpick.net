@@ -2,8 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Constants\PartnerAttributionSource;
+use App\Constants\SubscriptionStatus;
+use App\Models\Plan;
+use App\Models\Product;
+use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\ReferralService;
 use Database\Seeders\Testing\TestingDatabaseSeeder;
 use Tests\TestCase;
 
@@ -64,6 +70,52 @@ abstract class FeatureTest extends TestCase
         });
 
         return $user;
+    }
+
+    /**
+     * A workspace whose Partner Plan is active, so its members' referral
+     * codes resolve to it and it can quote partner prices.
+     */
+    protected function createActivePartnerTenant(): Tenant
+    {
+        $tenant = Tenant::factory()->create();
+        $product = Product::factory()->create(['metadata' => ['enables_reseller_program' => true]]);
+        Subscription::factory()->create([
+            'tenant_id' => $tenant->id,
+            'plan_id' => Plan::factory()->create(['product_id' => $product->id])->id,
+            'status' => SubscriptionStatus::ACTIVE->value,
+            'ends_at' => now()->addDays(30),
+        ]);
+
+        return $tenant;
+    }
+
+    /**
+     * A user attributed to a partner, i.e. one who registered through that
+     * partner's referral link. The storefront and checkout only open to such
+     * users (RequirePartnerAttribution).
+     */
+    protected function createReferredUser(?Tenant $partnerTenant = null, ?Tenant $tenant = null, array $tenantPermissions = [], array $attributes = []): User
+    {
+        $partnerTenant ??= $this->createActivePartnerTenant();
+
+        return $this->createUser($tenant, $tenantPermissions, $attributes + [
+            'partner_tenant_id' => $partnerTenant->id,
+            'partner_attributed_at' => now(),
+            'partner_attribution_source' => PartnerAttributionSource::REGISTRATION->value,
+        ]);
+    }
+
+    /**
+     * Subsequent requests carry the partner cookie a referral-link visit
+     * leaves behind, so a guest passes RequirePartnerAttribution.
+     */
+    protected function asReferredGuest(?Tenant $partnerTenant = null): static
+    {
+        $partnerTenant ??= $this->createActivePartnerTenant();
+        $code = app(ReferralService::class)->getOrCreateReferralCode($this->createUser($partnerTenant))->code;
+
+        return $this->withCookie(config('partner.cookie_name'), $code);
     }
 
     protected function configureDefaultCurrency(): void

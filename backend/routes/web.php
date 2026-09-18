@@ -11,6 +11,8 @@ use App\Http\Controllers\ProductCheckoutController;
 use App\Http\Controllers\SubscriptionCheckoutController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Middleware\RepairHtmlEscapedQueryString;
+use App\Http\Middleware\RequirePartnerAttribution;
+use App\Services\PartnerPricingResolver;
 use App\Services\PlanService;
 use App\Services\SessionService;
 use App\Services\TenantCreationService;
@@ -42,12 +44,22 @@ Route::get('/', function (UserDashboardService $dashboardService) {
         }
     }
 
+    // A visitor nobody referred has nothing to see: the storefront is
+    // partner-only (RequirePartnerAttribution).
+    if (app(PartnerPricingResolver::class)->resolvePartnerTenant(auth()->user()) === null) {
+        return redirect()->route('pricing.invite-only');
+    }
+
     return redirect()->route('pricing');
 })->name('home');
 
 Route::get('/pricing', function () {
     return view('pricing');
-})->name('pricing');
+})->name('pricing')->middleware(RequirePartnerAttribution::class);
+
+Route::get('/pricing/invite-only', function () {
+    return view('pricing.invite-only');
+})->name('pricing.invite-only');
 
 Route::get('/dashboard', function (UserDashboardService $dashboardService) {
     return redirect($dashboardService->getUserDashboardUrl(Auth::user()));
@@ -71,7 +83,7 @@ Route::get('/plan/start', function (
     }
 
     return redirect()->route('register');
-})->name('plan.start');
+})->name('plan.start')->middleware(RequirePartnerAttribution::class);
 
 Route::get('/email/verify', function () {
     return view('auth.verify');
@@ -119,12 +131,12 @@ Route::get('/auth/{provider}/callback', [OAuthController::class, 'callback'])
 Route::get('/checkout/plan/{planSlug}', [
     SubscriptionCheckoutController::class,
     'subscriptionCheckout',
-])->name('checkout.subscription');
+])->name('checkout.subscription')->middleware(RequirePartnerAttribution::class);
 
 Route::get('/checkout/convert-subscription/{subscriptionUuid}', [
     SubscriptionCheckoutController::class,
     'convertLocalSubscriptionCheckout',
-])->name('checkout.convert-local-subscription');
+])->name('checkout.convert-local-subscription')->middleware(RequirePartnerAttribution::class);
 
 Route::get('/already-subscribed', function () {
     return view('checkout.already-subscribed');
@@ -173,12 +185,12 @@ Route::get('/privacy-policy', function () {
 Route::get('/buy/product/{productSlug}/{quantity?}', [
     ProductCheckoutController::class,
     'addToCart',
-])->name('buy.product');
+])->name('buy.product')->middleware(RequirePartnerAttribution::class);
 
 Route::get('/checkout/product', [
     ProductCheckoutController::class,
     'productCheckout',
-])->name('checkout.product');
+])->name('checkout.product')->middleware(RequirePartnerAttribution::class);
 
 Route::get('/checkout/product/success', [
     ProductCheckoutController::class,
