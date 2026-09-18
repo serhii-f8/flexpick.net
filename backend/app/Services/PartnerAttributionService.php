@@ -57,10 +57,17 @@ class PartnerAttributionService
     /**
      * EncryptCookies has already decrypted and MAC-checked the value by the
      * time any service reads it; a forged or edited cookie never gets here.
+     *
+     * A cookie queued on THIS request (TrackReferralCode, on the very page
+     * load that carried the referral link) is not in the request yet -- the
+     * browser only sends it back on the next one. It is read here so the
+     * first page a referred visitor sees already carries the partner's
+     * prices, instead of only after a refresh.
      */
     public function cookieCode(?Request $request = null): ?string
     {
-        $code = ($request ?? request())->cookie($this->cookieName());
+        $code = ($request ?? request())->cookie($this->cookieName())
+            ?? Cookie::queued($this->cookieName())?->getValue();
 
         return $this->isPlausibleCode($code) ? $code : null;
     }

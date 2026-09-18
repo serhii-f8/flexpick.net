@@ -115,6 +115,18 @@ class PartnerAttributionServiceTest extends FeatureTest
         $this->assertNull($this->service()->cookieCode());
     }
 
+    public function test_cookie_code_falls_back_to_a_cookie_queued_on_this_request(): void
+    {
+        // The middleware queues the cookie on the very request that carried
+        // the referral link; the browser only sends it back on the NEXT one.
+        // Reading the queued value is what makes partner prices show on the
+        // first page load rather than after a refresh.
+        $this->app['request']->cookies->remove(config('partner.cookie_name'));
+        $this->service()->queueCookie('REF-QUEUEDCODE2');
+
+        $this->assertSame('REF-QUEUEDCODE2', $this->service()->cookieCode());
+    }
+
     public function test_has_partner_cookie_requires_the_code_to_resolve(): void
     {
         [, , $code] = $this->partnerWithCode();
