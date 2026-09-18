@@ -33,7 +33,8 @@ class LoginControllerTest extends FeatureTest
     {
         config(['app.two_factor_auth_enabled' => true]);
 
-        $user = $this->createUser(null, [], [
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant, [], [
             'email' => 'test@example.com',
             'password' => bcrypt('password123'),
         ]);
@@ -43,7 +44,7 @@ class LoginControllerTest extends FeatureTest
             'password' => 'password123',
         ]);
 
-        $response->assertRedirect(route('dashboard'));
+        $response->assertRedirect(route('filament.dashboard.pages.dashboard', ['tenant' => $tenant]));
     }
 
     public function test_2fa_verification_is_shown_when_user_has_2fa_enabled()
@@ -75,8 +76,9 @@ class LoginControllerTest extends FeatureTest
 
         $email = $this->faker->email;
 
+        $tenant = $this->createTenant();
         /** @var User $user */
-        $user = $this->createUser(null, [], [
+        $user = $this->createUser($tenant, [], [
             'email' => $email,
             'password' => bcrypt('password123'),
         ]);
@@ -89,40 +91,56 @@ class LoginControllerTest extends FeatureTest
             'password' => 'password123',
         ]);
 
-        $response->assertRedirect(route('dashboard'));
+        $response->assertRedirect(route('filament.dashboard.pages.dashboard', ['tenant' => $tenant]));
     }
 
-    public function test_login_from_external_landing_referer_redirects_to_dashboard(): void
+    public function test_login_from_external_landing_referer_lands_on_the_workspace_dashboard(): void
     {
         $email = $this->faker->email;
-        $this->createUser(null, [], ['email' => $email, 'password' => bcrypt('password123')]);
+        $tenant = $this->createTenant();
+        $this->createUser($tenant, [], ['email' => $email, 'password' => bcrypt('password123')]);
 
         $this->get(route('login'), ['referer' => 'https://flexpick.net/']);
 
         $this->post(route('login'), ['email' => $email, 'password' => 'password123'])
-            ->assertRedirect(route('dashboard'));
+            ->assertRedirect(route('filament.dashboard.pages.dashboard', ['tenant' => $tenant]));
     }
 
-    public function test_login_from_home_referer_redirects_to_dashboard(): void
+    public function test_login_from_home_referer_lands_on_the_workspace_dashboard(): void
     {
         $email = $this->faker->email;
-        $this->createUser(null, [], ['email' => $email, 'password' => bcrypt('password123')]);
+        $tenant = $this->createTenant();
+        $this->createUser($tenant, [], ['email' => $email, 'password' => bcrypt('password123')]);
 
         $this->get(route('login'), ['referer' => route('home')]);
 
         $this->post(route('login'), ['email' => $email, 'password' => 'password123'])
-            ->assertRedirect(route('dashboard'));
+            ->assertRedirect(route('filament.dashboard.pages.dashboard', ['tenant' => $tenant]));
     }
 
-    public function test_login_from_internal_page_returns_to_that_page(): void
+    public function test_login_from_the_pricing_page_lands_on_the_workspace_dashboard_not_back_on_pricing(): void
     {
+        // The page the visitor came from is not where they want to go after
+        // logging in: their workspace is. Only a genuinely protected page
+        // (next test) is worth returning to.
         $email = $this->faker->email;
-        $this->createUser(null, [], ['email' => $email, 'password' => bcrypt('password123')]);
+        $tenant = $this->createTenant();
+        $this->createUser($tenant, [], ['email' => $email, 'password' => bcrypt('password123')]);
 
         $this->get(route('login'), ['referer' => route('pricing')]);
 
         $this->post(route('login'), ['email' => $email, 'password' => 'password123'])
-            ->assertRedirect(route('pricing'));
+            ->assertRedirect(route('filament.dashboard.pages.dashboard', ['tenant' => $tenant]));
+    }
+
+    public function test_login_of_a_user_without_a_workspace_falls_back_to_home(): void
+    {
+        // Nothing to show yet -- the same place /dashboard would have sent them.
+        $email = $this->faker->email;
+        $this->createUser(null, [], ['email' => $email, 'password' => bcrypt('password123')]);
+
+        $this->post(route('login'), ['email' => $email, 'password' => 'password123'])
+            ->assertRedirect(route('home'));
     }
 
     public function test_login_after_protected_page_redirects_back_to_it(): void

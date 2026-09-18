@@ -43,12 +43,6 @@ parameters:
 			path: app/Filament/Admin/Resources/OneTimeProducts/RelationManagers/PricesRelationManager.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$tenant\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Filament/Admin/Resources/Orders/OrderResource.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
 			identifier: property.notFound
 			count: 3
@@ -787,12 +781,6 @@ parameters:
 			path: app/Models/UserStripeData.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$tenant\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Policies/OrderPolicy.php
-
-		-
 			message: '#^Method App\\Services\\AuditReport\\Collectors\\HotspotCollector\:\:collect\(\) should return array\<string, mixed\> but returns list\<array\<string, int\|string\>\>\.$#'
 			identifier: return.type
 			count: 1
@@ -1211,12 +1199,6 @@ parameters:
 			identifier: method.notFound
 			count: 1
 			path: app/Services/PaymentProviders/Polar/PolarProvider.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$tenant\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/PaymentProviders/Stripe/StripeProvider.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'

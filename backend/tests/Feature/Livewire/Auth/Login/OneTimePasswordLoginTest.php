@@ -151,6 +151,20 @@ class OneTimePasswordLoginTest extends FeatureTest
         $this->assertEquals($user->id, Auth::id());
     }
 
+    public function test_authenticating_points_the_redirect_at_the_users_workspace_dashboard()
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant, [], ['email_verified_at' => now()]);
+
+        $component = Livewire::test(OneTimePasswordLogin::class);
+        $component->instance()->authenticate($user);
+
+        $this->assertSame(
+            route('filament.dashboard.pages.dashboard', ['tenant' => $tenant]),
+            $component->instance()->redirectTo,
+        );
+    }
+
     public function test_submit_email_with_recaptcha_enabled()
     {
         config(['app.recaptcha_enabled' => true]);

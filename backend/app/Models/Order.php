@@ -72,7 +72,7 @@ class Order extends Model
         return $this->belongsTo(PaymentProvider::class);
     }
 
-    public function tenant()
+    public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
     }

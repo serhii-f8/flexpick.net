@@ -2,7 +2,9 @@
 
 namespace App\Livewire\Auth\Login;
 
+use App\Models\User;
 use App\Services\OneTimePasswordService;
+use App\Services\UserDashboardService;
 use App\Validator\LoginValidator;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\View\View;
@@ -14,6 +16,8 @@ class OneTimePasswordLogin extends OneTimePasswordComponent
     private OneTimePasswordService $oneTimePasswordService;
 
     private LoginValidator $loginValidator;
+
+    private UserDashboardService $userDashboardService;
 
     public $recaptcha;
 
@@ -29,10 +33,12 @@ class OneTimePasswordLogin extends OneTimePasswordComponent
 
     public function boot(
         OneTimePasswordService $oneTimePasswordService,
-        LoginValidator $loginValidator
+        LoginValidator $loginValidator,
+        UserDashboardService $userDashboardService,
     ) {
         $this->oneTimePasswordService = $oneTimePasswordService;
         $this->loginValidator = $loginValidator;
+        $this->userDashboardService = $userDashboardService;
     }
 
     public function submitEmail(): void
@@ -74,6 +80,14 @@ class OneTimePasswordLogin extends OneTimePasswordComponent
         }
 
         auth()->login($user);
+
+        // Same landing as the password login (RedirectAwareTrait): straight
+        // to the workspace dashboard, not the home redirect chain.
+        if ($user instanceof User) {
+            $this->redirectTo = $user->is_admin
+                ? route('filament.admin.pages.dashboard')
+                : $this->userDashboardService->getUserDashboardUrl($user);
+        }
     }
 
     protected function resetReCaptcha()

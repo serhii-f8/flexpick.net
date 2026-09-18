@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Dto\CartItemDto;
+use App\Models\Order;
 use App\Models\Tenant;
 use App\Services\DiscountService;
 use App\Services\OneTimeProductService;
 use App\Services\PartnerPricingResolver;
+use App\Services\PurchaseLandingService;
 use App\Services\SessionService;
 use App\Services\TenantCreationService;
 use Illuminate\Http\Request;
@@ -19,6 +21,7 @@ class ProductCheckoutController extends Controller
         private SessionService $sessionService,
         private PartnerPricingResolver $partnerPricingResolver,
         private TenantCreationService $tenantCreationService,
+        private PurchaseLandingService $purchaseLanding,
     ) {}
 
     public function productCheckout()
@@ -134,6 +137,12 @@ class ProductCheckoutController extends Controller
 
         $this->sessionService->clearCartDto();
 
-        return view('checkout.product-thank-you');
+        $order = Order::find($cartDto->orderId);
+
+        return $this->purchaseLanding->redirect(
+            auth()->user(),
+            $order?->tenant,
+            __('Your order is being processed and you will receive an email with your order details shortly.'),
+        );
     }
 }

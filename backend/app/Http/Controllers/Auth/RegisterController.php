@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\ReferralRegistrationGate;
 use App\Services\TenantService;
+use App\Services\UserDashboardService;
 use App\Services\UserService;
 use App\Validator\RegisterValidator;
 use Illuminate\Contracts\Validation\Validator;
@@ -40,10 +41,16 @@ class RegisterController extends Controller
         protected UserService $userService,
         protected TenantService $tenantService,
         protected ReferralRegistrationGate $referralRegistrationGate,
+        protected UserDashboardService $userDashboardService,
     ) {
         $this->middleware('guest');
     }
 
+    /**
+     * Pending workspace invitations first, then a protected page the auth
+     * middleware bounced them off, then their own dashboard -- never the
+     * page they happened to register from.
+     */
     public function redirectPath()
     {
         $user = auth()->user();
@@ -52,7 +59,11 @@ class RegisterController extends Controller
             return route('invitations');
         }
 
-        return Redirect::getIntendedUrl() ?? route('home');
+        if (Redirect::getIntendedUrl() !== null) {
+            return Redirect::getIntendedUrl();
+        }
+
+        return $user ? $this->userDashboardService->getUserDashboardUrl($user) : route('home');
     }
 
     /**
@@ -82,10 +93,6 @@ class RegisterController extends Controller
      */
     public function showRegistrationForm()
     {
-        if (url()->previous() != route('login') && Redirect::getIntendedUrl() === null) {
-            Redirect::setIntendedUrl(url()->previous()); // make sure we redirect back to the page we came from
-        }
-
         return view('auth.register', [
             'isOtpLoginEnabled' => config('app.otp_login_enabled'),
             'isInviteOnly' => $this->referralRegistrationGate->isActive(),

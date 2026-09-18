@@ -6,6 +6,7 @@ use App\Constants\SubscriptionType;
 use App\Models\Plan;
 use App\Services\CalculationService;
 use App\Services\DiscountService;
+use App\Services\PurchaseLandingService;
 use App\Services\SessionService;
 use App\Services\SubscriptionService;
 use App\Services\TenantSubscriptionService;
@@ -18,6 +19,7 @@ class SubscriptionCheckoutController extends Controller
         private SubscriptionService $subscriptionService,
         private SessionService $sessionService,
         private TenantSubscriptionService $tenantSubscriptionService,
+        private PurchaseLandingService $purchaseLanding,
     ) {}
 
     public function subscriptionCheckout(string $planSlug)
@@ -99,11 +101,12 @@ class SubscriptionCheckoutController extends Controller
 
         $this->sessionService->resetSubscriptionCheckoutDto();
 
-        if ($subscription && $subscription->type === SubscriptionType::LOCALLY_MANAGED) {
-            return view('checkout.local-subscription-thank-you');
-        }
+        $body = $subscription && $subscription->type === SubscriptionType::LOCALLY_MANAGED
+            ? __('Thanks for joining us! It might take a few moments for your subscription to be activated.')
+            : __('Your order is being processed and you will receive an email with your order details shortly.')
+                .' '.__('It might take a few moments for your subscription to be activated.');
 
-        return view('checkout.subscription-thank-you');
+        return $this->purchaseLanding->redirect(auth()->user(), $subscription?->tenant, $body);
     }
 
     public function convertLocalSubscriptionCheckoutSuccess()
@@ -114,9 +117,17 @@ class SubscriptionCheckoutController extends Controller
             return redirect()->route('home');
         }
 
+        $checkoutDto = $this->sessionService->getSubscriptionCheckoutDto();
+        $subscription = $this->subscriptionService->findById($checkoutDto->subscriptionId);
+
         $this->sessionService->resetSubscriptionCheckoutDto();
 
-        return view('checkout.convert-local-subscription-thank-you');
+        return $this->purchaseLanding->redirect(
+            auth()->user(),
+            $subscription?->tenant,
+            __('Your order is being processed and you will receive an email with your order details shortly.')
+                .' '.__('It might take a few moments for your subscription to be activated.'),
+        );
     }
 
     private function handleSubscriptionSuccess(): bool

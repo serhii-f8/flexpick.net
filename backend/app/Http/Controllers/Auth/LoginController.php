@@ -9,7 +9,6 @@ use App\Services\LoginService;
 use App\Validator\LoginValidator;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Redirect;
 
 class LoginController extends Controller
 {
@@ -34,33 +33,17 @@ class LoginController extends Controller
         $this->middleware('guest')->except('logout');
     }
 
+    /**
+     * The previous page is deliberately NOT remembered as the intended URL:
+     * after logging in a user goes to their dashboard, not back to the
+     * pricing page they clicked "Log in" from. The auth middleware still
+     * sets an intended URL for a protected page, and that one is honoured.
+     */
     public function showLoginForm()
     {
-        if (Redirect::getIntendedUrl() === null && $this->isReturnablePreviousUrl(url()->previous())) {
-            Redirect::setIntendedUrl(url()->previous()); // make sure we redirect back to the page we came from
-        }
-
         return view('auth.login', [
             'isOtpLoginEnabled' => config('app.otp_login_enabled'),
         ]);
-    }
-
-    private function isReturnablePreviousUrl(?string $previousUrl): bool
-    {
-        if (empty($previousUrl)) {
-            return false;
-        }
-
-        if (parse_url($previousUrl, PHP_URL_HOST) !== parse_url(config('app.url'), PHP_URL_HOST)) {
-            return false; // external referer (e.g. the landing site) — never "return" there after login
-        }
-
-        $excluded = array_map(
-            fn (string $url): string => rtrim($url, '/'),
-            [route('home'), route('login'), route('register')],
-        );
-
-        return ! in_array(rtrim($previousUrl, '/'), $excluded, true);
     }
 
     protected function authenticated(Request $request, User $user)
