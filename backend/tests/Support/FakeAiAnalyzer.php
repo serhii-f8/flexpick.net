@@ -43,6 +43,10 @@ class FakeAiAnalyzer implements AiAnalyzer
                 'risks' => [['title' => 'Low test coverage', 'impact' => 'high', 'evidence' => 'test ratio', 'recommendation' => 'Add smoke tests']],
                 'fix_first_plan' => [['step' => 'Set up CI', 'why' => 'Catch regressions early', 'effort' => 'S']],
                 'groups' => [],
+                'client_summary' => [
+                    'overview' => 'Fake plain-language overview.',
+                    'findings' => [['what' => 'Nothing is tested.', 'consequence' => 'Changes break things.', 'gain' => 'Fewer surprises.']],
+                ],
             ],
             inputTokens: 100,
             outputTokens: 50,

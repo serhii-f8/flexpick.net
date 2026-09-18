@@ -21,6 +21,13 @@ output them verbatim as your scores. A dimension absent from computed_scores was
 on this run: omit it from your scores entirely rather than estimating it, and do not describe
 it as healthy. Scores are 0-100, higher is healthier. Rank risks by impact. The fix-first plan
 must be concrete and ordered by leverage.
+
+The client_summary is written for a non-technical reader -- the business owner who paid for
+the audit, not their engineer. Plain everyday language: no tool names, file paths, rule ids,
+jargon or code. The overview is two or three sentences on the overall state of the codebase.
+Then three to five findings, the ones that matter most to the business, each in three parts:
+what is wrong in plain terms, what problems it may cause for them (lost customers, outages,
+slow or costly changes, security or legal exposure), and what they gain by fixing it.
 PROMPT;
 
     private const SCHEMA = [
@@ -91,8 +98,29 @@ PROMPT;
                     'additionalProperties' => false,
                 ],
             ],
+            'client_summary' => [
+                'type' => 'object',
+                'properties' => [
+                    'overview' => ['type' => 'string'],
+                    'findings' => [
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'what' => ['type' => 'string'],
+                                'consequence' => ['type' => 'string'],
+                                'gain' => ['type' => 'string'],
+                            ],
+                            'required' => ['what', 'consequence', 'gain'],
+                            'additionalProperties' => false,
+                        ],
+                    ],
+                ],
+                'required' => ['overview', 'findings'],
+                'additionalProperties' => false,
+            ],
         ],
-        'required' => ['summary', 'scores', 'risks', 'fix_first_plan', 'groups'],
+        'required' => ['summary', 'scores', 'risks', 'fix_first_plan', 'groups', 'client_summary'],
         'additionalProperties' => false,
     ];
 

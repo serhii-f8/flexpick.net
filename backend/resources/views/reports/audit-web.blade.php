@@ -50,6 +50,13 @@
         <p class="mt-3.5">{{ $payload['summary'] }}</p>
     </div>
 
+    @if (($payload['client_summary'] ?? null) !== null)
+        <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+            @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
+            @include('reports.partials.web.client-summary', ['payload' => $payload, 'unlocked' => $unlocked])
+        </div>
+    @endif
+
     @php($notMeasured = $report->auditRequest->metrics['not_measured'] ?? [])
     <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
         @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])

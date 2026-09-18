@@ -59,4 +59,29 @@ class PdfRenderTest extends FeatureTest
         $this->assertStringStartsWith('%PDF-', $output);
         $this->assertGreaterThan(1000, strlen($output));
     }
+
+    public function test_the_pdf_carries_the_plain_language_summary(): void
+    {
+        $report = AuditReport::factory()->create([
+            'payload' => AuditReport::factory()->definition()['payload'] + [
+                'client_summary' => [
+                    'overview' => 'Plain-words overview for the owner.',
+                    'findings' => [[
+                        'what' => 'Nothing is checked before a release.',
+                        'consequence' => 'A change can break checkout.',
+                        'gain' => 'Fewer surprises.',
+                    ]],
+                ],
+            ],
+        ]);
+
+        $html = view('reports.audit', ['report' => $report->fresh(), 'payload' => $report->payload])->render();
+
+        $this->assertStringContainsString(__('In plain terms'), $html);
+        $this->assertStringContainsString('Plain-words overview for the owner.', $html);
+        $this->assertStringContainsString('Nothing is checked before a release.', $html);
+        $this->assertStringContainsString('A change can break checkout.', $html);
+        $this->assertStringContainsString('Fewer surprises.', $html);
+        $this->assertStringStartsWith('%PDF-', Pdf::loadHTML($html)->output());
+    }
 }

@@ -14,7 +14,7 @@ use App\Exceptions\AiAnalysisException;
 class ReportPayload
 {
     /** Bump when the payload contract changes. */
-    public const VERSION = 4;
+    public const VERSION = 5;
 
     private const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
@@ -39,6 +39,7 @@ class ReportPayload
             2 => self::validateV2($payload),
             3 => self::validateV3($payload),
             4 => self::validateV4($payload),
+            5 => self::validateV5($payload),
             default => throw new AiAnalysisException("Unknown payload schema version: {$version}"),
         };
     }
@@ -199,6 +200,43 @@ class ReportPayload
         }
 
         return $payload;
+    }
+
+    private static function validateV5(array $payload): array
+    {
+        $payload = self::validateV4($payload);
+
+        // Optional for the same reason as every section since v3: reports
+        // stored before the plain-language summary existed must keep
+        // validating on view.
+        if (array_key_exists('client_summary', $payload)) {
+            self::validateClientSummary($payload['client_summary']);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * The section written for a non-technical reader: a short overview and
+     * a handful of findings, each as what is wrong, what it may cause, and
+     * what fixing it gains the client.
+     */
+    private static function validateClientSummary(mixed $summary): void
+    {
+        if (! is_array($summary)
+            || ! is_string($summary['overview'] ?? null)
+            || ! is_array($summary['findings'] ?? null)) {
+            throw new AiAnalysisException('Malformed client_summary section');
+        }
+
+        foreach ($summary['findings'] as $finding) {
+            if (! is_array($finding)
+                || ! is_string($finding['what'] ?? null)
+                || ! is_string($finding['consequence'] ?? null)
+                || ! is_string($finding['gain'] ?? null)) {
+                throw new AiAnalysisException('Malformed client_summary finding entry');
+            }
+        }
     }
 
     private static function validateExpertReview(mixed $review): void

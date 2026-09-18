@@ -90,8 +90,64 @@ class ReportPayloadTest extends TestCase
         ReportPayload::validate($payload, 4);
     }
 
-    public function test_default_version_is_now_four(): void
+    private function clientSummary(array $findingOverrides = []): array
     {
-        $this->assertSame(4, ReportPayload::VERSION);
+        return [
+            'overview' => 'Your app works today, but a few weak spots make changes slow and risky.',
+            'findings' => [
+                array_merge([
+                    'what' => 'Almost nothing is covered by automated tests.',
+                    'consequence' => 'Every change can quietly break something customers rely on.',
+                    'gain' => 'Ship updates faster, with far fewer surprises.',
+                ], $findingOverrides),
+            ],
+        ];
+    }
+
+    public function test_accepts_a_plain_language_client_summary(): void
+    {
+        $payload = $this->valid() + ['client_summary' => $this->clientSummary()];
+
+        $this->assertSame($payload, ReportPayload::validate($payload, 5));
+    }
+
+    public function test_client_summary_is_optional_in_v5(): void
+    {
+        // Reports stored before the section existed keep rendering.
+        $this->assertSame($this->valid(), ReportPayload::validate($this->valid(), 5));
+    }
+
+    public function test_client_summary_is_ignored_by_v4(): void
+    {
+        $payload = $this->valid() + ['client_summary' => 'not even an object'];
+
+        $this->assertSame($payload, ReportPayload::validate($payload, 4));
+    }
+
+    public function test_rejects_a_client_summary_without_an_overview(): void
+    {
+        $summary = $this->clientSummary();
+        unset($summary['overview']);
+
+        $this->expectException(AiAnalysisException::class);
+        $this->expectExceptionMessage('client_summary');
+        ReportPayload::validate($this->valid() + ['client_summary' => $summary], 5);
+    }
+
+    public function test_rejects_a_client_summary_finding_missing_a_field(): void
+    {
+        foreach (['what', 'consequence', 'gain'] as $field) {
+            try {
+                ReportPayload::validate($this->valid() + ['client_summary' => $this->clientSummary([$field => null])], 5);
+                $this->fail("Expected rejection for a finding without {$field}");
+            } catch (AiAnalysisException $e) {
+                $this->assertStringContainsString('client_summary', $e->getMessage());
+            }
+        }
+    }
+
+    public function test_default_version_is_now_five(): void
+    {
+        $this->assertSame(5, ReportPayload::VERSION);
     }
 }

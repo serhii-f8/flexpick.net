@@ -230,6 +230,14 @@ class AuditPipelineTest extends FeatureTest
         $this->assertSame(ReportPayload::VERSION, $report->payload_schema_version);
     }
 
+    public function test_the_plain_language_summary_is_stored_with_the_report(): void
+    {
+        $report = $this->runPipelineWithFakes()->fresh()->report;
+
+        $this->assertSame('Fake plain-language overview.', $report->payload['client_summary']['overview']);
+        $this->assertCount(1, $report->payload['client_summary']['findings']);
+    }
+
     public function test_expert_tier_run_holds_for_review_instead_of_sending(): void
     {
         $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer);

@@ -158,6 +158,10 @@ trait RunsAuditPipelineWithFakes
                         'risks' => [],
                         'fix_first_plan' => [],
                         'groups' => [],
+                        'client_summary' => [
+                            'overview' => 'Fake plain-language overview.',
+                            'findings' => [['what' => 'Nothing is tested.', 'consequence' => 'Changes break things.', 'gain' => 'Fewer surprises.']],
+                        ],
                     ],
                     inputTokens: $this->inputTokens,
                     outputTokens: $this->outputTokens,

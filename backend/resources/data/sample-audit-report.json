@@ -3,6 +3,31 @@
     "percentile": 38,
     "payload": {
         "summary": "A four-month-old AI-assisted codebase with working core flows but heavy duplication, no automated tests, and several dependency risks. Shippable today, fragile tomorrow: most incidents will come from the checkout and auth modules, where copies of the same logic have already drifted apart.",
+        "client_summary": {
+            "overview": "Your product works and customers can use it today, but it was built fast and nobody is checking it automatically. That makes every change slower and riskier than it needs to be, and a few specific gaps could cost you money or customer trust before anyone notices.",
+            "findings": [
+                {
+                    "what": "Anyone on the internet can tell your system that an order has been paid, without actually paying.",
+                    "consequence": "Free orders, refund disputes and lost revenue that only shows up when you reconcile the books.",
+                    "gain": "Closing this gap means only your payment provider can mark an order as paid, so revenue and orders always match."
+                },
+                {
+                    "what": "Passwords and access keys for one of your environments are stored inside the code itself.",
+                    "consequence": "Whoever gets a copy of the code -- a contractor, a leaked laptop, a public repository by mistake -- gets the keys too.",
+                    "gain": "Moving them out of the code and rotating them removes a standing risk of a data breach and a compliance headache."
+                },
+                {
+                    "what": "The same business rules, such as how discounts are applied, exist in several copies that have already started to differ.",
+                    "consequence": "Customers can be charged different amounts for the same basket depending on which screen they use, and a fix in one place does not fix the others.",
+                    "gain": "One shared version of each rule means consistent prices for customers and changes that take an afternoon instead of a week."
+                },
+                {
+                    "what": "Almost nothing is tested automatically before a release.",
+                    "consequence": "Every update is a gamble: a small change can quietly break sign-up or checkout and you learn about it from customers.",
+                    "gain": "A basic safety net lets you ship improvements faster and with far fewer surprises."
+                }
+            ]
+        },
         "scores": {
             "structure": 58,
             "duplication": 34,

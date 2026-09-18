@@ -46,6 +46,58 @@ class AuditReportPageTest extends FeatureTest
             ->assertDontSee(__('Unlock full report'));
     }
 
+    private function clientSummary(): array
+    {
+        return [
+            'overview' => 'Your app works today, but a few weak spots make every change slow and risky.',
+            'findings' => [[
+                'what' => 'Almost nothing is checked automatically before a release.',
+                'consequence' => 'A small change can quietly break checkout for your customers.',
+                'gain' => 'Ship updates faster, with far fewer surprises.',
+            ]],
+        ];
+    }
+
+    public function test_an_unlocked_report_shows_the_plain_language_summary(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create([
+            'payload' => AuditReport::factory()->definition()['payload'] + ['client_summary' => $this->clientSummary()],
+        ]);
+
+        $this->get(app(AuditReportService::class)->signedUrl($report))
+            ->assertOk()
+            ->assertSee(__('In plain terms'))
+            ->assertSee('Your app works today, but a few weak spots')
+            ->assertSee('Almost nothing is checked automatically')
+            ->assertSee('quietly break checkout')
+            ->assertSee('far fewer surprises');
+    }
+
+    public function test_a_locked_report_shows_the_overview_but_hides_the_findings(): void
+    {
+        $report = AuditReport::factory()->locked()->create([
+            'payload' => AuditReport::factory()->definition()['payload'] + ['client_summary' => $this->clientSummary()],
+        ]);
+
+        $this->get(app(AuditReportService::class)->signedUrl($report))
+            ->assertOk()
+            ->assertSee(__('In plain terms'))
+            ->assertSee('Your app works today, but a few weak spots')
+            ->assertDontSee('Almost nothing is checked automatically')
+            ->assertDontSee('quietly break checkout')
+            ->assertDontSee('far fewer surprises');
+    }
+
+    public function test_a_report_without_the_section_renders_without_it(): void
+    {
+        // Reports generated before the section existed carry no client_summary.
+        $report = AuditReport::factory()->unlocked()->create();
+
+        $this->get(app(AuditReportService::class)->signedUrl($report))
+            ->assertOk()
+            ->assertDontSee(__('In plain terms'));
+    }
+
     public function test_sample_report_is_public_and_unlocked(): void
     {
         $this->get('/reports/sample')
@@ -65,6 +117,7 @@ class AuditReportPageTest extends FeatureTest
         $response = $this->get('/reports/sample')->assertOk();
 
         foreach ([
+            'In plain terms',
             'Health scores',
             'What we found',
             'Repository facts',
@@ -102,6 +155,7 @@ class AuditReportPageTest extends FeatureTest
         $this->assertArrayHasKey('file_findings', $validated);
         $this->assertArrayHasKey('deep_review', $validated);
         $this->assertArrayHasKey('expert_review', $validated);
+        $this->assertArrayHasKey('client_summary', $validated);
     }
 
     public function test_unlock_route_stores_intent_and_redirects_to_checkout(): void
