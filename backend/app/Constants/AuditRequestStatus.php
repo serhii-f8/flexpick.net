@@ -16,4 +16,7 @@ enum AuditRequestStatus: string
     case AWAITING_ACCESS = 'awaiting_access';
     case AWAITING_PAYMENT = 'awaiting_payment';
     case EXPERT_REVIEW = 'expert_review';
+    // Closed for good: we could not reach or process the repository. The
+    // customer runs a new audit once that is fixed; this one never restarts.
+    case NOT_ANALYZABLE = 'not_analyzable';
 }

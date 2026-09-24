@@ -92,7 +92,7 @@ class AuditRequestRoutingTest extends FeatureTest
         Mail::assertQueued(AuditQuotaExhausted::class, fn ($mail) => $mail->hasTo('maxed@example.com'));
     }
 
-    public function test_unreachable_repo_awaits_access(): void
+    public function test_unreachable_repo_is_closed_rather_than_left_waiting(): void
     {
         $request = AuditRequest::factory()->verified()->create([
             'repo_url' => 'file:///nonexistent/private-repo',
@@ -102,7 +102,7 @@ class AuditRequestRoutingTest extends FeatureTest
         $this->route($request);
 
         $request->refresh();
-        $this->assertSame(AuditRequestStatus::AWAITING_ACCESS->value, $request->status);
+        $this->assertSame(AuditRequestStatus::NOT_ANALYZABLE->value, $request->status);
         $this->assertFalse($request->free_run);
         Queue::assertNotPushed(GenerateAuditReport::class);
         Mail::assertQueued(AuditRepoAccessNeeded::class);

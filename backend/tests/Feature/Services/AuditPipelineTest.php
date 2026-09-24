@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Services;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Exceptions\AiAnalysisException;
@@ -12,6 +13,7 @@ use App\Mail\Audit\AuditRequestFailed;
 use App\Models\AuditFindingGroup;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AiAnalyzer;
+use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditPipeline;
 use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\AuditReport\Findings\Severity;
@@ -102,7 +104,7 @@ class AuditPipelineTest extends FeatureTest
         $this->assertSame(AuditRequestStatus::SENT->value, $request->refresh()->status);
     }
 
-    public function test_inaccessible_repo_goes_to_followup(): void
+    public function test_inaccessible_repo_is_closed_and_the_customer_told_to_run_again(): void
     {
         $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer);
         $request = AuditRequest::factory()->create([
@@ -112,8 +114,33 @@ class AuditPipelineTest extends FeatureTest
 
         (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
 
-        $this->assertSame(AuditRequestStatus::NEEDS_FOLLOWUP->value, $request->fresh()->status);
-        Mail::assertQueued(AuditRepoAccessNeeded::class);
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::NOT_ANALYZABLE->value, $request->status);
+        $this->assertStringContainsString('not publicly accessible', (string) $request->failure_reason);
+        Mail::assertQueued(AuditRepoAccessNeeded::class, fn (AuditRepoAccessNeeded $mail) => $mail->hasTo($request->email));
+    }
+
+    /**
+     * The customer is told to run a new audit once access is granted, so the
+     * closed run must hand back what it spent -- otherwise "run it again"
+     * charges them twice.
+     */
+    public function test_inaccessible_repo_refunds_the_run(): void
+    {
+        $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer);
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'file:///nonexistent/nope',
+            'status' => AuditRequestStatus::QUEUED->value,
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
+
+        $this->assertNotNull($request->refresh()->credit_refunded_at);
+        $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
     public function test_ai_failure_marks_failed_and_notifies(): void

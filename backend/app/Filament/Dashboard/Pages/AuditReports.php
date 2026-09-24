@@ -5,6 +5,7 @@ namespace App\Filament\Dashboard\Pages;
 use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
+use App\Exceptions\AuditNotAnalyzableException;
 use App\Jobs\GenerateAuditReport;
 use App\Listeners\Order\HandleAuditTierOrder;
 use App\Models\AuditReport;
@@ -14,6 +15,7 @@ use App\Models\AuditScheduleRun;
 use App\Models\Tenant;
 use App\Models\TenantParameter;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\RepositoryCloner;
 use App\Services\AuditReport\ScheduleOccurrenceProjector;
 use App\Services\AuditReport\ScoreChartBuilder;
 use App\Services\AuditReport\TierQuota;
@@ -50,6 +52,13 @@ class AuditReports extends Page
     {
         $this->tier = $this->defaultTier()->value;
         $this->calendarMonth = now()->format('Y-m');
+
+        // The "Run the audit again" link in the repo-access email.
+        $repo = request()->query('repo');
+
+        if (is_string($repo) && str_starts_with($repo, 'http')) {
+            $this->repoUrl = $repo;
+        }
     }
 
     public function updatedRepoUrl(): void
@@ -205,6 +214,22 @@ class AuditReports extends Page
 
         if ($repoUrl === null || ! str_starts_with($repoUrl, 'http')) {
             Notification::make()->title(__('Enter a valid repository URL'))->danger()->send();
+
+            return;
+        }
+
+        // Before anything is charged or sent to checkout: a repo we cannot
+        // reach would only become a closed, refunded request, so tell the
+        // customer how to grant access right here instead.
+        try {
+            app(RepositoryCloner::class)->preflight($repoUrl);
+        } catch (AuditNotAnalyzableException) {
+            Notification::make()
+                ->title(__("We can't reach this repository yet"))
+                ->body(__("If it's private, invite :account as a read-only collaborator on GitHub (Settings → Collaborators → Add people, role \"Read\"). We usually accept invites within one business day — then run the audit again. Nothing has been charged.", ['account' => config('audit.github_account')]))
+                ->danger()
+                ->persistent()
+                ->send();
 
             return;
         }

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Mail;
 
+use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Mail\Audit\AuditQuotaExhausted;
+use App\Mail\Audit\AuditRepoAccessNeeded;
 use App\Mail\Audit\AuditReportReady;
 use App\Mail\Audit\AuditRequestReceived;
 use App\Models\AuditReport;
@@ -20,6 +22,56 @@ class AuditMailablesTest extends FeatureTest
 
         $mailable = new AuditRequestReceived($request, 'https://app.example.com/audit-requests/abc/status?signature=x');
         $mailable->assertSeeInHtml($request->name);
+    }
+
+    /**
+     * The customer invites us and then runs a new audit themselves -- the
+     * email must say so, and must not promise that we restart this one.
+     */
+    public function test_access_needed_mailable_tells_the_customer_to_run_a_new_audit(): void
+    {
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'https://github.com/acme/private-app',
+            'status' => AuditRequestStatus::NOT_ANALYZABLE->value,
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $mailable = new AuditRepoAccessNeeded($request);
+
+        $mailable->assertSeeInHtml(config('audit.github_account'));
+        $mailable->assertSeeInHtml('run a new audit');
+        $mailable->assertSeeInHtml('won\'t restart on its own');
+        $mailable->assertSeeInHtml('haven\'t been charged');
+        $mailable->assertSeeInHtml('Run the audit again');
+        $mailable->assertSeeInHtml('repo=https%3A%2F%2Fgithub.com%2Facme%2Fprivate-app');
+        $mailable->assertDontSeeInHtml('as soon as the invite is accepted');
+    }
+
+    public function test_access_needed_mailable_sends_a_workspaceless_visitor_to_sign_in(): void
+    {
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'https://github.com/acme/private-app',
+            'tenant_id' => null,
+        ]);
+
+        $mailable = new AuditRepoAccessNeeded($request);
+
+        $mailable->assertSeeInHtml(route('login'));
+    }
+
+    public function test_access_needed_mailable_explains_a_non_access_failure_without_invite_steps(): void
+    {
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'https://github.com/acme/huge-app',
+            'failure_reason' => 'Repository too large for automated analysis (900 MB)',
+        ]);
+
+        $mailable = new AuditRepoAccessNeeded($request, accessProblem: false);
+
+        $mailable->assertSeeInHtml('Repository too large for automated analysis (900 MB)');
+        $mailable->assertSeeInHtml('haven\'t been charged');
+        $mailable->assertDontSeeInHtml('Collaborators');
     }
 
     public function test_report_ready_attaches_pdf_and_links(): void

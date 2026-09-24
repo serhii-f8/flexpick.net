@@ -27,6 +27,12 @@ use Tests\Feature\FeatureTest;
 
 class AuditReportsPageTest extends FeatureTest
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeRepositoryAccess();
+    }
+
     public function test_launch_audit_creates_verified_dashboard_request_and_dispatches(): void
     {
         Queue::fake([GenerateAuditReport::class]);
@@ -79,6 +85,68 @@ class AuditReportsPageTest extends FeatureTest
         $this->assertSame(AuditRequestStatus::AWAITING_PAYMENT->value, $request->status);
         $this->assertSame(AuditFunding::PURCHASE, $request->funding);
         Queue::assertNotPushed(GenerateAuditReport::class);
+    }
+
+    /**
+     * Access is checked before anything is charged: an unreachable repo
+     * creates no request, spends no credit and never reaches checkout -- the
+     * customer is told to invite us and run it again.
+     */
+    public function test_launch_audit_on_an_unreachable_repo_charges_nothing_and_explains_the_invite(): void
+    {
+        $this->fakeRepositoryAccess(reachable: false);
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://github.com/acme/private')
+            ->assertNotified(__("We can't reach this repository yet"))
+            ->assertNoRedirect();
+
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
+        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        Queue::assertNotPushed(GenerateAuditReport::class);
+    }
+
+    public function test_launch_audit_on_an_unreachable_repo_does_not_send_the_customer_to_checkout(): void
+    {
+        $this->fakeRepositoryAccess(reachable: false);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user); // no subscription, no free runs: would go to checkout
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://github.com/acme/private')
+            ->assertNoRedirect();
+
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
+    }
+
+    /** The "Run the audit again" link in the access email lands here. */
+    public function test_the_repo_query_parameter_prefills_the_launch_form(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::withQueryParams(['repo' => 'https://github.com/acme/private'])
+            ->actingAs($user)
+            ->test(AuditReports::class)
+            ->assertSet('repoUrl', 'https://github.com/acme/private');
     }
 
     public function test_launch_audit_consumes_a_free_run_without_subscription(): void

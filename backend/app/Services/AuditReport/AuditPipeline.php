@@ -180,7 +180,7 @@ class AuditPipeline
             $auditRequest->appendPipelineLog('report', 'Report stored and sent');
         } catch (AuditNotAnalyzableException $e) {
             $auditRequest->appendPipelineLog('not_analyzable', $e->getMessage());
-            $this->requestService->markNeedsFollowup($auditRequest, $e->getMessage());
+            $this->requestService->closeNotAnalyzable($auditRequest, $e->getMessage(), $e->accessDenied);
         } finally {
             $this->cloner->cleanup($auditRequest->uuid);
         }

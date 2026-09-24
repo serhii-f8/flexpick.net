@@ -15,7 +15,7 @@ class RepositoryCloner
             ->run(['git', 'ls-remote', '--exit-code', $useToken ? $this->authenticatedUrl($url) : $url, 'HEAD']);
 
         if (! $result->successful()) {
-            throw new AuditNotAnalyzableException(
+            throw AuditNotAnalyzableException::accessDenied(
                 'Repository is not publicly accessible: '.$this->redactUrl($url)
             );
         }

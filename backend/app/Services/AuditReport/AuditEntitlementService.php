@@ -58,6 +58,7 @@ class AuditEntitlementService
         return AuditRequest::query()
             ->where('email', $email)
             ->where('free_run', true)
+            ->whereNull('credit_refunded_at')
             ->count();
     }
 
@@ -78,6 +79,7 @@ class AuditEntitlementService
         return AuditRequest::query()
             ->forTenant($tenant)
             ->where('free_run', true)
+            ->whereNull('credit_refunded_at')
             ->count();
     }
 
@@ -94,6 +96,43 @@ class AuditEntitlementService
             'free_run' => true,
             'funding' => AuditFunding::FREE->value,
         ]);
+    }
+
+    /**
+     * Hands back the run a request spent, for a repository we never got to
+     * analyze. Free and allowance runs are metered by the row itself, so
+     * stamping it takes it out of the count; a purchase spent a credit (or
+     * was paid by card), so it earns a fresh credit of its tier.
+     *
+     * Idempotent: returns false, and changes nothing, when the request was
+     * already refunded.
+     */
+    public function refund(AuditRequest $auditRequest): bool
+    {
+        return DB::transaction(function () use ($auditRequest): bool {
+            $claimed = AuditRequest::query()
+                ->whereKey($auditRequest->getKey())
+                ->whereNull('credit_refunded_at')
+                ->update(['credit_refunded_at' => now()]);
+
+            if ($claimed === 0) {
+                return false;
+            }
+
+            $auditRequest->refresh();
+
+            if ($auditRequest->funding === AuditFunding::PURCHASE && $auditRequest->tier !== null) {
+                if ($auditRequest->tenant === null) {
+                    $auditRequest->appendPipelineLog('refund_unassigned', 'Purchased run has no workspace to return its credit to');
+
+                    return true;
+                }
+
+                $this->grantPurchasedCredit($auditRequest->tenant, $auditRequest->tier);
+            }
+
+            return true;
+        });
     }
 
     /**
@@ -169,6 +208,7 @@ class AuditEntitlementService
             ->where('funding', AuditFunding::ALLOWANCE->value)
             ->where('tier', $tier->value)
             ->where('created_at', '>=', now()->startOfMonth())
+            ->whereNull('credit_refunded_at')
             ->count();
     }
 

@@ -29,7 +29,7 @@ class AuditRequest extends Model
 
     protected $fillable = [
         'name', 'email', 'repo_url', 'branch', 'message', 'status', 'failure_reason', 'meta', 'metrics',
-        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'funding', 'source', 'tier', 'user_id', 'tenant_id', 'prepaid',
+        'email_verified_at', 'marketing_consent', 'consented_at', 'free_run', 'funding', 'credit_refunded_at', 'source', 'tier', 'user_id', 'tenant_id', 'prepaid',
         'manually_paid', 'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
         'risk_files', 'deep_review_input_tokens', 'deep_review_output_tokens', 'deep_review_ms',
@@ -50,6 +50,7 @@ class AuditRequest extends Model
         'analysis_completed_at' => 'datetime',
         'tier' => AuditTier::class,
         'funding' => AuditFunding::class,
+        'credit_refunded_at' => 'datetime',
         'ai_input_tokens' => 'integer',
         'ai_output_tokens' => 'integer',
         'scanner_ms' => 'integer',
@@ -166,6 +167,8 @@ class AuditRequest extends Model
             AuditRequestStatus::REPORT_READY->value => self::TRIAGE_TERMINAL,
             AuditRequestStatus::SENT->value => self::TRIAGE_TERMINAL,
             AuditRequestStatus::HANDLED->value => self::TRIAGE_TERMINAL,
+            // The customer acts on it by running a new audit; nobody restarts this one.
+            AuditRequestStatus::NOT_ANALYZABLE->value => self::TRIAGE_TERMINAL,
         ];
     }
 

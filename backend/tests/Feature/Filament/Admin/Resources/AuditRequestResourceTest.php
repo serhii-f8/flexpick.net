@@ -107,6 +107,23 @@ class AuditRequestResourceTest extends FeatureTest
         Queue::assertPushed(GenerateAuditReport::class);
     }
 
+    /**
+     * A closed, refunded request is superseded by the new run the customer
+     * starts once access is granted. Restarting it would run the repo twice.
+     */
+    public function test_a_not_analyzable_request_cannot_be_restarted(): void
+    {
+        $record = AuditRequest::factory()->create([
+            'repo_url' => 'https://github.com/acme/private',
+            'status' => AuditRequestStatus::NOT_ANALYZABLE->value,
+        ]);
+
+        Livewire::actingAs($this->createAdminUser())
+            ->test(ListAuditRequests::class)
+            ->assertTableActionHidden('retry', $record)
+            ->assertTableActionHidden('launch', $record);
+    }
+
     public function test_the_stuck_tab_shows_only_stuck_requests(): void
     {
         $this->freezeTime();

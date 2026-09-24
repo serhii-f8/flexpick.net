@@ -132,6 +132,7 @@ class AuditRequestController extends Controller
             'report_ready', 'sent' => __('Your report is ready'),
             'failed' => __('The analysis hit a snag — an engineer is taking a look'),
             'needs_followup', 'awaiting_access' => __('We need access to your repository — check your email'),
+            'not_analyzable' => __("We couldn't reach your repository — check your email for next steps"),
             'awaiting_payment' => __('Payment needed to continue — check your email for options'),
             'expert_review' => __('Your report is complete and is being reviewed by our expert auditor before delivery.'),
             default => __('Processing'),

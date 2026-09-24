@@ -34,6 +34,7 @@ class WorkspaceSharedAuditHistoryTest extends FeatureTest
     {
         parent::setUp();
 
+        $this->fakeRepositoryAccess();
         config(['audit.free_reports_limit' => 3]);
         $this->alice = $this->createUser();
         $this->bob = $this->createUser();

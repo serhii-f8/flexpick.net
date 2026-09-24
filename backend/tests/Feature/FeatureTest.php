@@ -4,13 +4,16 @@ namespace Tests\Feature;
 
 use App\Constants\PartnerAttributionSource;
 use App\Constants\SubscriptionStatus;
+use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\AuditReport\RepositoryCloner;
 use App\Services\ReferralService;
 use Database\Seeders\Testing\TestingDatabaseSeeder;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 /**
@@ -37,6 +40,21 @@ abstract class FeatureTest extends TestCase
         $this->configureDefaultCurrency();
         $this->withoutExceptionHandling();
         $this->withoutVite();
+    }
+
+    /**
+     * Stand in for the `git ls-remote` access check, so dashboard launches in
+     * tests never reach the network. Every other cloner method stays real.
+     */
+    protected function fakeRepositoryAccess(bool $reachable = true): void
+    {
+        $this->partialMock(RepositoryCloner::class, function (MockInterface $mock) use ($reachable): void {
+            $expectation = $mock->shouldReceive('preflight');
+
+            $reachable
+                ? $expectation->andReturnNull()
+                : $expectation->andThrow(AuditNotAnalyzableException::accessDenied('Repository is not publicly accessible: https://github.com/acme/private'));
+        });
     }
 
     protected function createUser(?Tenant $tenant = null, array $tenantPermissions = [], array $attributes = [])

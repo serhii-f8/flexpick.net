@@ -23,6 +23,12 @@ use Tests\Support\CreatesAuditSubscriptions;
 
 class AuditReportsPurchaseTest extends FeatureTest
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeRepositoryAccess();
+    }
+
     use CreatesAuditSubscriptions;
 
     public function test_an_exhausted_paid_tier_creates_an_intent_and_redirects(): void

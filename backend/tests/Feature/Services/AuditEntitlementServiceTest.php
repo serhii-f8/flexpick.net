@@ -156,6 +156,68 @@ class AuditEntitlementServiceTest extends FeatureTest
         $this->assertSame(2, $this->service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
     }
 
+    /**
+     * A run we could not analyze is refunded: it must stop counting against
+     * the quota it was drawn from, whichever pool that was.
+     */
+    public function test_a_refunded_free_run_no_longer_counts(): void
+    {
+        config(['audit.free_reports_limit' => 1]);
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->freeRun()->create(['email' => 'r@example.com', 'tenant_id' => $tenant->id]);
+        $this->assertFalse($this->service->hasFreeRun($tenant));
+
+        $this->service->refund($request);
+
+        $this->assertNotNull($request->refresh()->credit_refunded_at);
+        $this->assertTrue($this->service->hasFreeRun($tenant));
+        $this->assertTrue($this->service->hasFreeRunForEmail('r@example.com'));
+    }
+
+    public function test_a_refunded_allowance_run_no_longer_counts(): void
+    {
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DIAGNOSTIC->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+        $this->assertSame(1, $this->service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+
+        $this->service->refund($request);
+
+        $this->assertSame(0, $this->service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+    }
+
+    public function test_a_refunded_purchase_returns_a_credit_of_its_tier(): void
+    {
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $this->service->refund($request);
+
+        $this->assertSame(1, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
+    public function test_refunding_twice_returns_the_credit_once(): void
+    {
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $this->assertTrue($this->service->refund($request));
+        $this->assertFalse($this->service->refund($request->refresh()));
+
+        $this->assertSame(1, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
     public function test_each_tier_meters_independently(): void
     {
         $user = $this->createUser();

@@ -17,6 +17,12 @@ use Tests\Support\CreatesAuditSubscriptions;
 
 class AuditReportsTierSelectionTest extends FeatureTest
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeRepositoryAccess();
+    }
+
     use CreatesAuditSubscriptions;
 
     public function test_a_diagnostic_run_is_created_at_that_tier_and_spends_the_allowance(): void

@@ -118,9 +118,12 @@ class AuditRequestService
 
         try {
             $this->cloner->preflight($auditRequest->repo_url, useToken: false);
-        } catch (AuditNotAnalyzableException) {
-            $auditRequest->update(['status' => AuditRequestStatus::AWAITING_ACCESS->value]);
-            $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest), $auditRequest->email, $auditRequest);
+        } catch (AuditNotAnalyzableException $e) {
+            // Anonymous on purpose: our token reads every customer's private
+            // repos, so a landing visitor must not be able to aim it at one.
+            // Nothing was spent yet, so closing refunds nothing; the email
+            // sends them to the dashboard to run it again once we have access.
+            $this->closeNotAnalyzable($auditRequest, $e->getMessage(), $e->accessDenied);
             $this->notifyAdmin($auditRequest);
 
             return;
@@ -174,6 +177,26 @@ class AuditRequestService
         ]);
 
         $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest), $auditRequest->email, $auditRequest);
+    }
+
+    /**
+     * Close a request whose repository we could not reach or process, and
+     * hand back whatever it spent. It never restarts: the customer fixes
+     * access and starts a new audit, which the refund keeps free of a double
+     * charge.
+     */
+    public function closeNotAnalyzable(AuditRequest $auditRequest, string $reason, bool $accessDenied = true): void
+    {
+        $auditRequest->update([
+            'status' => AuditRequestStatus::NOT_ANALYZABLE->value,
+            'failure_reason' => $reason,
+        ]);
+
+        if ($this->entitlements->refund($auditRequest)) {
+            $auditRequest->appendPipelineLog('refunded', 'Run refunded: the repository could not be analyzed');
+        }
+
+        $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest, $accessDenied), $auditRequest->email, $auditRequest);
     }
 
     public function markFailed(AuditRequest $auditRequest, string $reason): void
