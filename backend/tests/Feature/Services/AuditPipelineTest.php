@@ -12,6 +12,7 @@ use App\Mail\Audit\AuditReportReady;
 use App\Mail\Audit\AuditRequestFailed;
 use App\Models\AuditFindingGroup;
 use App\Models\AuditRequest;
+use App\Models\Tenant;
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditPipeline;
@@ -86,10 +87,12 @@ class AuditPipelineTest extends FeatureTest
     public function test_the_requests_branch_is_passed_through_to_the_cloner(): void
     {
         $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer);
+        $tenant = $this->createTenant();
         $request = AuditRequest::factory()->create([
             'repo_url' => 'file://'.$this->fixtureRepo,
             'branch' => 'main',
             'status' => AuditRequestStatus::QUEUED->value,
+            'tenant_id' => $tenant->id,
         ]);
 
         // A plain partialMock() would build RepositoryCloner without running its
@@ -97,10 +100,19 @@ class AuditPipelineTest extends FeatureTest
         // -- fatal the moment passthru() reaches the real clone() body. Supply
         // the real dependency explicitly so the mock is a genuine instance.
         $mock = Mockery::mock(RepositoryCloner::class, [app(GitRepoAccessResolver::class)])->makePartial();
+        // The tenant is asserted too: a regression to `tenant: null` at the
+        // AuditPipeline::run() call site would silently clone every private
+        // repo anonymously, and fail it, even for a connected workspace.
+        $mock->shouldReceive('preflight')
+            ->once()
+            ->withArgs(fn (string $url, ?Tenant $passedTenant) => $url === $request->repo_url
+                && $passedTenant?->is($tenant) === true)
+            ->passthru();
         $mock->shouldReceive('clone')
             ->once()
-            ->withArgs(fn (string $url, string $uuid, $tenant, ?string $branch) => $url === $request->repo_url
+            ->withArgs(fn (string $url, string $uuid, ?Tenant $passedTenant, ?string $branch) => $url === $request->repo_url
                 && $uuid === $request->uuid
+                && $passedTenant?->is($tenant) === true
                 && $branch === 'main')
             ->passthru();
         $this->instance(RepositoryCloner::class, $mock);

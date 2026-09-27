@@ -4,6 +4,7 @@ namespace Tests\Feature\Models;
 
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Tests\Feature\FeatureTest;
 
@@ -30,7 +31,7 @@ class TenantGitConnectionTest extends FeatureTest
         $tenant = Tenant::factory()->create();
         TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
     }

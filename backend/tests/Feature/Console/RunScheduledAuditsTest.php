@@ -10,6 +10,7 @@ use App\Models\AuditSchedule;
 use App\Models\AuditScheduleRun;
 use App\Models\TenantGitConnection;
 use App\Services\AuditReport\AuditEntitlementService;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
@@ -25,6 +26,9 @@ class RunScheduledAuditsTest extends FeatureTest
         Process::fake(['*' => Process::result(exitCode: 1)]);
         Queue::fake();
         [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+        // Connected, so the run below can only be the fail-open branch reacting
+        // to the faked ls-remote failure.
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
 
         AuditSchedule::create([
             'user_id' => $user->id,
@@ -194,6 +198,9 @@ class RunScheduledAuditsTest extends FeatureTest
         Process::fake(['*' => Process::result(exitCode: 1)]);
         Queue::fake();
         [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+        // Connected, so the run below can only be the fail-open branch reacting
+        // to the faked ls-remote failure.
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
 
         AuditSchedule::create([
             'user_id' => $user->id,
@@ -208,6 +215,7 @@ class RunScheduledAuditsTest extends FeatureTest
         $this->artisan('app:run-scheduled-audits')->assertSuccessful();
 
         Queue::assertPushed(GenerateAuditReport::class);
+        Process::assertRan(fn (PendingProcess $process) => ($process->command[1] ?? null) === 'ls-remote');
     }
 
     /**
