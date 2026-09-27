@@ -47,4 +47,30 @@ class GitLabProviderTest extends FeatureTest
 
         $this->assertSame([], (new GitLabProvider)->listBranches($connection, 'https://gitlab.com/acme/private'));
     }
+
+    public function test_returns_branches_for_repo_with_dotted_name(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['access_token' => 'glpat_tenant_token']);
+        Http::fake(['gitlab.com/api/v4/projects/acme%2Fmy.project/repository/branches*' => Http::response([
+            ['name' => 'main'],
+        ])]);
+
+        $branches = (new GitLabProvider)->listBranches($connection, 'https://gitlab.com/acme/my.project');
+
+        $this->assertSame(['main'], $branches);
+    }
+
+    public function test_caches_branches_per_connection(): void
+    {
+        $connectionA = TenantGitConnection::factory()->make(['id' => 1, 'access_token' => 'token-a']);
+        $connectionB = TenantGitConnection::factory()->make(['id' => 2, 'access_token' => 'token-b']);
+        Http::fake(['gitlab.com/api/v4/projects/acme%2Fapp/repository/branches*' => Http::response([['name' => 'main']])]);
+
+        $provider = new GitLabProvider;
+        $provider->listBranches($connectionA, 'https://gitlab.com/acme/app');
+        $provider->listBranches($connectionA, 'https://gitlab.com/acme/app');
+        $provider->listBranches($connectionB, 'https://gitlab.com/acme/app');
+
+        Http::assertSentCount(2);
+    }
 }
