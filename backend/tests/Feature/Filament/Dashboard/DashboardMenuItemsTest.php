@@ -6,6 +6,7 @@ use App\Constants\SubscriptionStatus;
 use App\Constants\TenancyPermissionConstants;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Filament\Dashboard\Pages\Dashboard;
+use App\Filament\Dashboard\Pages\GitConnections;
 use App\Filament\Dashboard\Pages\PartnerPricingSettings;
 use App\Filament\Dashboard\Pages\Users;
 use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
@@ -94,7 +95,7 @@ class DashboardMenuItemsTest extends FeatureTest
         $navigation = $this->renderedNavigation();
 
         $this->assertSame(['Dashboard'], $navigation[''] ?? []);
-        $this->assertSame(['Run an audit', 'Audit history'], $navigation['Audits'] ?? []);
+        $this->assertSame(['Run an audit', 'Git Connections', 'Audit history'], $navigation['Audits'] ?? []);
         $this->assertSame(['Buy More / Upgrade', 'Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
         $this->assertArrayNotHasKey('Referrals', $navigation);
         $this->assertArrayNotHasKey('Partner', $navigation);
@@ -144,6 +145,7 @@ class DashboardMenuItemsTest extends FeatureTest
         return [
             'Dashboard' => [Dashboard::class],
             'Run an audit' => [AuditReports::class],
+            'Git Connections' => [GitConnections::class],
             'Audit history' => [AuditRequestResource::class],
             'Orders' => [OrderResource::class],
             'Subscriptions' => [SubscriptionResource::class],

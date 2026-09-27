@@ -19,7 +19,6 @@ use App\Services\AuditReport\RepositoryCloner;
 use App\Services\AuditReport\ScheduleOccurrenceProjector;
 use App\Services\AuditReport\ScoreChartBuilder;
 use App\Services\AuditReport\TierQuota;
-use App\Services\GitHub\GitHubApiClient;
 use App\Services\GitProviders\GitProviderResolver;
 use App\Services\GitProviders\GitRepoAccessResolver;
 use Filament\Facades\Filament;
@@ -82,15 +81,25 @@ class AuditReports extends Page
             return;
         }
 
-        $this->branchesByRepo[$key] = app(GitHubApiClient::class)->listBranches($repoUrl);
+        /** @var Tenant|null $tenant */
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return;
+        }
+
+        $provider = app(GitProviderResolver::class)->forUrl($repoUrl);
+        $connection = $provider !== null ? app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant) : null;
+
+        $this->branchesByRepo[$key] = $connection !== null ? $provider->listBranches($connection, $repoUrl) : [];
     }
 
     /**
-     * The branch lookup runs on the shared AUDIT_GITHUB_TOKEN PAT, which is a
-     * read-only collaborator on every customer's private repos. Left open,
-     * this public Livewire method is a free, instant, repeatable and unlogged
-     * oracle for "does owner/repo exist and can the PAT see it" -- branches
-     * back means yes, an empty array means no. That is strictly worse than
+     * The branch lookup runs on the calling tenant's own connected account,
+     * so it can only ever see repos that account can see. Left open, this
+     * public Livewire method is a free, instant, repeatable and unlogged
+     * oracle for "does owner/repo exist and can the account see it" --
+     * branches back means yes, an empty array means no. That is strictly worse than
      * probing through launchAudit(), which at least costs a credit and leaves
      * an auditable AuditRequest row.
      *
