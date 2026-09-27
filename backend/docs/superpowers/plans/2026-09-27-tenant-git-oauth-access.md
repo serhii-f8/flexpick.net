@@ -781,7 +781,7 @@ git commit -m "feat(audit): add BitbucketProvider"
 
 **Interfaces:**
 - Consumes: `GitHubProvider`, `GitLabProvider`, `BitbucketProvider` (Tasks 2-4).
-- Produces: `GitProviderResolver::forUrl(string $url): ?GitProvider` and `::forProviderName(string $name): GitProvider`, used by Task 6 and Task 8.
+- Produces: `GitProviderResolver::forUrl(string $url): ?GitProvider` and `::forProviderName(string $name): GitProvider`, used by Task 6 and Task 9.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -901,7 +901,7 @@ The core security-fix logic: given a repo URL and an optional tenant, produce ei
 
 **Interfaces:**
 - Consumes: `GitProviderResolver` (Task 5), `TenantGitConnection` (Task 1), `App\Exceptions\AuditNotAnalyzableException` (existing).
-- Produces: `GitRepoAccessResolver::resolveCloneUrl(string $repoUrl, ?Tenant $tenant): string` and `::connectionFor(string $repoUrl, Tenant $tenant): ?TenantGitConnection`, used by Task 7 (`RepositoryCloner`) and Task 9 (`AuditReports::loadBranches()`).
+- Produces: `GitRepoAccessResolver::resolveCloneUrl(string $repoUrl, ?Tenant $tenant): string` and `::connectionFor(string $repoUrl, Tenant $tenant): ?TenantGitConnection`, used by Task 7 (`RepositoryCloner`) and Task 8 (`AuditReports::loadBranches()`).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1342,7 +1342,225 @@ git commit -m "fix(audit): clone with the requesting tenant's own connection, no
 
 ---
 
-### Task 8: OAuth connect flow — `GitConnectionService` + `OAuthController`
+### Task 8: Filament Dashboard "Git Connections" page + migrate branch lookup
+
+**Files:**
+- Create: `app/Filament/Dashboard/Pages/GitConnections.php`
+- Create: `resources/views/filament/dashboard/pages/git-connections.blade.php`
+- Modify: `app/Filament/Dashboard/Pages/AuditReports.php` (`loadBranches()`, imports)
+- Test: `tests/Feature/Filament/Dashboard/GitConnectionsPageTest.php`
+- Test: modify `tests/Feature/Filament/Dashboard/AuditReportsTest.php` (or wherever `loadBranches()` is currently covered) to fake the new provider path instead of `GitHubApiClient`
+
+**Interfaces:**
+- Consumes: `TenantGitConnection` (Task 1), `GitRepoAccessResolver` (Task 6), `GitProviderResolver` (Task 5).
+- Produces: the `filament.dashboard.pages.git-connections` route (Filament's auto-registered page route, from this page's default slug), which Task 9's `OAuthController::callbackForGitConnection()` redirects to.
+
+- [ ] **Step 1: Write the failing page test**
+
+```php
+<?php
+
+namespace Tests\Feature\Filament\Dashboard;
+
+use App\Filament\Dashboard\Pages\GitConnections;
+use App\Models\Tenant;
+use App\Models\TenantGitConnection;
+use App\Models\User;
+use Livewire\Livewire;
+use Tests\Feature\FeatureTest;
+
+class GitConnectionsPageTest extends FeatureTest
+{
+    public function test_shows_connected_and_unconnected_providers(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->create();
+        $tenant->users()->attach($user);
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github', 'account_login' => 'octocat']);
+
+        $this->actingAs($user);
+
+        Livewire::test(GitConnections::class, ['tenant' => $tenant])
+            ->assertSee('octocat')
+            ->assertSee('Not connected');
+    }
+
+    public function test_disconnect_removes_the_connection(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $user = User::factory()->create();
+        $tenant->users()->attach($user);
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
+
+        $this->actingAs($user);
+
+        Livewire::test(GitConnections::class, ['tenant' => $tenant])
+            ->call('disconnect', 'github');
+
+        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'github']);
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `docker compose exec laravel.test php artisan test --filter=GitConnectionsPageTest`
+Expected: FAIL — class not found.
+
+- [ ] **Step 3: Write the `GitConnections` page**
+
+```php
+<?php
+
+namespace App\Filament\Dashboard\Pages;
+
+use App\Models\TenantGitConnection;
+use Filament\Facades\Filament;
+use Filament\Pages\Page;
+
+class GitConnections extends Page
+{
+    protected string $view = 'filament.dashboard.pages.git-connections';
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-link';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Audits';
+
+    protected static ?int $navigationSort = 2;
+
+    /** @return array<string, array{label: string, connected: bool, account: ?string}> */
+    public function connections(): array
+    {
+        $tenant = Filament::getTenant();
+        $existing = TenantGitConnection::query()->where('tenant_id', $tenant->id)->get()->keyBy('provider');
+
+        $providers = ['github' => 'GitHub', 'gitlab' => 'GitLab', 'bitbucket' => 'Bitbucket'];
+
+        $result = [];
+        foreach ($providers as $key => $label) {
+            $connection = $existing->get($key);
+            $result[$key] = [
+                'label' => $label,
+                'connected' => $connection !== null,
+                'account' => $connection?->account_login,
+            ];
+        }
+
+        return $result;
+    }
+
+    public function connectUrl(string $provider): string
+    {
+        return route('auth.oauth.redirect', [
+            'provider' => $provider,
+            'intent' => 'git_connection',
+            'tenant_id' => Filament::getTenant()->id,
+        ]);
+    }
+
+    public function disconnect(string $provider): void
+    {
+        TenantGitConnection::query()
+            ->where('tenant_id', Filament::getTenant()->id)
+            ->where('provider', $provider)
+            ->delete();
+    }
+}
+```
+
+- [ ] **Step 4: Write the view**
+
+```blade
+<x-filament-panels::page>
+    <div class="grid gap-4 md:grid-cols-3">
+        @foreach ($this->connections() as $provider => $connection)
+            <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                <h3 class="text-base font-semibold text-gray-950 dark:text-white">{{ $connection['label'] }}</h3>
+
+                @if ($connection['connected'])
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ __('Connected as :account', ['account' => $connection['account']]) }}</p>
+                    <div class="mt-3 flex gap-2">
+                        <a href="{{ $this->connectUrl($provider) }}" class="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200">{{ __('Reconnect') }}</a>
+                        <button type="button" wire:click="disconnect('{{ $provider }}')" wire:confirm="{{ __('Disconnect this account?') }}" class="inline-flex items-center rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500">{{ __('Disconnect') }}</button>
+                    </div>
+                @else
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ __('Not connected') }}</p>
+                    <a href="{{ $this->connectUrl($provider) }}" class="mt-3 inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500">{{ __('Connect') }}</a>
+                @endif
+            </div>
+        @endforeach
+    </div>
+</x-filament-panels::page>
+```
+
+- [ ] **Step 5: Run test to verify it passes**
+
+Run: `docker compose exec laravel.test php artisan test --filter=GitConnectionsPageTest`
+Expected: PASS
+
+- [ ] **Step 6: Migrate `AuditReports::loadBranches()` off `GitHubApiClient`**
+
+In `app/Filament/Dashboard/Pages/AuditReports.php`, replace the `use App\Services\GitHub\GitHubApiClient;` import with:
+
+```php
+use App\Services\GitProviders\GitProviderResolver;
+use App\Services\GitProviders\GitRepoAccessResolver;
+```
+
+Replace `loadBranches()` (lines 71-84):
+
+```php
+    public function loadBranches(string $repoUrl): void
+    {
+        $key = rtrim($repoUrl, '/');
+
+        if (array_key_exists($key, $this->branchesByRepo)) {
+            return;
+        }
+
+        if (! $this->userMayLookUpBranchesFor($key)) {
+            return;
+        }
+
+        /** @var Tenant|null $tenant */
+        $tenant = Filament::getTenant();
+
+        if ($tenant === null) {
+            return;
+        }
+
+        $provider = app(GitProviderResolver::class)->forUrl($repoUrl);
+        $connection = $provider !== null ? app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant) : null;
+
+        $this->branchesByRepo[$key] = $connection !== null ? $provider->listBranches($connection, $repoUrl) : [];
+    }
+```
+
+Update the docblock above `userMayLookUpBranchesFor()` (lines 86-100): replace "runs on the shared AUDIT_GITHUB_TOKEN PAT, which is a read-only collaborator on every customer's private repos" with "runs on the calling tenant's own connected account, so it can only ever see repos that account can see" — the guard method body itself (lines 101-119) is unchanged, since restricting lookups to repos the tenant already has a claim to is still good defense in depth even though the underlying oracle problem is now structurally closed.
+
+- [ ] **Step 7: Update the existing branch-lookup test**
+
+Find the existing test(s) asserting `loadBranches()`/`GitHubApiClient` behavior (likely in `tests/Feature/Filament/Dashboard/AuditReportsTest.php`) and replace any `GitHubApiClient`/`config(['audit.github_token' => ...])` fake setup with a `TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github'])` plus `Http::fake([...])`, matching the pattern in `GitHubProviderTest`.
+
+- [ ] **Step 8: Run the full Filament dashboard test file**
+
+Run: `docker compose exec laravel.test php artisan test --filter=AuditReportsTest`
+Expected: PASS
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add app/Filament/Dashboard/Pages/GitConnections.php \
+        resources/views/filament/dashboard/pages/git-connections.blade.php \
+        app/Filament/Dashboard/Pages/AuditReports.php \
+        tests/Feature/Filament/Dashboard/GitConnectionsPageTest.php \
+        tests/Feature/Filament/Dashboard/AuditReportsTest.php
+git commit -m "feat(audit): add the workspace Git Connections page; branch lookup uses the tenant's own connection"
+```
+
+---
+
+### Task 9: OAuth connect flow — `GitConnectionService` + `OAuthController`
 
 **Files:**
 - Create: `app/Services/GitProviders/GitConnectionService.php`
@@ -1352,8 +1570,8 @@ git commit -m "fix(audit): clone with the requesting tenant's own connection, no
 - Test: `tests/Feature/Http/Controllers/Auth/GitConnectionOAuthTest.php`
 
 **Interfaces:**
-- Consumes: `TenantGitConnection` (Task 1), `GitProviderResolver` (Task 5).
-- Produces: `GitConnectionService::store(Tenant $tenant, User $user, string $provider, \Laravel\Socialite\Contracts\User $socialiteUser): TenantGitConnection`, used by `OAuthController` here and by Task 9's page indirectly (via the redirect it triggers).
+- Consumes: `TenantGitConnection` (Task 1), `GitProviderResolver` (Task 5), the `filament.dashboard.pages.git-connections` route (Task 8).
+- Produces: `GitConnectionService::store(Tenant $tenant, User $user, string $provider, \Laravel\Socialite\Contracts\User $socialiteUser): TenantGitConnection`, used by `OAuthController` here.
 
 - [ ] **Step 1: Write the failing `GitConnectionService` test**
 
@@ -1601,7 +1819,7 @@ Add the new private method at the end of the class, before the closing `}`:
     }
 ```
 
-(The exact route name is confirmed in Task 9, once the `GitConnections` page exists — Filament auto-registers a page's route as `filament.{panel}.pages.{slug}`, and the page's default slug is derived from its class name, `git-connections`.)
+(The exact route name is confirmed in Task 8, which creates the `GitConnections` page — Filament auto-registers a page's route as `filament.{panel}.pages.{slug}`, and the page's default slug is derived from its class name, `git-connections`.)
 
 - [ ] **Step 8: Add the missing `.env.example` entries**
 
@@ -1628,223 +1846,6 @@ git add app/Services/GitProviders/GitConnectionService.php \
         tests/Feature/Services/GitProviders/GitConnectionServiceTest.php \
         tests/Feature/Http/Controllers/Auth/GitConnectionOAuthTest.php
 git commit -m "feat(audit): let a tenant connect their own GitHub/GitLab/Bitbucket account"
-```
-
----
-
-### Task 9: Filament Dashboard "Git Connections" page + migrate branch lookup
-
-**Files:**
-- Create: `app/Filament/Dashboard/Pages/GitConnections.php`
-- Create: `resources/views/filament/dashboard/pages/git-connections.blade.php`
-- Modify: `app/Filament/Dashboard/Pages/AuditReports.php` (`loadBranches()`, imports)
-- Test: `tests/Feature/Filament/Dashboard/GitConnectionsPageTest.php`
-- Test: modify `tests/Feature/Filament/Dashboard/AuditReportsTest.php` (or wherever `loadBranches()` is currently covered) to fake the new provider path instead of `GitHubApiClient`
-
-**Interfaces:**
-- Consumes: `TenantGitConnection` (Task 1), `GitRepoAccessResolver` (Task 6), `GitProviderResolver` (Task 5).
-
-- [ ] **Step 1: Write the failing page test**
-
-```php
-<?php
-
-namespace Tests\Feature\Filament\Dashboard;
-
-use App\Filament\Dashboard\Pages\GitConnections;
-use App\Models\Tenant;
-use App\Models\TenantGitConnection;
-use App\Models\User;
-use Livewire\Livewire;
-use Tests\Feature\FeatureTest;
-
-class GitConnectionsPageTest extends FeatureTest
-{
-    public function test_shows_connected_and_unconnected_providers(): void
-    {
-        $tenant = Tenant::factory()->create();
-        $user = User::factory()->create();
-        $tenant->users()->attach($user);
-        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github', 'account_login' => 'octocat']);
-
-        $this->actingAs($user);
-
-        Livewire::test(GitConnections::class, ['tenant' => $tenant])
-            ->assertSee('octocat')
-            ->assertSee('Not connected');
-    }
-
-    public function test_disconnect_removes_the_connection(): void
-    {
-        $tenant = Tenant::factory()->create();
-        $user = User::factory()->create();
-        $tenant->users()->attach($user);
-        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
-
-        $this->actingAs($user);
-
-        Livewire::test(GitConnections::class, ['tenant' => $tenant])
-            ->call('disconnect', 'github');
-
-        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'github']);
-    }
-}
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `docker compose exec laravel.test php artisan test --filter=GitConnectionsPageTest`
-Expected: FAIL — class not found.
-
-- [ ] **Step 3: Write the `GitConnections` page**
-
-```php
-<?php
-
-namespace App\Filament\Dashboard\Pages;
-
-use App\Models\TenantGitConnection;
-use Filament\Facades\Filament;
-use Filament\Pages\Page;
-
-class GitConnections extends Page
-{
-    protected string $view = 'filament.dashboard.pages.git-connections';
-
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-link';
-
-    protected static string|\UnitEnum|null $navigationGroup = 'Audits';
-
-    protected static ?int $navigationSort = 2;
-
-    /** @return array<string, array{label: string, connected: bool, account: ?string}> */
-    public function connections(): array
-    {
-        $tenant = Filament::getTenant();
-        $existing = TenantGitConnection::query()->where('tenant_id', $tenant->id)->get()->keyBy('provider');
-
-        $providers = ['github' => 'GitHub', 'gitlab' => 'GitLab', 'bitbucket' => 'Bitbucket'];
-
-        $result = [];
-        foreach ($providers as $key => $label) {
-            $connection = $existing->get($key);
-            $result[$key] = [
-                'label' => $label,
-                'connected' => $connection !== null,
-                'account' => $connection?->account_login,
-            ];
-        }
-
-        return $result;
-    }
-
-    public function connectUrl(string $provider): string
-    {
-        return route('auth.oauth.redirect', [
-            'provider' => $provider,
-            'intent' => 'git_connection',
-            'tenant_id' => Filament::getTenant()->id,
-        ]);
-    }
-
-    public function disconnect(string $provider): void
-    {
-        TenantGitConnection::query()
-            ->where('tenant_id', Filament::getTenant()->id)
-            ->where('provider', $provider)
-            ->delete();
-    }
-}
-```
-
-- [ ] **Step 4: Write the view**
-
-```blade
-<x-filament-panels::page>
-    <div class="grid gap-4 md:grid-cols-3">
-        @foreach ($this->connections() as $provider => $connection)
-            <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-                <h3 class="text-base font-semibold text-gray-950 dark:text-white">{{ $connection['label'] }}</h3>
-
-                @if ($connection['connected'])
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ __('Connected as :account', ['account' => $connection['account']]) }}</p>
-                    <div class="mt-3 flex gap-2">
-                        <a href="{{ $this->connectUrl($provider) }}" class="inline-flex items-center rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200">{{ __('Reconnect') }}</a>
-                        <button type="button" wire:click="disconnect('{{ $provider }}')" wire:confirm="{{ __('Disconnect this account?') }}" class="inline-flex items-center rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500">{{ __('Disconnect') }}</button>
-                    </div>
-                @else
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ __('Not connected') }}</p>
-                    <a href="{{ $this->connectUrl($provider) }}" class="mt-3 inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500">{{ __('Connect') }}</a>
-                @endif
-            </div>
-        @endforeach
-    </div>
-</x-filament-panels::page>
-```
-
-- [ ] **Step 5: Run test to verify it passes**
-
-Run: `docker compose exec laravel.test php artisan test --filter=GitConnectionsPageTest`
-Expected: PASS
-
-- [ ] **Step 6: Migrate `AuditReports::loadBranches()` off `GitHubApiClient`**
-
-In `app/Filament/Dashboard/Pages/AuditReports.php`, replace the `use App\Services\GitHub\GitHubApiClient;` import with:
-
-```php
-use App\Services\GitProviders\GitProviderResolver;
-use App\Services\GitProviders\GitRepoAccessResolver;
-```
-
-Replace `loadBranches()` (lines 71-84):
-
-```php
-    public function loadBranches(string $repoUrl): void
-    {
-        $key = rtrim($repoUrl, '/');
-
-        if (array_key_exists($key, $this->branchesByRepo)) {
-            return;
-        }
-
-        if (! $this->userMayLookUpBranchesFor($key)) {
-            return;
-        }
-
-        /** @var Tenant|null $tenant */
-        $tenant = Filament::getTenant();
-
-        if ($tenant === null) {
-            return;
-        }
-
-        $provider = app(GitProviderResolver::class)->forUrl($repoUrl);
-        $connection = $provider !== null ? app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant) : null;
-
-        $this->branchesByRepo[$key] = $connection !== null ? $provider->listBranches($connection, $repoUrl) : [];
-    }
-```
-
-Update the docblock above `userMayLookUpBranchesFor()` (lines 86-100): replace "runs on the shared AUDIT_GITHUB_TOKEN PAT, which is a read-only collaborator on every customer's private repos" with "runs on the calling tenant's own connected account, so it can only ever see repos that account can see" — the guard method body itself (lines 101-119) is unchanged, since restricting lookups to repos the tenant already has a claim to is still good defense in depth even though the underlying oracle problem is now structurally closed.
-
-- [ ] **Step 7: Update the existing branch-lookup test**
-
-Find the existing test(s) asserting `loadBranches()`/`GitHubApiClient` behavior (likely in `tests/Feature/Filament/Dashboard/AuditReportsTest.php`) and replace any `GitHubApiClient`/`config(['audit.github_token' => ...])` fake setup with a `TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github'])` plus `Http::fake([...])`, matching the pattern in `GitHubProviderTest`.
-
-- [ ] **Step 8: Run the full Filament dashboard test file**
-
-Run: `docker compose exec laravel.test php artisan test --filter=AuditReportsTest`
-Expected: PASS
-
-- [ ] **Step 9: Commit**
-
-```bash
-git add app/Filament/Dashboard/Pages/GitConnections.php \
-        resources/views/filament/dashboard/pages/git-connections.blade.php \
-        app/Filament/Dashboard/Pages/AuditReports.php \
-        tests/Feature/Filament/Dashboard/GitConnectionsPageTest.php \
-        tests/Feature/Filament/Dashboard/AuditReportsTest.php
-git commit -m "feat(audit): add the workspace Git Connections page; branch lookup uses the tenant's own connection"
 ```
 
 ---
@@ -2050,16 +2051,16 @@ git commit -m "chore(audit): retire the shared GitHub token and GitHubApiClient"
 **Spec coverage:**
 - `GitProvider` interface, per-provider implementations, resolver — Tasks 2-5. ✓
 - `tenant_git_connections` encrypted storage — Task 1. ✓
-- Connection flow (OAuth routes, retiring the shared-token model) — Tasks 8, 11. ✓
+- Connection flow (OAuth routes, retiring the shared-token model) — Tasks 9, 11. ✓
 - `RepositoryCloner` using tenant connections — Task 7. ✓
 - Landing page public-repo-only / dashboard preflight-before-charge / mid-pipeline reconnect copy — Tasks 7 (mechanism) and 10 (copy). ✓
 - Spec's Non-goals (self-hosted providers, auto-accept invites, resume-in-place) — deliberately not built; nothing in this plan does them. ✓
 
 **Placeholder scan:** no TBD/TODO; every step has real, complete code. The one deliberately open-ended step (Task 7, Step 6: "run the full suite and fix fallout") names exactly what kind of failure to expect and how to fix it, because the fallout depends on which existing tests construct `AuditRequest`/`AuditSchedule` fixtures without a tenant — that set can't be enumerated without running the suite.
 
-**Type consistency:** `RepositoryCloner::preflight/clone/remoteHeadSha` all take `?Tenant $tenant = null` consistently across Tasks 7's rewrite and all four call-site updates. `GitProvider::listBranches`/`cloneUrl` signatures match across the interface (Task 2) and all three implementations (Tasks 2-4) and the one caller outside `GitRepoAccessResolver` (Task 9's `loadBranches()`). `GitConnectionService::store()`'s parameter order (`Tenant, User, string, SocialiteUser`) matches its one call site in `OAuthController::callbackForGitConnection()` (Task 8).
+**Type consistency:** `RepositoryCloner::preflight/clone/remoteHeadSha` all take `?Tenant $tenant = null` consistently across Tasks 7's rewrite and all four call-site updates. `GitProvider::listBranches`/`cloneUrl` signatures match across the interface (Task 2) and all three implementations (Tasks 2-4) and the one caller outside `GitRepoAccessResolver` (Task 8's `loadBranches()`). `GitConnectionService::store()`'s parameter order (`Tenant, User, string, SocialiteUser`) matches its one call site in `OAuthController::callbackForGitConnection()` (Task 9).
 
-**Review Focus:** all five items above have an owning test — cross-tenant isolation (Task 6 `test_tenant_a_connection_is_never_used_for_tenant_b`, Task 7 `test_preflight_does_not_leak_another_tenants_connection`), `remoteHeadSha()` no-throw (Task 7 `test_remote_head_sha_returns_null_instead_of_throwing_when_no_connection_exists`), landing-page anonymous passthrough (Task 6 `test_returns_the_url_unchanged_when_no_tenant_is_given`, Task 7 `test_preflight_succeeds_against_a_public_local_repo_with_no_tenant`), encrypted-at-rest (Task 1 `test_access_token_is_encrypted_at_rest`), and connect-flow tenant-membership authorization (Task 8 `test_redirect_rejects_a_tenant_the_user_does_not_belong_to`, `test_redirect_requires_authentication`).
+**Review Focus:** all five items above have an owning test — cross-tenant isolation (Task 6 `test_tenant_a_connection_is_never_used_for_tenant_b`, Task 7 `test_preflight_does_not_leak_another_tenants_connection`), `remoteHeadSha()` no-throw (Task 7 `test_remote_head_sha_returns_null_instead_of_throwing_when_no_connection_exists`), landing-page anonymous passthrough (Task 6 `test_returns_the_url_unchanged_when_no_tenant_is_given`, Task 7 `test_preflight_succeeds_against_a_public_local_repo_with_no_tenant`), encrypted-at-rest (Task 1 `test_access_token_is_encrypted_at_rest`), and connect-flow tenant-membership authorization (Task 9 `test_redirect_rejects_a_tenant_the_user_does_not_belong_to`, `test_redirect_requires_authentication`).
 
 ---
 
