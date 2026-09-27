@@ -5,6 +5,7 @@ namespace App\Services\GitProviders;
 use App\Exceptions\GitTokenRefreshUnavailableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 
@@ -142,7 +143,9 @@ class GitRepoAccessResolver
 
     private function isExpired(TenantGitConnection $connection): bool
     {
-        return $connection->expires_at !== null
-            && $connection->expires_at->lte(now()->addSeconds(self::EXPIRY_LEEWAY_SECONDS));
+        $expiresAt = $connection->expires_at; // 'datetime' cast: Carbon or null
+
+        return $expiresAt instanceof CarbonInterface
+            && $expiresAt->lte(now()->addSeconds(self::EXPIRY_LEEWAY_SECONDS));
     }
 }
