@@ -750,7 +750,7 @@ class BitbucketProvider implements GitProvider
     /** @return array{workspace:string,slug:string}|null */
     private function parseRepo(string $repoUrl): ?array
     {
-        if (! preg_match('#bitbucket\.org[:/]([^/]+)/([^/.]+?)(?:\.git)?/?$#i', $repoUrl, $matches)) {
+        if (! preg_match('#bitbucket\.org[:/]([^/]+)/(.+?)(?:\.git)?/?$#i', $repoUrl, $matches)) {
             return null;
         }
 
