@@ -15,12 +15,17 @@ use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
+use App\Models\TenantGitConnection;
 use App\Models\User;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\RepositoryCloner;
 use App\Services\GitHub\GitHubApiClient;
+use App\Services\GitProviders\GitRepoAccessResolver;
 use Filament\Facades\Filament;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
@@ -88,13 +93,15 @@ class AuditReportsPageTest extends FeatureTest
     }
 
     /**
-     * Access is checked before anything is charged: an unreachable repo
-     * creates no request, spends no credit and never reaches checkout -- the
-     * customer is told to invite us and run it again.
+     * Access is checked before anything is charged: a private repo on a known
+     * host, with no connection for that host, creates no request, spends no
+     * credit and never reaches checkout -- the customer is told to connect
+     * their account and run it again.
      */
-    public function test_launch_audit_on_an_unreachable_repo_charges_nothing_and_explains_the_invite(): void
+    public function test_launch_audit_on_a_private_repo_without_a_connection_asks_to_connect_and_charges_nothing(): void
     {
-        $this->fakeRepositoryAccess(reachable: false);
+        $this->useRealRepositoryCloner();
+        Process::fake(['*' => Process::result(exitCode: 128)]);
         Queue::fake([GenerateAuditReport::class]);
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
@@ -107,12 +114,95 @@ class AuditReportsPageTest extends FeatureTest
         Livewire::actingAs($user)
             ->test(AuditReports::class)
             ->call('launchAudit', 'https://github.com/acme/private')
+            ->assertNotified(__('Connect your :provider account', ['provider' => 'GitHub']))
+            ->assertNoRedirect();
+
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
+        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        Queue::assertNotPushed(GenerateAuditReport::class);
+    }
+
+    /**
+     * A connection on file does not guarantee reach (wrong URL, repo outside
+     * the granted scope): that still gets the generic notification from the
+     * preflight() catch, not "connect your account".
+     */
+    public function test_launch_audit_with_a_connection_to_an_unreachable_repo_shows_the_generic_notification(): void
+    {
+        $this->useRealRepositoryCloner();
+        Process::fake(['*' => Process::result(exitCode: 128)]);
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://github.com/acme/missing')
             ->assertNotified(__("We can't reach this repository yet"))
             ->assertNoRedirect();
 
         $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
         $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
         Queue::assertNotPushed(GenerateAuditReport::class);
+    }
+
+    /**
+     * No connection is not a blanket block: a public repo on a known host is
+     * probed anonymously and launches normally.
+     */
+    public function test_launch_audit_on_a_public_known_host_repo_without_a_connection_still_launches(): void
+    {
+        $this->useRealRepositoryCloner();
+        Process::fake(['*' => Process::result(output: "abc123\tHEAD\n")]);
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://github.com/acme/public')
+            ->assertNotified(__('Audit started'));
+
+        $this->assertSame(1, AuditRequest::where('user_id', $user->id)->where('repo_url', 'https://github.com/acme/public')->count());
+        Process::assertRan(fn (PendingProcess $process) => in_array('https://github.com/acme/public', $process->command, true));
+        Queue::assertPushed(GenerateAuditReport::class);
+    }
+
+    /** Regression: hosts we have no provider integration for pass straight through. */
+    public function test_launch_audit_on_a_public_unrecognized_host_repo_launches_without_any_connection(): void
+    {
+        $this->useRealRepositoryCloner();
+        Process::fake(['*' => Process::result(output: "abc123\tHEAD\n")]);
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://codeberg.org/acme/app')
+            ->assertNotified(__('Audit started'));
+
+        $this->assertSame(1, AuditRequest::where('user_id', $user->id)->where('repo_url', 'https://codeberg.org/acme/app')->count());
+        Process::assertRan(fn (PendingProcess $process) => $process->command === [
+            'git', 'ls-remote', '--exit-code', 'https://codeberg.org/acme/app', 'HEAD',
+        ]);
+        Queue::assertPushed(GenerateAuditReport::class);
     }
 
     public function test_launch_audit_on_an_unreachable_repo_does_not_send_the_customer_to_checkout(): void
@@ -664,5 +754,14 @@ class AuditReportsPageTest extends FeatureTest
             'status' => SubscriptionStatus::ACTIVE->value,
             'ends_at' => now()->addDays(30),
         ]);
+    }
+
+    /**
+     * setUp() replaces preflight() with a stub; these tests need the real
+     * cloner (and the real resolver behind it) against a faked `git`.
+     */
+    private function useRealRepositoryCloner(): void
+    {
+        $this->instance(RepositoryCloner::class, new RepositoryCloner(app(GitRepoAccessResolver::class)));
     }
 }

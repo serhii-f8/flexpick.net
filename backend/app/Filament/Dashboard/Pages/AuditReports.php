@@ -20,6 +20,8 @@ use App\Services\AuditReport\ScheduleOccurrenceProjector;
 use App\Services\AuditReport\ScoreChartBuilder;
 use App\Services\AuditReport\TierQuota;
 use App\Services\GitHub\GitHubApiClient;
+use App\Services\GitProviders\GitProviderResolver;
+use App\Services\GitProviders\GitRepoAccessResolver;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -221,12 +223,31 @@ class AuditReports extends Page
         // Before anything is charged or sent to checkout: a repo we cannot
         // reach would only become a closed, refunded request, so tell the
         // customer how to grant access right here instead.
+        //
+        // preflight() runs first even with no connection on file: without
+        // one it probes anonymously, so a public repo on a known host still
+        // goes through. Only once it fails do we tell apart "connect your
+        // account" (known host, no connection for it) from "we can't reach
+        // it" (connected already, or a host we have no integration for).
         try {
             app(RepositoryCloner::class)->preflight($repoUrl, tenant: $tenant);
         } catch (AuditNotAnalyzableException) {
+            $provider = app(GitProviderResolver::class)->forUrl($repoUrl);
+
+            if ($provider !== null && $tenant !== null && app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant) === null) {
+                Notification::make()
+                    ->title(__('Connect your :provider account', ['provider' => $provider->label()]))
+                    ->body(__('This looks like a private :provider repository. Connect your :provider account from the Git Connections page, then run the audit again. Nothing has been charged.', ['provider' => $provider->label()]))
+                    ->danger()
+                    ->persistent()
+                    ->send();
+
+                return;
+            }
+
             Notification::make()
                 ->title(__("We can't reach this repository yet"))
-                ->body(__("If it's private, invite :account as a read-only collaborator on GitHub (Settings → Collaborators → Add people, role \"Read\"). We usually accept invites within one business day — then run the audit again. Nothing has been charged.", ['account' => config('audit.github_account')]))
+                ->body(__('Double-check the URL, or if this is a private repository on a different git host, reply to our support email for help. Nothing has been charged.'))
                 ->danger()
                 ->persistent()
                 ->send();
