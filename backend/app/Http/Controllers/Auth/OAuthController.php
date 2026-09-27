@@ -5,7 +5,12 @@ namespace App\Http\Controllers\Auth;
 use App\Constants\ReferralConstants;
 use App\Http\Controllers\Auth\Trait\RedirectAwareTrait;
 use App\Models\OauthLoginProvider;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Services\GitProviders\GitConnectionService;
+use App\Services\GitProviders\GitProviderResolver;
+use App\Services\ReferralRegistrationGate;
+use App\Services\UserService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,16 +21,37 @@ class OAuthController extends RegisterController
 {
     use RedirectAwareTrait;
 
+    /**
+     * Deliberately does not call `parent::__construct()`: that constructor's
+     * final statement is an unconditional `$this->middleware('guest')`,
+     * applied to every action on the class with no `only()`/`except()`. It
+     * would block the git-connection flow below, which requires an
+     * *authenticated* tenant member to reach `redirect()`/`callback()`, and
+     * controller middleware can't be conditioned on a query parameter. The
+     * login-only behaviour that `guest` used to provide is instead
+     * reproduced inline, as the first check in each action -- so an
+     * authenticated user hitting the login path still bounces exactly as
+     * before, before any provider lookup runs.
+     */
+    public function __construct(
+        protected UserService $userService,
+        protected ReferralRegistrationGate $referralRegistrationGate,
+    ) {}
+
     public function redirect(string $provider)
     {
-        $providerObj = OauthLoginProvider::where('provider_name', $provider)->firstOrFail();
-
-        if (! $providerObj->enabled) {
-            abort(404);
+        if (request()->query('intent') === 'git_connection') {
+            return $this->redirectForGitConnection($provider);
         }
 
         if (Auth::check()) {
             return redirect()->route('home');
+        }
+
+        $providerObj = OauthLoginProvider::where('provider_name', $provider)->firstOrFail();
+
+        if (! $providerObj->enabled) {
+            abort(404);
         }
 
         Redirect::setIntendedUrl(url()->previous());
@@ -33,8 +59,33 @@ class OAuthController extends RegisterController
         return Socialite::driver($provider)->redirect();
     }
 
+    private function redirectForGitConnection(string $provider)
+    {
+        abort_unless(Auth::check(), 403);
+
+        $tenantId = request()->query('tenant_id');
+        abort_unless(
+            $tenantId && Auth::user()->tenants()->where('tenants.id', $tenantId)->exists(),
+            403
+        );
+
+        session(['git_connection_tenant_id' => $tenantId]);
+
+        $scopes = app(GitProviderResolver::class)->forProviderName($provider)->authorizationScopes();
+
+        return Socialite::driver($provider)->scopes($scopes)->redirect();
+    }
+
     public function callback(string $provider)
     {
+        if (session()->has('git_connection_tenant_id')) {
+            return $this->callbackForGitConnection($provider);
+        }
+
+        if (Auth::check()) {
+            return redirect()->route('home');
+        }
+
         $providerObj = OauthLoginProvider::where('provider_name', $provider)->firstOrFail();
 
         if (! $providerObj->enabled) {
@@ -139,5 +190,25 @@ class OAuthController extends RegisterController
         }
 
         return redirect($this->getRedirectUrl(Auth::user()));
+    }
+
+    private function callbackForGitConnection(string $provider)
+    {
+        $tenantId = session()->pull('git_connection_tenant_id');
+        $tenant = Tenant::findOrFail($tenantId);
+
+        abort_unless(Auth::user()->tenants()->where('tenants.id', $tenant->id)->exists(), 403);
+
+        try {
+            $oauthUser = Socialite::driver($provider)->user();
+        } catch (Exception) {
+            return redirect()->route('filament.dashboard.pages.git-connections', ['tenant' => $tenant])
+                ->withErrors(['git_connection' => __('Connection was cancelled or failed. Please try again.')]);
+        }
+
+        app(GitConnectionService::class)->store($tenant, Auth::user(), $provider, $oauthUser);
+
+        return redirect()->route('filament.dashboard.pages.git-connections', ['tenant' => $tenant])
+            ->with('status', __(':provider connected.', ['provider' => ucfirst($provider)]));
     }
 }
