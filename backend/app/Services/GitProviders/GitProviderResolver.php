@@ -6,6 +6,14 @@ use InvalidArgumentException;
 
 class GitProviderResolver
 {
+    /**
+     * The provider names {@see forProviderName()} can resolve. Used by callers
+     * (e.g. the git-connection OAuth flow) to reject an unknown provider name
+     * with a clean 404 before calling forProviderName(), instead of letting its
+     * InvalidArgumentException surface as an uncaught 500.
+     */
+    public const KNOWN_PROVIDER_NAMES = ['github', 'gitlab', 'bitbucket'];
+
     public function __construct(
         private GitHubProvider $github,
         private GitLabProvider $gitlab,

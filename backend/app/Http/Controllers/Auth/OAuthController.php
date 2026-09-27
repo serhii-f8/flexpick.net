@@ -45,7 +45,7 @@ class OAuthController extends RegisterController
         }
 
         if (Auth::check()) {
-            return redirect()->route('home');
+            return redirect()->route('dashboard');
         }
 
         $providerObj = OauthLoginProvider::where('provider_name', $provider)->firstOrFail();
@@ -64,10 +64,14 @@ class OAuthController extends RegisterController
         abort_unless(Auth::check(), 403);
 
         $tenantId = request()->query('tenant_id');
+        abort_unless(is_scalar($tenantId) && ctype_digit((string) $tenantId), 403);
+
         abort_unless(
-            $tenantId && Auth::user()->tenants()->where('tenants.id', $tenantId)->exists(),
+            Auth::user()->tenants()->where('tenants.id', $tenantId)->exists(),
             403
         );
+
+        abort_unless(in_array($provider, GitProviderResolver::KNOWN_PROVIDER_NAMES, true), 404);
 
         session(['git_connection_tenant_id' => $tenantId]);
 
@@ -83,7 +87,7 @@ class OAuthController extends RegisterController
         }
 
         if (Auth::check()) {
-            return redirect()->route('home');
+            return redirect()->route('dashboard');
         }
 
         $providerObj = OauthLoginProvider::where('provider_name', $provider)->firstOrFail();
@@ -194,6 +198,9 @@ class OAuthController extends RegisterController
 
     private function callbackForGitConnection(string $provider)
     {
+        abort_unless(Auth::check(), 403);
+        abort_unless(in_array($provider, GitProviderResolver::KNOWN_PROVIDER_NAMES, true), 404);
+
         $tenantId = session()->pull('git_connection_tenant_id');
         $tenant = Tenant::findOrFail($tenantId);
 

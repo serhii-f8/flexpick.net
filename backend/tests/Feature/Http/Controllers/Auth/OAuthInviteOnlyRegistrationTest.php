@@ -72,6 +72,34 @@ class OAuthInviteOnlyRegistrationTest extends FeatureTest
         $this->assertAuthenticatedAs($existing);
     }
 
+    /**
+     * Regression test: OAuthController used to inherit RegisterController's
+     * `guest` middleware, which sent an already-authenticated visitor to
+     * route('dashboard'). Its own constructor replaced that with an inline
+     * `Auth::check()` redirect that briefly pointed at route('home') (the
+     * pricing page) instead -- a real behaviour mismatch, not just a stray
+     * word. Both redirect() and callback() must send them to the dashboard.
+     */
+    public function test_an_authenticated_user_hitting_the_plain_login_redirect_goes_to_the_dashboard(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->get(route('auth.oauth.redirect', ['provider' => 'google']));
+
+        $response->assertRedirect(route('dashboard'));
+    }
+
+    public function test_an_authenticated_user_hitting_the_plain_login_callback_goes_to_the_dashboard(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->get(route('auth.oauth.callback', ['provider' => 'google']));
+
+        $response->assertRedirect(route('dashboard'));
+    }
+
     private function fakeOauthUser(string $email): void
     {
         $socialiteUser = (new SocialiteUser)->map([
