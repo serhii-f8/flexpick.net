@@ -61,4 +61,28 @@ class GitHubProviderTest extends FeatureTest
 
         Http::assertSentCount(2);
     }
+
+    public function test_returns_branches_for_repo_with_dotted_name_without_git_suffix(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['access_token' => 'ghp_tenant_token']);
+        Http::fake(['api.github.com/repos/acme/vue.js/branches*' => Http::response([
+            ['name' => 'main'], ['name' => 'develop'],
+        ])]);
+
+        $branches = (new GitHubProvider)->listBranches($connection, 'https://github.com/acme/vue.js');
+
+        $this->assertSame(['main', 'develop'], $branches);
+    }
+
+    public function test_returns_branches_for_repo_with_dotted_name_and_git_suffix(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['access_token' => 'ghp_tenant_token']);
+        Http::fake(['api.github.com/repos/acme/socket.io/branches*' => Http::response([
+            ['name' => 'master'], ['name' => 'develop'],
+        ])]);
+
+        $branches = (new GitHubProvider)->listBranches($connection, 'https://github.com/acme/socket.io.git');
+
+        $this->assertSame(['master', 'develop'], $branches);
+    }
 }

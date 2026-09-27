@@ -59,7 +59,7 @@ class GitHubProvider implements GitProvider
     /** @return array{owner:string,name:string}|null */
     private function parseRepo(string $repoUrl): ?array
     {
-        if (! preg_match('#github\.com[:/]([^/]+)/([^/.]+?)(?:\.git)?/?$#i', $repoUrl, $matches)) {
+        if (! preg_match('#github\.com[:/]([^/]+)/(.+?)(?:\.git)?/?$#i', $repoUrl, $matches)) {
             return null;
         }
 
