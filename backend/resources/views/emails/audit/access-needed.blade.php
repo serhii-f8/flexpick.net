@@ -16,13 +16,12 @@
                     {{ __("This audit request is now closed and won't restart on its own. You haven't been charged for it.") }}
                 </p>
                 <p style="margin: 16px 0 0; line-height: 24px">
-                    <strong>{{ __('1. Give us read access.') }}</strong>
-                    {{ __('Invite our review account :account as a read-only collaborator on GitHub:', ['account' => config('audit.github_account')]) }}
-                    {{ __('Repository → Settings → Collaborators → Add people → search for ":account" → set role to "Read".', ['account' => config('audit.github_account')]) }}
+                    <strong>{{ __('1. Connect your :provider account.', ['provider' => $providerLabel]) }}</strong>
+                    {{ __('From your workspace, connect the :provider account that can read this repository — private repos need this before we can analyze them.', ['provider' => $providerLabel]) }}
                 </p>
                 <p style="margin: 16px 0 0; line-height: 24px">
                     <strong>{{ __('2. Then run a new audit.') }}</strong>
-                    {{ __('Start it from your dashboard — the repository is already filled in. We usually accept invites within one business day; if you try before we have, the dashboard tells you so and nothing is charged.') }}
+                    {{ __('Start it from your dashboard — the repository is already filled in. Connecting your account takes effect immediately, so there is no waiting.') }}
                 </p>
                 <p style="margin: 24px 0 0; line-height: 24px; text-align: center;">
                     <a href="{{ $rerunUrl }}" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
@@ -30,7 +29,7 @@
                     </a>
                 </p>
                 <p style="margin: 24px 0 0; line-height: 24px; font-size: 13px; color: #64748b;">
-                    {{ __('On another git host, or prefer not to invite us? Just reply to this email. Happy to sign an NDA first.') }}
+                    {{ __('On another git host, or need help another way? Just reply to this email.') }}
                 </p>
             @elseif ($auditRequest->repo_url)
                 <p style="margin: 16px 0 0; line-height: 24px">
@@ -48,7 +47,7 @@
                     {{ __("You didn't include a repository link, so we couldn't start the automated analysis.") }}
                 </p>
                 <p style="margin: 16px 0 0; line-height: 24px">
-                    {{ __('Reply to this email with a repository URL — for private GitHub repos, also invite our review account :account as a read-only collaborator. Happy to sign an NDA first.', ['account' => config('audit.github_account')]) }}
+                    {{ __('Reply to this email with a repository URL — for a private repo, connect the matching GitHub, GitLab, or Bitbucket account from your workspace first.') }}
                 </p>
             @endif
         </td>

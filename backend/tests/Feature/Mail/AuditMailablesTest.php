@@ -25,8 +25,9 @@ class AuditMailablesTest extends FeatureTest
     }
 
     /**
-     * The customer invites us and then runs a new audit themselves -- the
-     * email must say so, and must not promise that we restart this one.
+     * The customer connects their own git account and then runs a new audit
+     * themselves -- the email must say so, and must not promise that we
+     * restart this one.
      */
     public function test_access_needed_mailable_tells_the_customer_to_run_a_new_audit(): void
     {
@@ -39,13 +40,30 @@ class AuditMailablesTest extends FeatureTest
 
         $mailable = new AuditRepoAccessNeeded($request);
 
-        $mailable->assertSeeInHtml(config('audit.github_account'));
+        $mailable->assertSeeInHtml('Connect your GitHub account');
         $mailable->assertSeeInHtml('run a new audit');
         $mailable->assertSeeInHtml('won\'t restart on its own');
         $mailable->assertSeeInHtml('haven\'t been charged');
         $mailable->assertSeeInHtml('Run the audit again');
         $mailable->assertSeeInHtml('repo=https%3A%2F%2Fgithub.com%2Facme%2Fprivate-app');
-        $mailable->assertDontSeeInHtml('as soon as the invite is accepted');
+        $mailable->assertDontSeeInHtml('read-only collaborator');
+        $mailable->assertDontSeeInHtml('business day');
+    }
+
+    /**
+     * The email names the repo's own git provider -- a GitLab URL must not
+     * be told to connect GitHub, and the retired invite-a-collaborator
+     * language must be gone entirely.
+     */
+    public function test_access_failure_email_names_the_repos_provider(): void
+    {
+        $auditRequest = AuditRequest::factory()->create(['repo_url' => 'https://gitlab.com/acme/app']);
+
+        $rendered = (new AuditRepoAccessNeeded($auditRequest, accessProblem: true))->render();
+
+        $this->assertStringContainsString('Connect your GitLab account', $rendered);
+        $this->assertStringNotContainsString('read-only collaborator', $rendered);
+        $this->assertStringNotContainsString('business day', $rendered);
     }
 
     public function test_access_needed_mailable_sends_a_workspaceless_visitor_to_sign_in(): void

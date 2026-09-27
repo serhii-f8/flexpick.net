@@ -16,7 +16,7 @@
                     <details id="audit-private-repo" class="fp-disclosure mt-2">
                         <summary>{{ __('Private repository?') }}</summary>
                         <p>
-                            {{ __('Invite :account on GitHub as a read-only collaborator (Settings → Collaborators → Add people), then paste the URL here. We start the audit as soon as the invite lands.', ['account' => config('audit.github_account')]) }}
+                            {{ __('Connect your GitHub, GitLab, or Bitbucket account from the Git Connections page, then paste the URL here — private repos need a connected account before they can be analyzed.') }}
                         </p>
                     </details>
                 </div>

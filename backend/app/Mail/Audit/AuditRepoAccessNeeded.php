@@ -4,6 +4,7 @@ namespace App\Mail\Audit;
 
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Models\AuditRequest;
+use App\Services\GitProviders\GitProviderResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -38,8 +39,20 @@ class AuditRepoAccessNeeded extends Mailable implements ShouldQueue
     {
         return new Content(
             view: 'emails.audit.access-needed',
-            with: ['rerunUrl' => $this->rerunUrl()],
+            with: [
+                'rerunUrl' => $this->rerunUrl(),
+                'providerLabel' => $this->providerLabel(),
+            ],
         );
+    }
+
+    private function providerLabel(): string
+    {
+        if ($this->auditRequest->repo_url === null) {
+            return 'Git';
+        }
+
+        return app(GitProviderResolver::class)->forUrl($this->auditRequest->repo_url)?->label() ?? 'Git';
     }
 
     /**

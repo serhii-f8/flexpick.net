@@ -121,7 +121,7 @@ class AuditRequestResourceTest extends FeatureTest
             ->assertSee('Clone timed out after 120s');
     }
 
-    public function test_view_shows_invite_instructions_for_awaiting_access(): void
+    public function test_view_shows_connect_instructions_for_awaiting_access(): void
     {
         $user = User::factory()->create();
         $tenant = $this->createTenantFor($user);
@@ -135,7 +135,7 @@ class AuditRequestResourceTest extends FeatureTest
 
         $this->get(AuditRequestResource::getUrl('view', ['record' => $audit->uuid], true, 'dashboard', tenant: $tenant))
             ->assertSuccessful()
-            ->assertSee(config('audit.github_account'));
+            ->assertSee('Connect your GitHub, GitLab, or Bitbucket account');
     }
 
     public function test_view_shows_scores_and_report_links_for_completed_audit(): void
