@@ -98,20 +98,13 @@ class TokenScrubber
 
     private static function scrub(string $value): string
     {
-        // Any embedded credential pair, whether or not it is our token.
-        $value = (string) preg_replace(
+        // Any embedded credential pair, whether or not it belongs to a
+        // connected tenant's own token.
+        return (string) preg_replace(
             '#https://[^:/@\s]+:[^@\s]+@#i',
             'https://'.self::REPLACEMENT.'@',
             $value
         );
-
-        $token = (string) config('audit.github_token');
-
-        if ($token !== '') {
-            $value = str_replace($token, self::REPLACEMENT, $value);
-        }
-
-        return $value;
     }
 
     /**

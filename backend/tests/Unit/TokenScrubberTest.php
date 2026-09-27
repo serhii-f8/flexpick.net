@@ -13,13 +13,6 @@ class TokenScrubberTest extends TestCase
 {
     private const TOKEN = 'ghp_AbCdEf0123456789AbCdEf0123456789AbCd';
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        config()->set('audit.github_token', self::TOKEN);
-    }
-
     public function test_strips_an_embedded_credential_pair_from_the_message(): void
     {
         $event = Event::createEvent();
@@ -36,16 +29,6 @@ class TokenScrubberTest extends TestCase
         $this->assertStringContainsString('github.com/acme/app.git', $scrubbed->getMessage());
     }
 
-    public function test_strips_a_bare_token_occurrence(): void
-    {
-        $event = Event::createEvent();
-        $event->setMessage('git exited 128; token was '.self::TOKEN);
-
-        $scrubbed = TokenScrubber::handle($event, new EventHint);
-
-        $this->assertStringNotContainsString(self::TOKEN, $scrubbed->getMessage());
-    }
-
     public function test_strips_credentials_from_extra_context(): void
     {
         $event = Event::createEvent();
@@ -58,10 +41,8 @@ class TokenScrubberTest extends TestCase
         $this->assertStringNotContainsString(self::TOKEN, json_encode($scrubbed->getExtra()));
     }
 
-    public function test_strips_any_credential_pair_even_when_no_token_is_configured(): void
+    public function test_strips_any_credential_pair_regardless_of_provider(): void
     {
-        config()->set('audit.github_token', null);
-
         $event = Event::createEvent();
         $event->setMessage('https://x-access-token:some-other-secret@github.com/acme/app.git');
 
