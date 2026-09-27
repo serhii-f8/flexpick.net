@@ -2,11 +2,19 @@
 
 namespace App\Services\GitProviders;
 
+use App\Exceptions\GitTokenRefreshUnavailableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 
 class GitRepoAccessResolver
 {
+    /**
+     * Refresh a token this close to expiry rather than hand git one that dies mid-clone.
+     */
+    private const EXPIRY_LEEWAY_SECONDS = 60;
+
     public function __construct(private GitProviderResolver $providers) {}
 
     /**
@@ -32,7 +40,7 @@ class GitRepoAccessResolver
             return $repoUrl;
         }
 
-        $connection = $this->connectionFor($repoUrl, $tenant);
+        $connection = $this->freshConnection($repoUrl, $tenant);
 
         if ($connection === null) {
             return $repoUrl;
@@ -60,7 +68,18 @@ class GitRepoAccessResolver
             && ! isset($parts['port']);
     }
 
+    /**
+     * The tenant's connection for this repo's provider, with a usable (refreshed if
+     * need be) token -- or null when there is none. A connection whose refresh the
+     * provider rejected is deleted, so callers see exactly what they'd see had the
+     * tenant never connected: the dashboard asks them to connect again.
+     */
     public function connectionFor(string $repoUrl, Tenant $tenant): ?TenantGitConnection
+    {
+        return $this->freshConnection($repoUrl, $tenant);
+    }
+
+    private function freshConnection(string $repoUrl, Tenant $tenant): ?TenantGitConnection
     {
         $provider = $this->providers->forUrl($repoUrl);
 
@@ -68,9 +87,62 @@ class GitRepoAccessResolver
             return null;
         }
 
-        return TenantGitConnection::query()
+        $connection = TenantGitConnection::query()
             ->where('tenant_id', $tenant->id)
             ->where('provider', $provider->name())
             ->first();
+
+        if ($connection === null || ! $this->isExpired($connection)) {
+            return $connection;
+        }
+
+        // GitLab rotates the refresh_token on every use and revokes the old one, so two
+        // workers refreshing the same connection at once would have the loser's refresh
+        // rejected -- and a rejection deletes the connection. Serialize per connection,
+        // and re-read inside the lock: the winner may already have refreshed it.
+        try {
+            return Cache::lock("git_connection_refresh:{$connection->id}", 30)
+                ->block(15, fn () => $this->refreshIfStillExpired($provider, $connection));
+        } catch (LockTimeoutException) {
+            return null;
+        }
+    }
+
+    private function refreshIfStillExpired(GitProvider $provider, TenantGitConnection $stale): ?TenantGitConnection
+    {
+        $connection = $stale->fresh();
+
+        if ($connection === null || ! $this->isExpired($connection)) {
+            return $connection;
+        }
+
+        try {
+            $refreshed = $provider->refreshToken($connection);
+        } catch (GitTokenRefreshUnavailableException) {
+            // Transient (network/5xx): keep the connection for the next attempt, but
+            // don't hand out a token we know is expired. This call proceeds as if
+            // unconnected (a public repo still clones anonymously).
+            return null;
+        }
+
+        if ($refreshed === null) {
+            $connection->delete();
+
+            return null;
+        }
+
+        $connection->update([
+            'access_token' => $refreshed['access_token'],
+            'refresh_token' => $refreshed['refresh_token'] ?? $connection->refresh_token,
+            'expires_at' => $refreshed['expires_in'] !== null ? now()->addSeconds($refreshed['expires_in']) : null,
+        ]);
+
+        return $connection->fresh();
+    }
+
+    private function isExpired(TenantGitConnection $connection): bool
+    {
+        return $connection->expires_at !== null
+            && $connection->expires_at->lte(now()->addSeconds(self::EXPIRY_LEEWAY_SECONDS));
     }
 }

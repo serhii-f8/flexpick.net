@@ -5,6 +5,8 @@ namespace Tests\Feature\Services\GitProviders;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Services\GitProviders\GitRepoAccessResolver;
+use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\FeatureTest;
 
 class GitRepoAccessResolverTest extends FeatureTest
@@ -162,5 +164,133 @@ class GitRepoAccessResolverTest extends FeatureTest
 
         $this->assertSame('https://github.com:443/acme/app', $url);
         $this->assertStringNotContainsString('tenant-token-must-not-leak', $url);
+    }
+
+    /** @return array<string, array{string, string, string, string}> */
+    public static function refreshableProviders(): array
+    {
+        return [
+            'gitlab' => ['gitlab', 'https://gitlab.com/acme/app', 'gitlab.com/oauth/token', 'https://oauth2:'],
+            'bitbucket' => ['bitbucket', 'https://bitbucket.org/acme/app', 'bitbucket.org/site/oauth2/access_token', 'https://x-token-auth:'],
+        ];
+    }
+
+    #[DataProvider('refreshableProviders')]
+    public function test_an_expired_token_is_refreshed_and_persisted_before_use(string $provider, string $repoUrl, string $tokenEndpoint, string $clonePrefix): void
+    {
+        $this->freezeSecond();
+        $tenant = Tenant::factory()->create();
+        $connection = TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => $provider,
+            'access_token' => 'expired-access',
+            'refresh_token' => 'valid-refresh',
+            'expires_at' => now()->subMinute(),
+        ]);
+        Http::fake([$tokenEndpoint => Http::response(['access_token' => 'new-access', 'refresh_token' => 'new-refresh', 'expires_in' => 7200])]);
+
+        $url = app(GitRepoAccessResolver::class)->resolveCloneUrl($repoUrl, $tenant);
+
+        $this->assertSame($clonePrefix.'new-access@'.substr($repoUrl, strlen('https://')), $url);
+        $connection->refresh();
+        $this->assertSame('new-access', $connection->access_token);
+        $this->assertSame('new-refresh', $connection->refresh_token);
+        $this->assertTrue($connection->expires_at->equalTo(now()->addSeconds(7200)));
+        Http::assertSentCount(1);
+    }
+
+    #[DataProvider('refreshableProviders')]
+    public function test_a_refresh_that_omits_a_new_refresh_token_keeps_the_old_one(string $provider, string $repoUrl, string $tokenEndpoint): void
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => $provider, 'refresh_token' => 'kept-refresh', 'expires_at' => now()->subMinute(),
+        ]);
+        Http::fake([$tokenEndpoint => Http::response(['access_token' => 'new-access', 'expires_in' => 7200])]);
+
+        $found = app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant);
+
+        $this->assertSame('new-access', $found?->access_token);
+        $this->assertSame('kept-refresh', $found?->refresh_token);
+    }
+
+    #[DataProvider('refreshableProviders')]
+    public function test_a_rejected_refresh_deletes_the_connection_as_if_it_never_existed(string $provider, string $repoUrl, string $tokenEndpoint): void
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => $provider,
+            'access_token' => 'expired-access-must-not-leak',
+            'refresh_token' => 'revoked-refresh',
+            'expires_at' => now()->subMinute(),
+        ]);
+        Http::fake([$tokenEndpoint => Http::response(['error' => 'invalid_grant'], 400)]);
+
+        $url = app(GitRepoAccessResolver::class)->resolveCloneUrl($repoUrl, $tenant);
+
+        $this->assertSame($repoUrl, $url);
+        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
+        $this->assertNull(app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant));
+    }
+
+    #[DataProvider('refreshableProviders')]
+    public function test_a_401_from_the_token_endpoint_also_deletes_the_connection(string $provider, string $repoUrl, string $tokenEndpoint): void
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => $provider, 'refresh_token' => 'r', 'expires_at' => now()->subMinute(),
+        ]);
+        Http::fake([$tokenEndpoint => Http::response(['error' => 'invalid_client'], 401)]);
+
+        $this->assertNull(app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant));
+        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
+    }
+
+    #[DataProvider('refreshableProviders')]
+    public function test_a_token_that_has_not_expired_is_used_without_a_refresh(string $provider, string $repoUrl, string $tokenEndpoint, string $clonePrefix): void
+    {
+        Http::fake();
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => $provider,
+            'access_token' => 'still-valid',
+            'refresh_token' => 'valid-refresh',
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $url = app(GitRepoAccessResolver::class)->resolveCloneUrl($repoUrl, $tenant);
+
+        $this->assertSame($clonePrefix.'still-valid@'.substr($repoUrl, strlen('https://')), $url);
+        Http::assertNothingSent();
+    }
+
+    #[DataProvider('refreshableProviders')]
+    public function test_a_provider_outage_during_refresh_keeps_the_connection_but_withholds_the_expired_token(string $provider, string $repoUrl, string $tokenEndpoint): void
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => $provider,
+            'access_token' => 'expired-access-must-not-leak',
+            'refresh_token' => 'valid-refresh',
+            'expires_at' => now()->subMinute(),
+        ]);
+        Http::fake([$tokenEndpoint => Http::response(null, 503)]);
+
+        $url = app(GitRepoAccessResolver::class)->resolveCloneUrl($repoUrl, $tenant);
+
+        $this->assertSame($repoUrl, $url);
+        $this->assertDatabaseHas('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
+    }
+
+    public function test_an_expired_github_connection_cannot_be_refreshed_and_is_dropped(): void
+    {
+        Http::fake();
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'github', 'access_token' => 'expired-gh', 'expires_at' => now()->subMinute(),
+        ]);
+
+        $this->assertNull(app(GitRepoAccessResolver::class)->connectionFor('https://github.com/acme/app', $tenant));
+        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'github']);
+        Http::assertNothingSent();
     }
 }

@@ -9,6 +9,8 @@ use Throwable;
 
 class BitbucketProvider implements GitProvider
 {
+    use InterpretsTokenRefreshResponses;
+
     public function name(): string
     {
         return 'bitbucket';
@@ -54,6 +56,26 @@ class BitbucketProvider implements GitProvider
     public function cloneUrl(TenantGitConnection $connection, string $repoUrl): string
     {
         return 'https://x-token-auth:'.$connection->access_token.'@'.substr($repoUrl, strlen('https://'));
+    }
+
+    /**
+     * Bitbucket Cloud OAuth2 refresh_token grant: POST
+     * https://bitbucket.org/site/oauth2/access_token, HTTP Basic auth with the OAuth
+     * consumer's key:secret, form params grant_type=refresh_token and refresh_token.
+     */
+    public function refreshToken(TenantGitConnection $connection): ?array
+    {
+        if (blank($connection->refresh_token)) {
+            return null;
+        }
+
+        return $this->interpretRefreshResponse(fn () => Http::timeout(10)->connectTimeout(5)
+            ->asForm()
+            ->withBasicAuth((string) config('services.bitbucket.client_id'), (string) config('services.bitbucket.client_secret'))
+            ->post('https://bitbucket.org/site/oauth2/access_token', [
+                'grant_type' => 'refresh_token',
+                'refresh_token' => $connection->refresh_token,
+            ]));
     }
 
     /** @return array{workspace:string,slug:string}|null */

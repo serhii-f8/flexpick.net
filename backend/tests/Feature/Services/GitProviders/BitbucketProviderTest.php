@@ -2,8 +2,11 @@
 
 namespace Tests\Feature\Services\GitProviders;
 
+use App\Exceptions\GitTokenRefreshUnavailableException;
 use App\Models\TenantGitConnection;
 use App\Services\GitProviders\BitbucketProvider;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\FeatureTest;
 
@@ -87,5 +90,50 @@ class BitbucketProviderTest extends FeatureTest
         $provider->listBranches($connectionB, 'https://bitbucket.org/acme/app');
 
         Http::assertSentCount(2);
+    }
+
+    public function test_refresh_token_posts_the_refresh_grant_with_basic_auth_to_the_bitbucket_token_endpoint(): void
+    {
+        config()->set('services.bitbucket', ['client_id' => 'bb-key', 'client_secret' => 'bb-secret', 'redirect' => '/auth/bitbucket/callback']);
+        $connection = TenantGitConnection::factory()->make(['provider' => 'bitbucket', 'refresh_token' => 'bb-refresh-old']);
+        Http::fake(['bitbucket.org/site/oauth2/access_token' => Http::response([
+            'access_token' => 'bb-access-new', 'scopes' => 'repository', 'expires_in' => 7200, 'refresh_token' => 'bb-refresh-new', 'token_type' => 'bearer',
+        ])]);
+
+        $result = (new BitbucketProvider)->refreshToken($connection);
+
+        $this->assertSame(['access_token' => 'bb-access-new', 'refresh_token' => 'bb-refresh-new', 'expires_in' => 7200], $result);
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && $request->url() === 'https://bitbucket.org/site/oauth2/access_token'
+            && $request->isForm()
+            && $request->hasHeader('Authorization', 'Basic '.base64_encode('bb-key:bb-secret'))
+            && $request->data() === ['grant_type' => 'refresh_token', 'refresh_token' => 'bb-refresh-old']);
+    }
+
+    public function test_refresh_token_returns_null_when_bitbucket_rejects_the_grant(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['provider' => 'bitbucket', 'refresh_token' => 'revoked']);
+        Http::fake(['bitbucket.org/site/oauth2/access_token' => Http::response(['error' => 'invalid_grant'], 400)]);
+
+        $this->assertNull((new BitbucketProvider)->refreshToken($connection));
+    }
+
+    public function test_refresh_token_returns_null_without_a_request_when_no_refresh_token_is_on_file(): void
+    {
+        Http::fake();
+        $connection = TenantGitConnection::factory()->make(['provider' => 'bitbucket', 'refresh_token' => null]);
+
+        $this->assertNull((new BitbucketProvider)->refreshToken($connection));
+        Http::assertNothingSent();
+    }
+
+    public function test_refresh_token_reports_an_unreachable_endpoint_as_transient_not_as_a_rejection(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['provider' => 'bitbucket', 'refresh_token' => 'bb-refresh']);
+        Http::fake(fn () => throw new ConnectionException('timed out'));
+
+        $this->expectException(GitTokenRefreshUnavailableException::class);
+
+        (new BitbucketProvider)->refreshToken($connection);
     }
 }

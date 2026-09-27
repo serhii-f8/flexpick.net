@@ -56,6 +56,18 @@ class GitHubProvider implements GitProvider
         return 'https://x-access-token:'.$connection->access_token.'@'.substr($repoUrl, strlen('https://'));
     }
 
+    /**
+     * GitHub OAuth App tokens do not expire, so a GitHub connection never has an
+     * expires_at and this is never reached in practice. OAuth Apps have no
+     * refresh_token grant at all; should an expiring token ever appear (e.g. a future
+     * GitHub App migration), null makes the resolver drop the connection and ask the
+     * tenant to reconnect -- the safe outcome for a token we cannot renew.
+     */
+    public function refreshToken(TenantGitConnection $connection): ?array
+    {
+        return null;
+    }
+
     /** @return array{owner:string,name:string}|null */
     private function parseRepo(string $repoUrl): ?array
     {

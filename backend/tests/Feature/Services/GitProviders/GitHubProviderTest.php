@@ -85,4 +85,17 @@ class GitHubProviderTest extends FeatureTest
 
         $this->assertSame(['master', 'develop'], $branches);
     }
+
+    /**
+     * GitHub OAuth App tokens don't expire and OAuth Apps have no refresh_token grant:
+     * refresh is never possible, and null tells the resolver to drop the connection.
+     */
+    public function test_refresh_token_is_never_possible(): void
+    {
+        Http::fake();
+        $connection = TenantGitConnection::factory()->make(['refresh_token' => 'anything', 'expires_at' => now()->subHour()]);
+
+        $this->assertNull((new GitHubProvider)->refreshToken($connection));
+        Http::assertNothingSent();
+    }
 }
