@@ -38,6 +38,7 @@ class BitbucketProviderTest extends FeatureTest
 
         $this->assertSame(['main', 'develop'], $branches);
         Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer bb_tenant_token'));
+        Http::assertSent(fn ($request) => str_contains((string) $request->url(), 'pagelen=100'));
     }
 
     public function test_returns_empty_array_for_an_inaccessible_repo(): void

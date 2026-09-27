@@ -40,7 +40,7 @@ class BitbucketProvider implements GitProvider
                 try {
                     $response = Http::timeout(10)->connectTimeout(5)
                         ->withToken($connection->access_token)
-                        ->get("https://api.bitbucket.org/2.0/repositories/{$repo['workspace']}/{$repo['slug']}/refs/branches")
+                        ->get("https://api.bitbucket.org/2.0/repositories/{$repo['workspace']}/{$repo['slug']}/refs/branches", ['pagelen' => 100])
                         ->throw();
 
                     return collect($response->json('values'))->pluck('name')->filter()->values()->all();
