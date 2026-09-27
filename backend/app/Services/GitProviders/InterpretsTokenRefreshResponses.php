@@ -30,9 +30,20 @@ trait InterpretsTokenRefreshResponses
             throw new GitTokenRefreshUnavailableException("{$this->label()} token endpoint returned {$response->status()}");
         }
 
-        // RFC 6749 §5.2: a revoked/expired/invalid refresh_token is a 400 invalid_grant
-        // (401 for bad client credentials). Either way this token will never refresh.
         if (! $response->successful()) {
+            // RFC 6749 §5.2: only `invalid_grant` means THIS refresh_token is genuinely
+            // dead (expired, revoked, already used) -- that's the one case where deleting
+            // the tenant's connection is correct. Everything else -- invalid_client (our
+            // own client secret is wrong), a rate limit, a request timeout, or any other
+            // rejection -- is transient or on our side, and must not disconnect a tenant
+            // over it. A malformed/non-JSON error body (no `error` field at all, e.g. a
+            // plain-text 429 from a CDN) also falls through to transient here.
+            if ($response->json('error') !== 'invalid_grant') {
+                throw new GitTokenRefreshUnavailableException(
+                    "{$this->label()} token endpoint rejected the refresh (".($response->json('error') ?? (string) $response->status()).')'
+                );
+            }
+
             return null;
         }
 

@@ -233,7 +233,27 @@ class GitRepoAccessResolverTest extends FeatureTest
     }
 
     #[DataProvider('refreshableProviders')]
-    public function test_a_401_from_the_token_endpoint_also_deletes_the_connection(string $provider, string $repoUrl, string $tokenEndpoint): void
+    public function test_a_401_invalid_grant_still_deletes_the_connection(string $provider, string $repoUrl, string $tokenEndpoint): void
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => $provider, 'refresh_token' => 'r', 'expires_at' => now()->subMinute(),
+        ]);
+        // RFC 6749 §5.2 allows invalid_grant on either 400 or 401 -- the status code
+        // alone never decides this, only the `error` value does.
+        Http::fake([$tokenEndpoint => Http::response(['error' => 'invalid_grant'], 401)]);
+
+        $this->assertNull(app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant));
+        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
+    }
+
+    /**
+     * invalid_client means OUR client_id/secret is wrong -- not that the tenant's
+     * refresh_token is dead. Deleting the connection here would mass-disconnect
+     * every tenant on that provider over a config mistake on our side.
+     */
+    #[DataProvider('refreshableProviders')]
+    public function test_a_401_invalid_client_keeps_the_connection(string $provider, string $repoUrl, string $tokenEndpoint): void
     {
         $tenant = Tenant::factory()->create();
         TenantGitConnection::factory()->for($tenant)->create([
@@ -242,7 +262,7 @@ class GitRepoAccessResolverTest extends FeatureTest
         Http::fake([$tokenEndpoint => Http::response(['error' => 'invalid_client'], 401)]);
 
         $this->assertNull(app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant));
-        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
+        $this->assertDatabaseHas('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
     }
 
     #[DataProvider('refreshableProviders')]

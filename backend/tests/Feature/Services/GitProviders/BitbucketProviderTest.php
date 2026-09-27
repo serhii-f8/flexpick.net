@@ -136,4 +136,34 @@ class BitbucketProviderTest extends FeatureTest
 
         (new BitbucketProvider)->refreshToken($connection);
     }
+
+    /**
+     * A 429 (or any other 4xx that isn't the specific "this refresh_token is dead"
+     * rejection) must not delete the tenant's connection -- only RFC 6749 §5.2's
+     * `invalid_grant` means that.
+     */
+    public function test_refresh_token_reports_a_rate_limit_as_transient_not_as_a_rejection(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['provider' => 'bitbucket', 'refresh_token' => 'bb-refresh']);
+        Http::fake(['bitbucket.org/site/oauth2/access_token' => Http::response(null, 429)]);
+
+        $this->expectException(GitTokenRefreshUnavailableException::class);
+
+        (new BitbucketProvider)->refreshToken($connection);
+    }
+
+    /**
+     * invalid_client means OUR consumer key/secret is wrong, not that the
+     * tenant's refresh_token is dead -- deleting the connection would be
+     * wrong and would mass-disconnect every tenant on a config mistake.
+     */
+    public function test_refresh_token_reports_invalid_client_as_transient_not_as_a_rejection(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['provider' => 'bitbucket', 'refresh_token' => 'bb-refresh']);
+        Http::fake(['bitbucket.org/site/oauth2/access_token' => Http::response(['error' => 'invalid_client'], 401)]);
+
+        $this->expectException(GitTokenRefreshUnavailableException::class);
+
+        (new BitbucketProvider)->refreshToken($connection);
+    }
 }
