@@ -678,6 +678,46 @@ class BitbucketProviderTest extends FeatureTest
 
         $this->assertSame([], (new BitbucketProvider)->listBranches($connection, 'https://bitbucket.org/acme/private'));
     }
+
+    public function test_returns_branches_for_repo_with_dotted_name_without_git_suffix(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['access_token' => 'bb_tenant_token']);
+        Http::fake(['api.bitbucket.org/2.0/repositories/acme/vue.js/refs/branches*' => Http::response([
+            'values' => [['name' => 'main']],
+        ])]);
+
+        $branches = (new BitbucketProvider)->listBranches($connection, 'https://bitbucket.org/acme/vue.js');
+
+        $this->assertSame(['main'], $branches);
+    }
+
+    public function test_returns_branches_for_repo_with_dotted_name_and_git_suffix(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['access_token' => 'bb_tenant_token']);
+        Http::fake(['api.bitbucket.org/2.0/repositories/acme/vue.js/refs/branches*' => Http::response([
+            'values' => [['name' => 'main']],
+        ])]);
+
+        $branches = (new BitbucketProvider)->listBranches($connection, 'https://bitbucket.org/acme/vue.js.git');
+
+        $this->assertSame(['main'], $branches);
+    }
+
+    public function test_caches_branches_per_connection(): void
+    {
+        $connectionA = TenantGitConnection::factory()->make(['id' => 1, 'access_token' => 'token-a']);
+        $connectionB = TenantGitConnection::factory()->make(['id' => 2, 'access_token' => 'token-b']);
+        Http::fake(['api.bitbucket.org/2.0/repositories/acme/app/refs/branches*' => Http::response([
+            'values' => [['name' => 'main']],
+        ])]);
+
+        $provider = new BitbucketProvider;
+        $provider->listBranches($connectionA, 'https://bitbucket.org/acme/app');
+        $provider->listBranches($connectionA, 'https://bitbucket.org/acme/app');
+        $provider->listBranches($connectionB, 'https://bitbucket.org/acme/app');
+
+        Http::assertSentCount(2);
+    }
 }
 ```
 
