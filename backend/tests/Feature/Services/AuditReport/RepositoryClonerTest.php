@@ -6,6 +6,7 @@ use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Services\AuditReport\RepositoryCloner;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Tests\Feature\FeatureTest;
@@ -38,33 +39,144 @@ class RepositoryClonerTest extends FeatureTest
         $this->addToAssertionCount(1); // no exception thrown
     }
 
-    public function test_preflight_throws_when_a_connected_provider_host_has_no_tenant_connection(): void
+    /**
+     * No connection is not a denial: git is handed the raw, unauthenticated URL, and
+     * a private repo fails through the ordinary not-reachable path.
+     */
+    public function test_preflight_without_a_connection_runs_git_anonymously_and_fails_as_unreachable(): void
     {
+        Process::fake(['*' => Process::result(exitCode: 128)]);
         $tenant = Tenant::factory()->create();
 
-        $this->expectException(AuditNotAnalyzableException::class);
-        $this->expectExceptionMessage('Connect your GitHub account to audit this repository.');
+        try {
+            app(RepositoryCloner::class)->preflight('https://github.com/acme/private', tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertTrue($e->accessDenied);
+            $this->assertStringContainsString('Repository is not publicly accessible', $e->getMessage());
+        }
 
-        app(RepositoryCloner::class)->preflight('https://github.com/acme/private', tenant: $tenant);
+        Process::assertRan(fn (PendingProcess $process) => $process->command === [
+            'git', 'ls-remote', '--exit-code', 'https://github.com/acme/private', 'HEAD',
+        ]);
     }
 
     /**
-     * The security fix, exercised through the real preflight path: Tenant B
-     * cannot reach a repo using Tenant A's connection.
+     * The regression this design guards against: a tenant-stamped request for a public
+     * repo must still go through, anonymously, with no connection on file.
+     */
+    public function test_preflight_without_a_connection_succeeds_for_a_public_repo(): void
+    {
+        Process::fake(['*' => Process::result(output: "abc123\tHEAD\n")]);
+        $tenant = Tenant::factory()->create();
+
+        app(RepositoryCloner::class)->preflight('https://github.com/acme/public', tenant: $tenant);
+
+        Process::assertRan(fn (PendingProcess $process) => in_array('https://github.com/acme/public', $process->command, true));
+    }
+
+    /**
+     * The security fix, exercised through the real preflight path: Tenant B's git
+     * command never carries Tenant A's token.
      */
     public function test_preflight_does_not_leak_another_tenants_connection(): void
     {
+        Process::fake(['*' => Process::result(exitCode: 128)]);
         $tenantA = Tenant::factory()->create();
         $tenantB = Tenant::factory()->create();
-        TenantGitConnection::factory()->for($tenantA)->create(['provider' => 'github']);
+        TenantGitConnection::factory()->for($tenantA)->create([
+            'provider' => 'github',
+            'access_token' => 'ghp_tenant_a_secret_token',
+        ]);
 
-        $this->expectException(AuditNotAnalyzableException::class);
+        try {
+            app(RepositoryCloner::class)->preflight('https://github.com/acme/app', tenant: $tenantB);
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException) {
+            // expected: B has no connection, and the repo is private
+        }
 
-        app(RepositoryCloner::class)->preflight('https://github.com/acme/app', tenant: $tenantB);
+        Process::assertRan(fn (PendingProcess $process) => in_array('https://github.com/acme/app', $process->command, true));
+        Process::assertDidntRun(fn (PendingProcess $process) => str_contains(implode(' ', (array) $process->command), 'ghp_tenant_a_secret_token'));
     }
 
-    public function test_remote_head_sha_returns_null_instead_of_throwing_when_no_connection_exists(): void
+    public function test_preflight_hands_git_the_connected_tenants_authenticated_url(): void
     {
+        Process::fake(['*' => Process::result(output: "abc123\tHEAD\n")]);
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'github',
+            'access_token' => 'ghp_connected_tenant_token',
+        ]);
+
+        app(RepositoryCloner::class)->preflight('https://github.com/acme/private', tenant: $tenant);
+
+        Process::assertRan(fn (PendingProcess $process) => $process->command === [
+            'git', 'ls-remote', '--exit-code', 'https://x-access-token:ghp_connected_tenant_token@github.com/acme/private', 'HEAD',
+        ]);
+    }
+
+    public function test_clone_hands_git_the_connected_tenants_authenticated_url(): void
+    {
+        Process::fake(['*' => Process::result()]);
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab',
+            'access_token' => 'glpat-connected-tenant-token',
+        ]);
+        $uuid = 'test-clone-auth-'.uniqid();
+        $cloner = app(RepositoryCloner::class);
+
+        try {
+            $cloner->clone('https://gitlab.com/acme/private', $uuid, tenant: $tenant);
+        } finally {
+            $cloner->cleanup($uuid);
+        }
+
+        Process::assertRan(fn (PendingProcess $process) => ($process->command[1] ?? null) === 'clone'
+            && str_contains(implode(' ', (array) $process->command), 'glpat-connected-tenant-token@gitlab.com/acme/private'));
+    }
+
+    /**
+     * Failure messages are built from the raw URL (redactUrl($url)), never from the
+     * resolved, credentialed one -- they end up in pipeline logs, the admin
+     * notification and the customer email.
+     */
+    public function test_token_never_leaks_into_exception_messages(): void
+    {
+        Process::fake(['*' => Process::result(exitCode: 128)]);
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'github',
+            'access_token' => 'ghp_secret_connected_token',
+        ]);
+        $cloner = app(RepositoryCloner::class);
+
+        try {
+            $cloner->preflight('https://github.com/acme/private', tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException from preflight()');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertStringNotContainsString('ghp_secret_connected_token', $e->getMessage());
+        }
+
+        $uuid = 'test-clone-leak-'.uniqid();
+
+        try {
+            $cloner->clone('https://github.com/acme/private', $uuid, tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException from clone()');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertStringNotContainsString('ghp_secret_connected_token', $e->getMessage());
+        } finally {
+            $cloner->cleanup($uuid);
+        }
+
+        // Proves the token really was in play -- otherwise the assertions above are vacuous.
+        Process::assertRan(fn (PendingProcess $process) => str_contains(implode(' ', (array) $process->command), 'ghp_secret_connected_token'));
+    }
+
+    public function test_remote_head_sha_returns_null_when_no_connection_exists_and_the_repo_is_private(): void
+    {
+        Process::fake(['*' => Process::result(exitCode: 128)]);
         $tenant = Tenant::factory()->create();
 
         $sha = app(RepositoryCloner::class)->remoteHeadSha('https://github.com/acme/private', tenant: $tenant);

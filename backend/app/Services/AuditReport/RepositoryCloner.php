@@ -65,17 +65,13 @@ class RepositoryCloner
 
     /**
      * The current SHA of a remote ref, without cloning. `null` on any
-     * failure (unreachable host, private repo, no git connection, network
-     * error) -- callers (ScheduledAuditChangeChecker) must treat that as
-     * "unknown," never as "unchanged."
+     * failure (unreachable host, private repo with no git connection,
+     * network error) -- callers (ScheduledAuditChangeChecker) must treat
+     * that as "unknown," never as "unchanged."
      */
     public function remoteHeadSha(string $url, ?string $branch = null, ?Tenant $tenant = null): ?string
     {
-        try {
-            $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
-        } catch (AuditNotAnalyzableException) {
-            return null;
-        }
+        $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
 
         $ref = $branch !== null ? 'refs/heads/'.$branch : 'HEAD';
 

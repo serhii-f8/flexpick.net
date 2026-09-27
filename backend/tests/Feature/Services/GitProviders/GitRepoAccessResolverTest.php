@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Services\GitProviders;
 
-use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Services\GitProviders\GitRepoAccessResolver;
@@ -23,14 +22,17 @@ class GitRepoAccessResolverTest extends FeatureTest
         $this->assertSame('https://x-access-token:ghp_tenant_token@github.com/acme/app', $url);
     }
 
-    public function test_throws_when_the_tenant_has_no_connection_for_that_provider(): void
+    /**
+     * A miss is not a denial: the URL passes through unauthenticated, so a public repo
+     * still clones anonymously and a private one fails git's own reachability check.
+     */
+    public function test_returns_the_url_unchanged_when_the_tenant_has_no_connection_for_that_provider(): void
     {
         $tenant = Tenant::factory()->create();
 
-        $this->expectException(AuditNotAnalyzableException::class);
-        $this->expectExceptionMessage('Connect your GitHub account to audit this repository.');
+        $url = app(GitRepoAccessResolver::class)->resolveCloneUrl('https://github.com/acme/app', $tenant);
 
-        app(GitRepoAccessResolver::class)->resolveCloneUrl('https://github.com/acme/app', $tenant);
+        $this->assertSame('https://github.com/acme/app', $url);
     }
 
     /**
@@ -47,9 +49,10 @@ class GitRepoAccessResolverTest extends FeatureTest
             'access_token' => 'tenant-a-token',
         ]);
 
-        $this->expectException(AuditNotAnalyzableException::class);
+        $urlForB = app(GitRepoAccessResolver::class)->resolveCloneUrl('https://github.com/acme/private', $tenantB);
 
-        app(GitRepoAccessResolver::class)->resolveCloneUrl('https://github.com/acme/private', $tenantB);
+        $this->assertStringNotContainsString('tenant-a-token', $urlForB);
+        $this->assertSame('https://github.com/acme/private', $urlForB);
     }
 
     public function test_returns_the_url_unchanged_when_no_tenant_is_given(): void
@@ -119,14 +122,18 @@ class GitRepoAccessResolverTest extends FeatureTest
         $this->assertStringNotContainsString('tenant-a-token', $urlForB);
     }
 
-    public function test_throws_when_tenant_has_a_connection_for_a_different_provider(): void
+    public function test_returns_the_url_unchanged_when_tenant_has_a_connection_for_a_different_provider(): void
     {
         $tenant = Tenant::factory()->create();
-        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'gitlab']);
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab',
+            'access_token' => 'glpat-gitlab-only-token',
+        ]);
 
-        $this->expectException(AuditNotAnalyzableException::class);
+        $url = app(GitRepoAccessResolver::class)->resolveCloneUrl('https://github.com/acme/app', $tenant);
 
-        app(GitRepoAccessResolver::class)->resolveCloneUrl('https://github.com/acme/app', $tenant);
+        $this->assertSame('https://github.com/acme/app', $url);
+        $this->assertStringNotContainsString('glpat-gitlab-only-token', $url);
     }
 
     public function test_a_url_with_embedded_userinfo_is_never_given_a_connections_token(): void

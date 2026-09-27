@@ -119,10 +119,15 @@ class AuditRequestService
         try {
             $this->cloner->preflight($auditRequest->repo_url, tenant: $auditRequest->tenant);
         } catch (AuditNotAnalyzableException $e) {
-            // Anonymous on purpose: our token reads every customer's private
-            // repos, so a landing visitor must not be able to aim it at one.
-            // Nothing was spent yet, so closing refunds nothing; the email
-            // sends them to the dashboard to run it again once we have access.
+            // A tenantless landing request probes anonymously; a tenant-stamped
+            // one (returning customer) uses that tenant's own connection if it
+            // has one. No proactive connection gate here -- a public repo
+            // succeeds either way; a private one without a connection fails
+            // through the same not-reachable path as any other unreachable
+            // repo. The dashboard is where we gate before charging
+            // (AuditReports::launchAudit()). Nothing was spent yet, so closing
+            // refunds nothing; the email sends them to the dashboard to run
+            // it again once they have connected their account.
             $this->closeNotAnalyzable($auditRequest, $e->getMessage(), $e->accessDenied);
             $this->notifyAdmin($auditRequest);
 
