@@ -5,8 +5,11 @@ namespace App\Services\AuditReport;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\Tenant;
 use App\Services\GitProviders\GitRepoAccessResolver;
+use Closure;
+use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Throwable;
 
 class RepositoryCloner
 {
@@ -14,11 +17,13 @@ class RepositoryCloner
 
     public function preflight(string $url, ?Tenant $tenant = null): void
     {
-        $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
-
-        $result = Process::timeout(config('audit.preflight_timeout'))
-            ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run(['git', 'ls-remote', '--exit-code', $resolvedUrl, 'HEAD']);
+        $result = $this->runGit(
+            $url,
+            $tenant,
+            config('audit.preflight_timeout'),
+            fn (string $resolvedUrl) => ['git', 'ls-remote', '--exit-code', $resolvedUrl, 'HEAD'],
+            'Repository could not be reached: ',
+        );
 
         if (! $result->successful()) {
             throw AuditNotAnalyzableException::accessDenied(
@@ -29,7 +34,6 @@ class RepositoryCloner
 
     public function clone(string $url, string $uuid, ?Tenant $tenant = null, ?string $branch = null): string
     {
-        $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
         $path = $this->workdirPath($uuid);
         File::ensureDirectoryExists(dirname($path));
 
@@ -38,12 +42,20 @@ class RepositoryCloner
             $command[] = '--branch';
             $command[] = $branch;
         }
-        $command[] = $resolvedUrl;
-        $command[] = $path;
 
-        $result = Process::timeout(config('audit.clone_timeout'))
-            ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run($command);
+        try {
+            $result = $this->runGit(
+                $url,
+                $tenant,
+                config('audit.clone_timeout'),
+                fn (string $resolvedUrl) => [...$command, $resolvedUrl, $path],
+                'Repository could not be cloned: ',
+            );
+        } catch (AuditNotAnalyzableException $e) {
+            $this->cleanup($uuid);
+
+            throw $e;
+        }
 
         if (! $result->successful()) {
             $this->cleanup($uuid);
@@ -71,13 +83,19 @@ class RepositoryCloner
      */
     public function remoteHeadSha(string $url, ?string $branch = null, ?Tenant $tenant = null): ?string
     {
-        $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
-
         $ref = $branch !== null ? 'refs/heads/'.$branch : 'HEAD';
 
-        $result = Process::timeout(config('audit.preflight_timeout'))
-            ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run(['git', 'ls-remote', $resolvedUrl, $ref]);
+        try {
+            $result = $this->runGit(
+                $url,
+                $tenant,
+                config('audit.preflight_timeout'),
+                fn (string $resolvedUrl) => ['git', 'ls-remote', $resolvedUrl, $ref],
+                'Repository could not be reached: ',
+            );
+        } catch (AuditNotAnalyzableException) {
+            return null;
+        }
 
         if (! $result->successful()) {
             return null;
@@ -87,6 +105,33 @@ class RepositoryCloner
         $sha = strtok($firstLine, "\t ");
 
         return $sha !== false && $sha !== '' ? $sha : null;
+    }
+
+    /**
+     * Resolve the (possibly credentialed) URL and run git against it, converting ANY
+     * throwable into an AuditNotAnalyzableException whose message is built from the raw,
+     * redacted URL alone.
+     *
+     * The resolved URL carries the tenant's real token, and a process timeout throws
+     * ProcessTimedOutException whose message is the full command line -- token included.
+     * Left alone, that message would reach failure_reason, the pipeline log, funnel events,
+     * Sentry and the audit timeline every workspace member sees. The caught exception is
+     * deliberately neither used for the message nor chained as `previous`. The same guard
+     * covers resolution failures (e.g. a DecryptException after an APP_KEY rotation).
+     *
+     * @param  Closure(string): list<string>  $command  builds the argv from the resolved URL
+     */
+    private function runGit(string $url, ?Tenant $tenant, mixed $timeout, Closure $command, string $failurePrefix): ProcessResult
+    {
+        try {
+            $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
+
+            return Process::timeout((int) $timeout)
+                ->env(['GIT_TERMINAL_PROMPT' => '0'])
+                ->run($command($resolvedUrl));
+        } catch (Throwable) {
+            throw new AuditNotAnalyzableException($failurePrefix.$this->redactUrl($url));
+        }
     }
 
     public function sizeKb(string $path): int

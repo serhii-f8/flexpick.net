@@ -6,9 +6,14 @@ use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Services\AuditReport\RepositoryCloner;
+use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Process\PendingProcess;
+use Illuminate\Process\ProcessResult;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Symfony\Component\Process\Exception\ProcessTimedOutException as SymfonyProcessTimedOutException;
+use Symfony\Component\Process\Process as SymfonyProcess;
 use Tests\Feature\FeatureTest;
 
 class RepositoryClonerTest extends FeatureTest
@@ -189,5 +194,107 @@ class RepositoryClonerTest extends FeatureTest
         $sha = app(RepositoryCloner::class)->remoteHeadSha('file://'.$this->fixtureRepo);
 
         $this->assertNotNull($sha);
+    }
+
+    /**
+     * A real ProcessTimedOutException, built exactly the way PendingProcess::run() builds
+     * one: its message is the full command line, credentialed URL and all.
+     */
+    private function fakeProcessTimeout(): void
+    {
+        Process::fake(function (PendingProcess $process) {
+            $symfonyProcess = new SymfonyProcess((array) $process->command);
+
+            throw new ProcessTimedOutException(
+                new SymfonyProcessTimedOutException($symfonyProcess, SymfonyProcessTimedOutException::TYPE_GENERAL),
+                new ProcessResult($symfonyProcess),
+            );
+        });
+    }
+
+    private function tenantWithConnectedToken(string $token): Tenant
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github', 'access_token' => $token]);
+
+        return $tenant;
+    }
+
+    public function test_the_faked_timeout_message_really_embeds_the_command_line(): void
+    {
+        $this->fakeProcessTimeout();
+
+        try {
+            Process::run(['git', 'ls-remote', 'https://x-access-token:ghp_probe@github.com/acme/app']);
+            $this->fail('Expected ProcessTimedOutException');
+        } catch (ProcessTimedOutException $e) {
+            // Guards the tests below against passing vacuously.
+            $this->assertStringContainsString('ghp_probe', $e->getMessage());
+        }
+    }
+
+    public function test_a_preflight_timeout_never_leaks_the_token(): void
+    {
+        $this->fakeProcessTimeout();
+        $tenant = $this->tenantWithConnectedToken('ghp_timeout_secret_token');
+
+        try {
+            app(RepositoryCloner::class)->preflight('https://github.com/acme/private', tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertSame('Repository could not be reached: https://github.com/acme/private', $e->getMessage());
+            $this->assertNull($e->getPrevious());
+        }
+    }
+
+    public function test_a_clone_timeout_never_leaks_the_token_and_cleans_up(): void
+    {
+        $this->fakeProcessTimeout();
+        $tenant = $this->tenantWithConnectedToken('ghp_timeout_secret_token');
+        $uuid = 'test-clone-timeout-'.uniqid();
+        $cloner = app(RepositoryCloner::class);
+
+        try {
+            $cloner->clone('https://github.com/acme/private', $uuid, tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertStringNotContainsString('ghp_timeout_secret_token', $e->getMessage());
+            $this->assertStringContainsString('https://github.com/acme/private', $e->getMessage());
+            $this->assertNull($e->getPrevious());
+        } finally {
+            $cloner->cleanup($uuid);
+        }
+
+        $this->assertDirectoryDoesNotExist(rtrim(config('audit.workdir'), '/').'/'.$uuid);
+    }
+
+    public function test_a_remote_head_sha_timeout_returns_null_instead_of_throwing(): void
+    {
+        $this->fakeProcessTimeout();
+        $tenant = $this->tenantWithConnectedToken('ghp_timeout_secret_token');
+
+        $this->assertNull(app(RepositoryCloner::class)->remoteHeadSha('https://github.com/acme/private', tenant: $tenant));
+    }
+
+    /**
+     * A corrupted/rotated APP_KEY makes decrypting the stored token throw; that must take
+     * the same not-analyzable path, never escape as a raw exception.
+     */
+    public function test_an_undecryptable_token_is_reported_as_not_analyzable(): void
+    {
+        Process::fake();
+        $tenant = Tenant::factory()->create();
+        $connection = TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
+        DB::table('tenant_git_connections')->where('id', $connection->id)->update(['access_token' => 'not-a-valid-ciphertext']);
+
+        try {
+            app(RepositoryCloner::class)->preflight('https://github.com/acme/private', tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertSame('Repository could not be reached: https://github.com/acme/private', $e->getMessage());
+        }
+
+        $this->assertNull(app(RepositoryCloner::class)->remoteHeadSha('https://github.com/acme/private', tenant: $tenant));
+        Process::assertNothingRan();
     }
 }
