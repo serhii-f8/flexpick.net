@@ -21,6 +21,8 @@ class TenantGitConnection extends Model
         'connected_at',
     ];
 
+    protected $hidden = ['access_token', 'refresh_token'];
+
     protected function casts(): array
     {
         return [
