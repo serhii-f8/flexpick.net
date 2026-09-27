@@ -1,4 +1,16 @@
 <x-filament-panels::page>
+    @if (session('status'))
+        <div role="status" class="rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-medium text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
+            {{ session('status') }}
+        </div>
+    @endif
+
+    @if ($errors->has('git_connection'))
+        <div role="alert" class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+            {{ $errors->first('git_connection') }}
+        </div>
+    @endif
+
     <div class="grid gap-4 md:grid-cols-3">
         @foreach ($this->connections() as $provider => $connection)
             <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">

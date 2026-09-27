@@ -129,4 +129,43 @@ class GitConnectionOAuthTest extends FeatureTest
 
         $response->assertForbidden();
     }
+
+    public function test_a_successful_connect_shows_a_correctly_capitalized_success_message_on_the_page(): void
+    {
+        $user = User::factory()->create();
+        $tenant = Tenant::factory()->create();
+        $tenant->users()->attach($user);
+
+        $socialiteUser = (new SocialiteUser)->setRaw([])->map(['nickname' => 'octocat', 'token' => 'glpat_callback_token']);
+        Socialite::shouldReceive('driver')->with('gitlab')->andReturnSelf();
+        Socialite::shouldReceive('user')->andReturn($socialiteUser);
+
+        $response = $this->actingAs($user)
+            ->withSession(['git_connection_tenant_id' => $tenant->id])
+            ->get('/auth/gitlab/callback');
+
+        $response->assertSessionHas('status', 'GitLab connected.');
+
+        $this->get($response->headers->get('Location'))
+            ->assertOk()
+            ->assertSee('GitLab connected.');
+    }
+
+    public function test_a_declined_grant_shows_the_error_message_on_the_page(): void
+    {
+        $user = User::factory()->create();
+        $tenant = Tenant::factory()->create();
+        $tenant->users()->attach($user);
+
+        Socialite::shouldReceive('driver')->with('github')->andReturnSelf();
+        Socialite::shouldReceive('user')->andThrow(new \Exception('access_denied'));
+
+        $response = $this->actingAs($user)
+            ->withSession(['git_connection_tenant_id' => $tenant->id])
+            ->get('/auth/github/callback');
+
+        $this->get($response->headers->get('Location'))
+            ->assertOk()
+            ->assertSee('Connection was cancelled or failed. Please try again.');
+    }
 }

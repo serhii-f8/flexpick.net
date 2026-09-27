@@ -215,7 +215,9 @@ class OAuthController extends RegisterController
 
         app(GitConnectionService::class)->store($tenant, Auth::user(), $provider, $oauthUser);
 
+        $label = app(GitProviderResolver::class)->forProviderName($provider)->label();
+
         return redirect()->route('filament.dashboard.pages.git-connections', ['tenant' => $tenant])
-            ->with('status', __(':provider connected.', ['provider' => ucfirst($provider)]));
+            ->with('status', __(':provider connected.', ['provider' => $label]));
     }
 }
