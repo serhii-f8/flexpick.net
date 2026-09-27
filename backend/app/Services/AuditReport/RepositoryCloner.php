@@ -3,16 +3,22 @@
 namespace App\Services\AuditReport;
 
 use App\Exceptions\AuditNotAnalyzableException;
+use App\Models\Tenant;
+use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
 class RepositoryCloner
 {
-    public function preflight(string $url, bool $useToken = true): void
+    public function __construct(private GitRepoAccessResolver $accessResolver) {}
+
+    public function preflight(string $url, ?Tenant $tenant = null): void
     {
+        $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
+
         $result = Process::timeout(config('audit.preflight_timeout'))
             ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run(['git', 'ls-remote', '--exit-code', $useToken ? $this->authenticatedUrl($url) : $url, 'HEAD']);
+            ->run(['git', 'ls-remote', '--exit-code', $resolvedUrl, 'HEAD']);
 
         if (! $result->successful()) {
             throw AuditNotAnalyzableException::accessDenied(
@@ -21,8 +27,9 @@ class RepositoryCloner
         }
     }
 
-    public function clone(string $url, string $uuid, ?string $branch = null): string
+    public function clone(string $url, string $uuid, ?Tenant $tenant = null, ?string $branch = null): string
     {
+        $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
         $path = $this->workdirPath($uuid);
         File::ensureDirectoryExists(dirname($path));
 
@@ -31,7 +38,7 @@ class RepositoryCloner
             $command[] = '--branch';
             $command[] = $branch;
         }
-        $command[] = $this->authenticatedUrl($url);
+        $command[] = $resolvedUrl;
         $command[] = $path;
 
         $result = Process::timeout(config('audit.clone_timeout'))
@@ -58,17 +65,23 @@ class RepositoryCloner
 
     /**
      * The current SHA of a remote ref, without cloning. `null` on any
-     * failure (unreachable host, private repo, network error) -- callers
-     * (ScheduledAuditChangeChecker) must treat that as "unknown," never as
-     * "unchanged."
+     * failure (unreachable host, private repo, no git connection, network
+     * error) -- callers (ScheduledAuditChangeChecker) must treat that as
+     * "unknown," never as "unchanged."
      */
-    public function remoteHeadSha(string $url, ?string $branch = null): ?string
+    public function remoteHeadSha(string $url, ?string $branch = null, ?Tenant $tenant = null): ?string
     {
+        try {
+            $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
+        } catch (AuditNotAnalyzableException) {
+            return null;
+        }
+
         $ref = $branch !== null ? 'refs/heads/'.$branch : 'HEAD';
 
         $result = Process::timeout(config('audit.preflight_timeout'))
             ->env(['GIT_TERMINAL_PROMPT' => '0'])
-            ->run(['git', 'ls-remote', $this->authenticatedUrl($url), $ref]);
+            ->run(['git', 'ls-remote', $resolvedUrl, $ref]);
 
         if (! $result->successful()) {
             return null;
@@ -107,16 +120,5 @@ class RepositoryCloner
     private function redactUrl(string $url): string
     {
         return preg_replace('#//[^/@]+@#', '//', $url) ?? $url;
-    }
-
-    private function authenticatedUrl(string $url): string
-    {
-        $token = config('audit.github_token');
-
-        if (! $token || ! str_starts_with($url, 'https://github.com/')) {
-            return $url;
-        }
-
-        return 'https://x-access-token:'.$token.'@'.substr($url, strlen('https://'));
     }
 }

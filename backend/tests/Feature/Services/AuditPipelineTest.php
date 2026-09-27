@@ -24,7 +24,9 @@ use App\Services\AuditReport\Scanners\ScannerRun;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
 use App\Services\AuditReport\ScoreCalculator;
 use App\Services\AuditRequestService;
+use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Support\Facades\Mail;
+use Mockery;
 use Tests\Feature\FeatureTest;
 use Tests\Support\FakeAiAnalyzer;
 use Tests\Support\RunsAuditPipelineWithFakes;
@@ -90,14 +92,18 @@ class AuditPipelineTest extends FeatureTest
             'status' => AuditRequestStatus::QUEUED->value,
         ]);
 
-        $this->partialMock(RepositoryCloner::class, function ($mock) use ($request) {
-            $mock->shouldReceive('clone')
-                ->once()
-                ->withArgs(fn (string $url, string $uuid, ?string $branch) => $url === $request->repo_url
-                    && $uuid === $request->uuid
-                    && $branch === 'main')
-                ->passthru();
-        });
+        // A plain partialMock() would build RepositoryCloner without running its
+        // constructor, leaving the injected GitRepoAccessResolver uninitialized
+        // -- fatal the moment passthru() reaches the real clone() body. Supply
+        // the real dependency explicitly so the mock is a genuine instance.
+        $mock = Mockery::mock(RepositoryCloner::class, [app(GitRepoAccessResolver::class)])->makePartial();
+        $mock->shouldReceive('clone')
+            ->once()
+            ->withArgs(fn (string $url, string $uuid, $tenant, ?string $branch) => $url === $request->repo_url
+                && $uuid === $request->uuid
+                && $branch === 'main')
+            ->passthru();
+        $this->instance(RepositoryCloner::class, $mock);
 
         (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
 

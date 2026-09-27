@@ -222,7 +222,7 @@ class AuditReports extends Page
         // reach would only become a closed, refunded request, so tell the
         // customer how to grant access right here instead.
         try {
-            app(RepositoryCloner::class)->preflight($repoUrl);
+            app(RepositoryCloner::class)->preflight($repoUrl, tenant: $tenant);
         } catch (AuditNotAnalyzableException) {
             Notification::make()
                 ->title(__("We can't reach this repository yet"))

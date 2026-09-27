@@ -117,7 +117,7 @@ class AuditRequestService
         }
 
         try {
-            $this->cloner->preflight($auditRequest->repo_url, useToken: false);
+            $this->cloner->preflight($auditRequest->repo_url, tenant: $auditRequest->tenant);
         } catch (AuditNotAnalyzableException $e) {
             // Anonymous on purpose: our token reads every customer's private
             // repos, so a landing visitor must not be able to aim it at one.

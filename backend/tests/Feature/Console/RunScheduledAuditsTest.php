@@ -8,6 +8,7 @@ use App\Jobs\GenerateAuditReport;
 use App\Models\AuditRequest;
 use App\Models\AuditSchedule;
 use App\Models\AuditScheduleRun;
+use App\Models\TenantGitConnection;
 use App\Services\AuditReport\AuditEntitlementService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Process;
@@ -134,6 +135,7 @@ class RunScheduledAuditsTest extends FeatureTest
         Process::fake(['*' => Process::result(output: "sha-same\tHEAD\n")]);
         Queue::fake();
         [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
 
         $schedule = AuditSchedule::create([
             'user_id' => $user->id,
@@ -162,6 +164,7 @@ class RunScheduledAuditsTest extends FeatureTest
         Process::fake(['*' => Process::result(output: "sha-new\tHEAD\n")]);
         Queue::fake();
         [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
 
         $schedule = AuditSchedule::create([
             'user_id' => $user->id,
@@ -221,6 +224,7 @@ class RunScheduledAuditsTest extends FeatureTest
         Process::fake(['*' => Process::result(output: "sha-same\tHEAD\n")]);
         Queue::fake();
         [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github']);
 
         $schedule = AuditSchedule::create([
             'user_id' => $user->id,

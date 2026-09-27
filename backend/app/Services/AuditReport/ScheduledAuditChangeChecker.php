@@ -10,7 +10,7 @@ class ScheduledAuditChangeChecker
 
     public function check(AuditSchedule $schedule): ChangeCheckResult
     {
-        $sha = $this->cloner->remoteHeadSha($schedule->repo_url, $schedule->branch);
+        $sha = $this->cloner->remoteHeadSha($schedule->repo_url, $schedule->branch, tenant: $schedule->tenant);
 
         // Fail open: an unreadable SHA (network error, transient outage) is
         // indistinguishable here from "definitely changed" -- both must let

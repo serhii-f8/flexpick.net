@@ -3,6 +3,7 @@
 namespace Tests\Feature\Services;
 
 use App\Models\AuditSchedule;
+use App\Models\TenantGitConnection;
 use App\Services\AuditReport\ScheduledAuditChangeChecker;
 use Illuminate\Support\Facades\Process;
 use Tests\Feature\FeatureTest;
@@ -13,6 +14,7 @@ class ScheduledAuditChangeCheckerTest extends FeatureTest
     {
         Process::fake(['*' => Process::result(output: "sha123\tHEAD\n")]);
         $schedule = AuditSchedule::factory()->make(['last_commit_sha' => 'sha123']);
+        TenantGitConnection::factory()->for($schedule->tenant)->create(['provider' => 'github']);
 
         $result = app(ScheduledAuditChangeChecker::class)->check($schedule);
 
@@ -24,6 +26,7 @@ class ScheduledAuditChangeCheckerTest extends FeatureTest
     {
         Process::fake(['*' => Process::result(output: "sha456\tHEAD\n")]);
         $schedule = AuditSchedule::factory()->make(['last_commit_sha' => 'sha123']);
+        TenantGitConnection::factory()->for($schedule->tenant)->create(['provider' => 'github']);
 
         $result = app(ScheduledAuditChangeChecker::class)->check($schedule);
 
@@ -35,6 +38,7 @@ class ScheduledAuditChangeCheckerTest extends FeatureTest
     {
         Process::fake(['*' => Process::result(output: "sha456\tHEAD\n")]);
         $schedule = AuditSchedule::factory()->make(['last_commit_sha' => null]);
+        TenantGitConnection::factory()->for($schedule->tenant)->create(['provider' => 'github']);
 
         $result = app(ScheduledAuditChangeChecker::class)->check($schedule);
 

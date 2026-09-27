@@ -112,7 +112,7 @@ class RepositoryClonerTest extends FeatureTest
         $cloner = app(RepositoryCloner::class);
         $uuid = 'test-clone-branch-'.uniqid();
 
-        $path = $cloner->clone('file://'.$this->branchFixtureRepo(), $uuid, 'feature-branch');
+        $path = $cloner->clone('file://'.$this->branchFixtureRepo(), $uuid, branch: 'feature-branch');
 
         $this->assertFileExists($path.'/FEATURE.md');
         $cloner->cleanup($uuid);
@@ -122,7 +122,7 @@ class RepositoryClonerTest extends FeatureTest
     {
         $this->expectException(AuditNotAnalyzableException::class);
 
-        app(RepositoryCloner::class)->clone('file://'.$this->branchFixtureRepo(), 'test-clone-missing-'.uniqid(), 'does-not-exist');
+        app(RepositoryCloner::class)->clone('file://'.$this->branchFixtureRepo(), 'test-clone-missing-'.uniqid(), branch: 'does-not-exist');
     }
 
     public function test_remote_head_sha_returns_the_resolved_sha(): void
