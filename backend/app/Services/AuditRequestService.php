@@ -204,7 +204,15 @@ class AuditRequestService
             $auditRequest->appendPipelineLog('refunded', 'Run refunded: the repository could not be analyzed');
         }
 
-        $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest, $accessDenied), $auditRequest->email, $auditRequest);
+        // Same hazard as closeAwaitingCredit(): the close and refund are
+        // committed, so a transport failure must not escape and have the
+        // queue retry a request run() will not reprocess. The AuditMailer
+        // log carries the failure for a manual resend.
+        try {
+            $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest, $accessDenied), $auditRequest->email, $auditRequest);
+        } catch (Throwable $e) {
+            $auditRequest->appendPipelineLog('mail_failed', "Customer email could not be sent: {$e->getMessage()}");
+        }
     }
 
     /**
@@ -250,13 +258,17 @@ class AuditRequestService
         // The AuditMailer log carries the failure for a manual resend.
         try {
             $this->auditMailer->send(new AuditCreditNeeded($auditRequest, $tooLarge), $auditRequest->email, $auditRequest);
-
-            // An oversized repo is a sales conversation, not a self-serve one.
-            if ($tooLarge) {
-                $this->notifyAdmin($auditRequest);
-            }
         } catch (Throwable $e) {
             $auditRequest->appendPipelineLog('mail_failed', "Customer email could not be sent: {$e->getMessage()}");
+        }
+
+        // An oversized repo is a sales conversation, not a self-serve one.
+        if ($tooLarge) {
+            try {
+                $this->notifyAdmin($auditRequest);
+            } catch (Throwable $e) {
+                $auditRequest->appendPipelineLog('mail_failed', "Admin email could not be sent: {$e->getMessage()}");
+            }
         }
     }
 

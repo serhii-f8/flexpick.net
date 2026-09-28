@@ -137,6 +137,9 @@ class AuditExtraRunsTest extends FeatureTest
 
     public function test_extras_are_metered_under_a_tenant_row_lock(): void
     {
+        // Pins the sequence, not just the SQL: the tenants row lock must be
+        // taken before the metered count is read, so two concurrent charges
+        // cannot both see the same allowance.
         $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 5]);
         $this->service->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 5);
         $request = $this->request($tenant, AuditFunding::ALLOWANCE);

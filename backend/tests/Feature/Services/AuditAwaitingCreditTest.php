@@ -98,6 +98,31 @@ class AuditAwaitingCreditTest extends FeatureTest
         $this->assertSame(AuditRequestStatus::AWAITING_CREDIT->value, $request->status);
         $this->assertNotNull($request->credit_refunded_at);
         $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+        $this->assertContains('mail_failed', array_column($request->pipeline_log ?? [], 'step'));
+    }
+
+    public function test_a_mail_transport_failure_in_close_not_analyzable_does_not_undo_the_close_or_reach_the_caller(): void
+    {
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'tenant_id' => $tenant->id,
+            'status' => AuditRequestStatus::ANALYZING->value,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $mailer = Mockery::mock(AuditMailer::class);
+        $mailer->shouldReceive('send')
+            ->andThrow(new \RuntimeException('smtp down'));
+        $this->instance(AuditMailer::class, $mailer);
+
+        app(AuditRequestService::class)->closeNotAnalyzable($request, 'Private repository without deploy key.');
+
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::NOT_ANALYZABLE->value, $request->status);
+        $this->assertNotNull($request->credit_refunded_at);
+        $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+        $this->assertContains('mail_failed', array_column($request->pipeline_log ?? [], 'step'));
     }
 
     public function test_the_insufficient_credit_email_sends_them_to_buy_and_run_again(): void
