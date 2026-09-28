@@ -107,6 +107,24 @@ class AuditRunSizerTest extends FeatureTest
         $this->assertSame(2, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
+    public function test_a_retry_holding_a_stale_copy_never_charges_twice(): void
+    {
+        $tenant = $this->createTenant();
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 3);
+        $request = $this->request($tenant, AuditFunding::PURCHASE);
+        // A queue retry handed its own copy, loaded before the first settle:
+        // its in-memory run_count is still null.
+        $retry = AuditRequest::find($request->id);
+
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, 150000));
+        // The retry's clone grew past the ceiling; the settled count stands.
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($retry, 412000));
+
+        $this->assertSame(2, $request->refresh()->run_count);
+        $this->assertSame(1, $request->extra_purchased_runs);
+        $this->assertSame(2, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
     private function request(Tenant $tenant, ?AuditFunding $funding): AuditRequest
     {
         return AuditRequest::factory()->create([
