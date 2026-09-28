@@ -6,6 +6,7 @@ use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Jobs\GenerateAuditReport;
+use App\Mail\Audit\AuditCreditNeeded;
 use App\Mail\Audit\AuditQuotaExhausted;
 use App\Mail\Audit\AuditRepoAccessNeeded;
 use App\Mail\Audit\AuditRequestFailed;
@@ -202,6 +203,31 @@ class AuditRequestService
         }
 
         $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest, $accessDenied), $auditRequest->email, $auditRequest);
+    }
+
+    /**
+     * Close a request whose repository costs more runs than the workspace
+     * could cover, or more than any self-serve band allows. Same shape as
+     * closeNotAnalyzable(): terminal, refunded, never resumed. Sizing is
+     * clone + scc only, so nothing chargeable was consumed.
+     */
+    public function closeAwaitingCredit(AuditRequest $auditRequest, string $reason, bool $tooLarge): void
+    {
+        $auditRequest->update([
+            'status' => AuditRequestStatus::AWAITING_CREDIT->value,
+            'failure_reason' => $reason,
+        ]);
+
+        if ($this->entitlements->refund($auditRequest)) {
+            $auditRequest->appendPipelineLog('refunded', 'Run refunded: the repository needs more runs than were available');
+        }
+
+        $this->auditMailer->send(new AuditCreditNeeded($auditRequest, $tooLarge), $auditRequest->email, $auditRequest);
+
+        // An oversized repo is a sales conversation, not a self-serve one.
+        if ($tooLarge) {
+            $this->notifyAdmin($auditRequest);
+        }
     }
 
     public function markFailed(AuditRequest $auditRequest, string $reason): void
