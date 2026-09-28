@@ -11,6 +11,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\TenantParameter;
 use App\Services\SubscriptionService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -55,11 +56,10 @@ class AuditEntitlementService
 
     public function freeRunsUsedForEmail(string $email): int
     {
-        return AuditRequest::query()
+        return $this->meteredRuns(AuditRequest::query()
             ->where('email', $email)
             ->where('free_run', true)
-            ->whereNull('credit_refunded_at')
-            ->count();
+            ->whereNull('credit_refunded_at'));
     }
 
     public function hasFreeRunForEmail(string $email): bool
@@ -76,11 +76,10 @@ class AuditEntitlementService
 
     public function freeRunsUsed(Tenant $tenant): int
     {
-        return AuditRequest::query()
+        return $this->meteredRuns(AuditRequest::query()
             ->forTenant($tenant)
             ->where('free_run', true)
-            ->whereNull('credit_refunded_at')
-            ->count();
+            ->whereNull('credit_refunded_at'));
     }
 
     public function hasFreeRun(Tenant $tenant): bool
@@ -121,14 +120,20 @@ class AuditEntitlementService
 
             $auditRequest->refresh();
 
-            if ($auditRequest->funding === AuditFunding::PURCHASE && $auditRequest->tier !== null) {
+            // A purchase-funded first run spent a credit; extra runs may have
+            // spent more whatever funded the first. Metered runs (free and
+            // allowance, first or extra) need nothing here: the stamp above
+            // takes the whole row out of the meters.
+            $credits = ($auditRequest->funding === AuditFunding::PURCHASE ? 1 : 0) + $auditRequest->extra_purchased_runs;
+
+            if ($credits > 0 && $auditRequest->tier !== null) {
                 if ($auditRequest->tenant === null) {
                     $auditRequest->appendPipelineLog('refund_unassigned', 'Purchased run has no workspace to return its credit to');
 
                     return true;
                 }
 
-                $this->grantPurchasedCredit($auditRequest->tenant, $auditRequest->tier);
+                $this->grantPurchasedCredit($auditRequest->tenant, $auditRequest->tier, $credits);
             }
 
             return true;
@@ -203,13 +208,12 @@ class AuditEntitlementService
      */
     public function runsUsedThisMonth(Tenant $tenant, AuditTier $tier): int
     {
-        return AuditRequest::query()
+        return $this->meteredRuns(AuditRequest::query()
             ->forTenant($tenant)
             ->where('funding', AuditFunding::ALLOWANCE->value)
             ->where('tier', $tier->value)
             ->where('created_at', '>=', now()->startOfMonth())
-            ->whereNull('credit_refunded_at')
-            ->count();
+            ->whereNull('credit_refunded_at'));
     }
 
     public function remainingRuns(Tenant $tenant, AuditTier $tier): int
@@ -291,6 +295,80 @@ class AuditEntitlementService
         $this->spendPurchasedCredit($tenant, $tier);
 
         return AuditFunding::PURCHASE;
+    }
+
+    /**
+     * Charges the runs a large repository costs beyond the first one, which
+     * was already spent when the request started. Drawn from the pool that
+     * funded that first run while it lasts (free quota or this month's
+     * allowance), then from purchased credits of the same tier.
+     *
+     * All or nothing: returns false and changes nothing when the extras can't
+     * be covered in full, so the caller can close the request and refund the
+     * first run instead of leaving it half-charged.
+     */
+    public function chargeExtraRuns(AuditRequest $auditRequest, int $extra): bool
+    {
+        if ($extra <= 0) {
+            return true;
+        }
+
+        $tenant = $auditRequest->tenant;
+        $tier = $auditRequest->tier;
+
+        // A tenantless landing request has no workspace to hold credit.
+        if ($tenant === null || $tier === null) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($auditRequest, $tenant, $tier, $extra): bool {
+            $metered = min($extra, $this->meteredHeadroom($tenant, $tier, $auditRequest->funding));
+            $purchased = $extra - $metered;
+
+            if ($purchased > 0) {
+                $param = TenantParameter::query()
+                    ->where('tenant_id', $tenant->id)
+                    ->where('name', $this->purchasedCreditParam($tier))
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($param === null || (int) $param->value < $purchased) {
+                    return false;
+                }
+
+                $param->update(['value' => (string) ((int) $param->value - $purchased)]);
+            }
+
+            $auditRequest->update([
+                'extra_metered_runs' => $metered,
+                'extra_purchased_runs' => $purchased,
+            ]);
+
+            return true;
+        });
+    }
+
+    /** Runs still available in the metered pool the first run came from. */
+    private function meteredHeadroom(Tenant $tenant, AuditTier $tier, ?AuditFunding $funding): int
+    {
+        return match ($funding) {
+            AuditFunding::FREE => max(0, $this->freeRunsLimit($tenant) - $this->freeRunsUsed($tenant)),
+            AuditFunding::ALLOWANCE => max(0, $this->allowance($tenant, $tier) - $this->runsUsedThisMonth($tenant, $tier)),
+            default => 0,
+        };
+    }
+
+    /**
+     * A row spends one run plus whatever extra runs its size cost from the
+     * same pool (AuditRunSizer). Refunded rows are excluded by the callers'
+     * whereNull('credit_refunded_at'), which takes all of a row's runs out
+     * at once.
+     *
+     * @param  Builder<AuditRequest>  $query
+     */
+    private function meteredRuns(Builder $query): int
+    {
+        return (int) $query->selectRaw('COUNT(*) + COALESCE(SUM(extra_metered_runs), 0) AS runs')->value('runs');
     }
 
     /** @return list<TierQuota> */
