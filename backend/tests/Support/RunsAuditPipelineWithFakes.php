@@ -37,6 +37,9 @@ trait RunsAuditPipelineWithFakes
     /** @var list<FindingGroup> */
     public array $lastAnalyzerGroups = [];
 
+    /** @var list<string> Fake scanners invoked, in the order they ran. */
+    public array $scannersInvoked = [];
+
     private string $fixtureRepo;
 
     private function setUpAuditPipelineFixture(): void
@@ -81,6 +84,8 @@ trait RunsAuditPipelineWithFakes
      *                                      assert rule_family/count, so which
      *                                      scanner "found" them doesn't matter.
      * @param  list<string>  $failingScanners
+     * @param  int|null  $totalLoc  LOC reported by the fake scc inventory
+     * @param  array<string, mixed>  $requestAttributes  extra attributes for the request
      */
     private function runPipelineWithFakes(
         array $groups = [],
@@ -89,7 +94,10 @@ trait RunsAuditPipelineWithFakes
         int $inputTokens = 10,
         int $outputTokens = 5,
         ?DeepReviewer $deepReviewer = null,
+        ?int $totalLoc = null,
+        array $requestAttributes = [],
     ): AuditRequest {
+        $this->scannersInvoked = [];
         $profile = app(TierProfileResolver::class)->for($tier);
         $available = array_values(array_diff($profile->scanners, $failingScanners));
         $emitter = end($available) ?: null;
@@ -105,7 +113,7 @@ trait RunsAuditPipelineWithFakes
             }
 
             if ($name === 'scc') {
-                $this->app->bind('audit.scanner.scc', fn () => $this->fakeScanner('scc', function (RepoContext $ctx): array {
+                $this->app->bind('audit.scanner.scc', fn () => $this->fakeScanner('scc', function (RepoContext $ctx) use ($totalLoc): array {
                     $fillerFiles = array_map(
                         fn (int $i): array => ['path' => "app/Filler/File{$i}.php", 'loc' => 1, 'complexity' => 0],
                         range(1, self::DEEP_REVIEW_FILLER_FILE_COUNT),
@@ -119,7 +127,7 @@ trait RunsAuditPipelineWithFakes
                     $ctx->withInventory(new SccInventory(
                         files: $files,
                         languages: ['PHP' => ['files' => count($files), 'loc' => 3 + count($fillerFiles)]],
-                        totalLoc: 3 + count($fillerFiles),
+                        totalLoc: $totalLoc ?? (3 + count($fillerFiles)),
                         totalComplexity: 1,
                     ));
 
@@ -177,6 +185,7 @@ trait RunsAuditPipelineWithFakes
             'repo_url' => 'file://'.$this->fixtureRepo,
             'status' => AuditRequestStatus::QUEUED->value,
             'tier' => $tier->value,
+            ...$requestAttributes,
         ]);
 
         (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
@@ -186,7 +195,13 @@ trait RunsAuditPipelineWithFakes
 
     private function fakeScanner(string $name, callable $scan): Scanner
     {
-        return new class($name, $scan) implements Scanner
+        $recorded = function (RepoContext $ctx) use ($name, $scan): array {
+            $this->scannersInvoked[] = $name;
+
+            return $scan($ctx);
+        };
+
+        return new class($name, $recorded) implements Scanner
         {
             public function __construct(
                 private string $scannerName,

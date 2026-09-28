@@ -41,4 +41,12 @@ final readonly class ScannerSuiteResult
     {
         return array_sum(array_map(fn (ScannerRun $run): int => $run->wallMs, $this->runs));
     }
+
+    public function merge(ScannerSuiteResult $other): self
+    {
+        return new self(
+            array_values([...$this->findings, ...$other->findings]),
+            array_values([...$this->runs, ...$other->runs]),
+        );
+    }
 }

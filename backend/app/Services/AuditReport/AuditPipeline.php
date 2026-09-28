@@ -5,6 +5,7 @@ namespace App\Services\AuditReport;
 use App\Constants\AuditAiStage;
 use App\Constants\AuditRequestStatus;
 use App\Exceptions\AiAnalysisException;
+use App\Exceptions\AuditAwaitingCreditException;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\AuditFindingGroup;
 use App\Models\AuditRequest;
@@ -44,6 +45,7 @@ class AuditPipeline
         private DeepReviewer $deepReviewer,
         private DeepFindingSanitizer $sanitizer,
         private AiCallRecorder $aiCalls,
+        private AuditRunSizer $runSizer,
     ) {}
 
     private function elapsedMs(float $startedAt): int
@@ -72,15 +74,32 @@ class AuditPipeline
             $context = new RepoContext($path, $profile);
 
             // Scanners first — scc's inventory sizes the budgets for everything
-            // after it, including excerpt selection (spec §3.2).
-            $suite = $this->scannerRunner->run($profile->scanners, $context);
-            $this->logScannerOutcomes($auditRequest, $suite);
+            // after it, including excerpt selection (spec §3.2). scc runs alone
+            // and the request is sized off its count before any other scanner
+            // is paid for: an oversized or uncovered request closes here
+            // (spec §2).
+            $sccSuite = $this->scannerRunner->run(['scc'], $context);
 
             // scc failing must not leave later stages without a basis (spec §10).
-            if ($context->inventory === null) {
-                $context->withInventory($this->sccScanner->fallbackInventory($path));
+            $inventory = $context->inventory;
+            if ($inventory === null) {
+                $inventory = $this->sccScanner->fallbackInventory($path);
+                $context->withInventory($inventory);
                 $auditRequest->appendPipelineLog('inventory', 'scc unavailable; used a walked file inventory');
             }
+
+            $runs = $this->runSizer->settle($auditRequest, $inventory->totalLoc);
+            $auditRequest->appendPipelineLog('sized', sprintf(
+                '%s lines of code; %d run(s)',
+                number_format($inventory->totalLoc),
+                $runs,
+            ));
+
+            $suite = $sccSuite->merge($this->scannerRunner->run(
+                array_values(array_filter($profile->scanners, fn (string $name): bool => $name !== 'scc')),
+                $context,
+            ));
+            $this->logScannerOutcomes($auditRequest, $suite);
 
             $groups = $this->grouper->group($this->deduplicator->dedupe($suite->findings));
 
@@ -178,6 +197,11 @@ class AuditPipeline
             // is exactly what it must not claim while a report is unsent.
             $auditRequest->update(['analysis_completed_at' => now()]);
             $auditRequest->appendPipelineLog('report', 'Report stored and sent');
+        } catch (AuditAwaitingCreditException $e) {
+            // Closed before any other scanner or the AI ran, so the only
+            // credit to give back is the first run's (spec §2).
+            $auditRequest->appendPipelineLog('awaiting_credit', $e->getMessage());
+            $this->requestService->closeAwaitingCredit($auditRequest, $e->getMessage(), $e->tooLarge);
         } catch (AuditNotAnalyzableException $e) {
             $auditRequest->appendPipelineLog('not_analyzable', $e->getMessage());
             $this->requestService->closeNotAnalyzable($auditRequest, $e->getMessage(), $e->accessDenied);

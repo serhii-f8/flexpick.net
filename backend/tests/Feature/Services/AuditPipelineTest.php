@@ -7,11 +7,13 @@ use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Exceptions\AiAnalysisException;
 use App\Jobs\GenerateAuditReport;
+use App\Mail\Audit\AuditCreditNeeded;
 use App\Mail\Audit\AuditRepoAccessNeeded;
 use App\Mail\Audit\AuditReportReady;
 use App\Mail\Audit\AuditRequestFailed;
 use App\Models\AuditFindingGroup;
 use App\Models\AuditRequest;
+use App\Models\Config;
 use App\Models\Tenant;
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\AuditEntitlementService;
@@ -25,6 +27,7 @@ use App\Services\AuditReport\Scanners\ScannerRun;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
 use App\Services\AuditReport\ScoreCalculator;
 use App\Services\AuditRequestService;
+use App\Services\ConfigService;
 use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Support\Facades\Mail;
 use Mockery;
@@ -41,6 +44,17 @@ class AuditPipelineTest extends FeatureTest
         parent::setUp();
         Mail::fake();
         $this->setUpAuditPipelineFixture();
+    }
+
+    protected function tearDown(): void
+    {
+        // This suite has no per-test DB reset (FeatureTest::migrate:fresh runs
+        // once). useTwoBands() persists a Config row, which would otherwise
+        // leak the override into every test that runs after it in the same
+        // process, regardless of declared order.
+        Config::where('key', 'audit.size_bands')->delete();
+
+        parent::tearDown();
     }
 
     public function test_happy_path_produces_and_sends_report(): void
@@ -206,7 +220,7 @@ class AuditPipelineTest extends FeatureTest
         $this->assertNotNull($request->analysis_completed_at);
 
         $steps = array_column($request->pipeline_log, 'step');
-        $this->assertSame(['started', 'cloned', 'metrics', 'analyzed', 'report'], $steps);
+        $this->assertSame(['started', 'cloned', 'sized', 'metrics', 'analyzed', 'report'], $steps);
     }
 
     public function test_failed_run_appends_failure_log_entry(): void
@@ -317,5 +331,95 @@ class AuditPipelineTest extends FeatureTest
 
         $this->assertNotNull($request->fresh()->report);
         $this->assertGreaterThan(0, $request->fresh()->metrics['files_total']);
+    }
+
+    private function useTwoBands(): void
+    {
+        app(ConfigService::class)->set('audit.size_bands', json_encode([
+            ['max_loc' => 100000, 'runs' => 1],
+            ['max_loc' => 300000, 'runs' => 2],
+        ]));
+    }
+
+    public function test_a_small_repo_is_settled_at_one_run(): void
+    {
+        $this->useTwoBands();
+
+        $request = $this->runPipelineWithFakes();
+
+        $this->assertSame(AuditRequestStatus::SENT->value, $request->status);
+        $this->assertSame(1, $request->run_count);
+    }
+
+    public function test_a_covered_large_repo_charges_the_extra_run_and_proceeds(): void
+    {
+        $this->useTwoBands();
+        $tenant = $this->createTenant();
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DIAGNOSTIC, 1);
+
+        $request = $this->runPipelineWithFakes(tier: AuditTier::DIAGNOSTIC, totalLoc: 150000, requestAttributes: [
+            'tenant_id' => $tenant->id,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $this->assertSame(AuditRequestStatus::SENT->value, $request->status);
+        $this->assertSame(2, $request->run_count);
+        $this->assertSame(1, $request->extra_purchased_runs);
+        $this->assertSame(0, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DIAGNOSTIC));
+    }
+
+    public function test_an_uncovered_large_repo_closes_refunded_before_any_other_scanner_or_ai(): void
+    {
+        $this->useTwoBands();
+        $tenant = $this->createTenant();
+
+        $request = $this->runPipelineWithFakes(tier: AuditTier::DIAGNOSTIC, totalLoc: 150000, requestAttributes: [
+            'tenant_id' => $tenant->id,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $this->assertSame(AuditRequestStatus::AWAITING_CREDIT->value, $request->status);
+        $this->assertNotNull($request->credit_refunded_at);
+        // The first run's credit comes back.
+        $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(['scc'], $this->scannersInvoked);
+        $this->assertNull($request->ai_input_tokens);
+        $this->assertNull($request->report);
+        Mail::assertQueued(AuditCreditNeeded::class, fn (AuditCreditNeeded $mail) => ! $mail->tooLarge);
+    }
+
+    public function test_a_repo_above_every_band_closes_as_too_large(): void
+    {
+        $this->useTwoBands();
+        $tenant = $this->createTenant();
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DIAGNOSTIC, 10);
+
+        $request = $this->runPipelineWithFakes(tier: AuditTier::DIAGNOSTIC, totalLoc: 412000, requestAttributes: [
+            'tenant_id' => $tenant->id,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $this->assertSame(AuditRequestStatus::AWAITING_CREDIT->value, $request->status);
+        $this->assertStringContainsString('300,000-line limit', (string) $request->failure_reason);
+        $this->assertSame(11, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DIAGNOSTIC));
+        Mail::assertQueued(AuditCreditNeeded::class, fn (AuditCreditNeeded $mail) => $mail->tooLarge);
+    }
+
+    public function test_a_retried_run_is_not_charged_again(): void
+    {
+        $this->useTwoBands();
+        $tenant = $this->createTenant();
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DIAGNOSTIC, 3);
+
+        $request = $this->runPipelineWithFakes(tier: AuditTier::DIAGNOSTIC, totalLoc: 150000, requestAttributes: [
+            'tenant_id' => $tenant->id,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+        // What the admin "Retry pipeline" action does.
+        $request->update(['status' => AuditRequestStatus::QUEUED->value]);
+        (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
+
+        $this->assertSame(1, $request->refresh()->extra_purchased_runs);
+        $this->assertSame(2, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DIAGNOSTIC));
     }
 }
