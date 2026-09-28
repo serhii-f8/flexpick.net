@@ -178,5 +178,6 @@ class ConfigConstants
 
         // Audits
         'audit.prompt_template',
+        'audit.size_bands',
     ];
 }

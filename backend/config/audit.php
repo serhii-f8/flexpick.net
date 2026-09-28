@@ -13,6 +13,10 @@ return [
     // Zero by default: Diagnostic is a paid tier. The env override is the
     // per-environment kill switch for handing out free runs again.
     'free_reports_limit' => (int) env('AUDIT_FREE_REPORTS_LIMIT', 0),
+    // Repository size bands (runs per audit by lines of code). Null means use
+    // the shipped defaults — see AuditSizeBands::DEFAULT_BANDS; an admin
+    // override is stored under the `audit.size_bands` config key.
+    'size_bands' => null,
     // USD per MILLION tokens, list rates, keyed by the exact model id sent to
     // the API (services.anthropic.model). A model missing from this table is
     // reported as unknown cost rather than free — see AuditAiCall::costUsd().
