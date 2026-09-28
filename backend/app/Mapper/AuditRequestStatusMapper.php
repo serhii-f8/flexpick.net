@@ -22,6 +22,7 @@ class AuditRequestStatusMapper
             AuditRequestStatus::AWAITING_PAYMENT->value => __('Awaiting payment'),
             AuditRequestStatus::EXPERT_REVIEW->value => __('Awaiting expert review'),
             AuditRequestStatus::NOT_ANALYZABLE->value => __("Couldn't analyze"),
+            AuditRequestStatus::AWAITING_CREDIT->value => __('Needs more credit'),
             default => $status,
         };
     }
@@ -30,7 +31,7 @@ class AuditRequestStatusMapper
     {
         return match ($status) {
             AuditRequestStatus::SENT->value, AuditRequestStatus::HANDLED->value => 'success',
-            AuditRequestStatus::FAILED->value, AuditRequestStatus::NOT_ANALYZABLE->value => 'danger',
+            AuditRequestStatus::FAILED->value, AuditRequestStatus::NOT_ANALYZABLE->value, AuditRequestStatus::AWAITING_CREDIT->value => 'danger',
             AuditRequestStatus::NEEDS_FOLLOWUP->value, AuditRequestStatus::AWAITING_ACCESS->value, AuditRequestStatus::AWAITING_PAYMENT->value, AuditRequestStatus::EXPERT_REVIEW->value => 'warning',
             AuditRequestStatus::REPORT_READY->value, AuditRequestStatus::ANALYZING->value, AuditRequestStatus::QUEUED->value => 'info',
             default => 'gray',

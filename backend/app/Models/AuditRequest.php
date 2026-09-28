@@ -33,6 +33,7 @@ class AuditRequest extends Model
         'manually_paid', 'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
         'risk_files', 'deep_review_input_tokens', 'deep_review_output_tokens', 'deep_review_ms',
+        'run_count', 'extra_metered_runs', 'extra_purchased_runs',
     ];
 
     protected $casts = [
@@ -59,6 +60,9 @@ class AuditRequest extends Model
         'deep_review_input_tokens' => 'integer',
         'deep_review_output_tokens' => 'integer',
         'deep_review_ms' => 'integer',
+        'run_count' => 'integer',
+        'extra_metered_runs' => 'integer',
+        'extra_purchased_runs' => 'integer',
     ];
 
     /**
@@ -68,6 +72,8 @@ class AuditRequest extends Model
      */
     protected $attributes = [
         'tier' => AuditTier::DIAGNOSTIC->value,
+        'extra_metered_runs' => 0,
+        'extra_purchased_runs' => 0,
     ];
 
     /**
@@ -169,6 +175,7 @@ class AuditRequest extends Model
             AuditRequestStatus::HANDLED->value => self::TRIAGE_TERMINAL,
             // The customer acts on it by running a new audit; nobody restarts this one.
             AuditRequestStatus::NOT_ANALYZABLE->value => self::TRIAGE_TERMINAL,
+            AuditRequestStatus::AWAITING_CREDIT->value => self::TRIAGE_TERMINAL,
         ];
     }
 

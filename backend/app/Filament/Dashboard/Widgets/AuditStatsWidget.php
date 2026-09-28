@@ -32,7 +32,7 @@ class AuditStatsWidget extends BaseWidget
                 AuditRequestStatus::AWAITING_PAYMENT->value,
             ],
             'completed' => [AuditRequestStatus::REPORT_READY->value, AuditRequestStatus::SENT->value, AuditRequestStatus::HANDLED->value],
-            'failed' => [AuditRequestStatus::FAILED->value, AuditRequestStatus::NOT_ANALYZABLE->value],
+            'failed' => [AuditRequestStatus::FAILED->value, AuditRequestStatus::NOT_ANALYZABLE->value, AuditRequestStatus::AWAITING_CREDIT->value],
         ];
     }
 

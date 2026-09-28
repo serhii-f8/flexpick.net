@@ -231,7 +231,7 @@ class AuditRequestResource extends Resource
         $mapper = app(AuditRequestStatusMapper::class);
         $status = $record->status;
 
-        $failed = in_array($status, [AuditRequestStatus::FAILED->value, AuditRequestStatus::NOT_ANALYZABLE->value], true);
+        $failed = in_array($status, [AuditRequestStatus::FAILED->value, AuditRequestStatus::NOT_ANALYZABLE->value, AuditRequestStatus::AWAITING_CREDIT->value], true);
         $verified = $record->email_verified_at !== null;
         $delivered = in_array($status, [
             AuditRequestStatus::REPORT_READY->value,
@@ -278,6 +278,7 @@ class AuditRequestResource extends Resource
             AuditRequestStatus::NEEDS_FOLLOWUP->value => __('We need more information — please check your email.'),
             AuditRequestStatus::AWAITING_ACCESS->value => __('Connect your GitHub, GitLab, or Bitbucket account from your workspace, then run a new audit from the Run an audit page.'),
             AuditRequestStatus::NOT_ANALYZABLE->value => __("We couldn't analyze this repository, so this audit is closed and you weren't charged for it. If it's private, connect the matching account from your workspace, then run a new audit."),
+            AuditRequestStatus::AWAITING_CREDIT->value => __("This repository needs more runs than your workspace had available, so this audit is closed and you weren't charged for it. See the reason below — buy credit or upgrade, then run a new audit."),
             AuditRequestStatus::AWAITING_PAYMENT->value => __('This audit is waiting for an available analysis. Upgrade your plan or buy a run to start it.'),
             AuditRequestStatus::EXPERT_REVIEW->value => __('Your report is complete and is being reviewed by our expert auditor before delivery.'),
             default => '',

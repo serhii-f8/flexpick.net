@@ -19,4 +19,8 @@ enum AuditRequestStatus: string
     // Closed for good: we could not reach or process the repository. The
     // customer runs a new audit once that is fixed; this one never restarts.
     case NOT_ANALYZABLE = 'not_analyzable';
+    // Closed for good: the repository needs more runs than the workspace
+    // could cover, or is bigger than any self-serve size band. The first run
+    // was refunded; the customer buys credit and runs a new audit.
+    case AWAITING_CREDIT = 'awaiting_credit';
 }
