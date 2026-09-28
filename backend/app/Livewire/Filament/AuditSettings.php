@@ -2,10 +2,13 @@
 
 namespace App\Livewire\Filament;
 
+use App\Services\AuditReport\AuditSizeBands;
 use App\Services\AuditReport\PromptComposer;
 use App\Services\ConfigService;
 use Closure;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
@@ -37,6 +40,7 @@ class AuditSettings extends Component implements HasForms
 
         $this->form->fill([
             'prompt_template' => $stored,
+            'size_bands' => app(AuditSizeBands::class)->bands(),
         ]);
 
         // A pre-Phase-11 override lacking {groups} would otherwise keep
@@ -72,6 +76,28 @@ class AuditSettings extends Component implements HasForms
                                 },
                             ]),
                     ]),
+                Section::make(__('Repository size bands'))
+                    ->description(__('How many runs an audit costs, by lines of code. A repository above the last band is closed as too large for self-serve and the customer is asked to contact us. The pricing page and the Run-an-audit page show these same bands.'))
+                    ->schema([
+                        Repeater::make('size_bands')
+                            ->hiddenLabel()
+                            ->schema([
+                                TextInput::make('max_loc')->label(__('Up to (lines of code)'))->integer()->minValue(1)->required(),
+                                TextInput::make('runs')->label(__('Runs'))->integer()->minValue(1)->maxValue(50)->required(),
+                            ])
+                            ->columns(2)
+                            ->minItems(1)
+                            ->reorderable(false)
+                            ->rules([
+                                fn (): Closure => function (string $attribute, $value, Closure $fail) {
+                                    $bands = AuditSizeBands::normalize(array_values((array) $value));
+
+                                    if ($bands === null) {
+                                        $fail(__('Each band needs a distinct size limit, and a larger band can never cost fewer runs.'));
+                                    }
+                                },
+                            ]),
+                    ]),
             ])
             ->statePath('data');
     }
@@ -81,6 +107,11 @@ class AuditSettings extends Component implements HasForms
         $data = $this->form->getState();
 
         $this->configService->set('audit.prompt_template', $data['prompt_template'] ?? '');
+
+        $this->configService->set(
+            'audit.size_bands',
+            (string) json_encode(AuditSizeBands::normalize(array_values($data['size_bands'] ?? [])) ?? AuditSizeBands::DEFAULT_BANDS),
+        );
 
         Notification::make()->title(__('Audit settings saved'))->success()->send();
     }
