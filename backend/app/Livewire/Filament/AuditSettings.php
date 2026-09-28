@@ -36,6 +36,8 @@ class AuditSettings extends Component implements HasForms
 
     public function mount(): void
     {
+        $this->guardAccess();
+
         $stored = (string) $this->configService->get('audit.prompt_template', '');
 
         $this->form->fill([
@@ -104,15 +106,34 @@ class AuditSettings extends Component implements HasForms
 
     public function save(): void
     {
+        $this->guardAccess();
+
         $data = $this->form->getState();
 
         $this->configService->set('audit.prompt_template', $data['prompt_template'] ?? '');
 
-        $this->configService->set(
-            'audit.size_bands',
-            (string) json_encode(AuditSizeBands::normalize(array_values($data['size_bands'] ?? [])) ?? AuditSizeBands::DEFAULT_BANDS),
-        );
+        // A direct /livewire/update call can omit size_bands entirely, and
+        // Laravel skips rules for absent attributes, so write only a band
+        // list that validates instead of silently overwriting the stored
+        // bands with the defaults.
+        $bands = AuditSizeBands::normalize(array_values($data['size_bands'] ?? []));
+
+        if ($bands !== null) {
+            $this->configService->set('audit.size_bands', (string) json_encode($bands));
+        }
 
         Notification::make()->title(__('Audit settings saved'))->success()->send();
+    }
+
+    private function guardAccess(): void
+    {
+        // The admin page checks this in its canAccess(), but the component
+        // is also reachable directly over /livewire/update, so mount() and
+        // save() must not act on an unauthenticated or unauthorized call.
+        abort_unless(
+            $this->configService->isAdminSettingsEnabled()
+            && auth()->user()?->hasPermissionTo('update settings'),
+            403,
+        );
     }
 }
