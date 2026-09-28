@@ -76,6 +76,8 @@
                 </div>
             </fieldset>
 
+            <x-audit.size-bands class="mt-4" />
+
             <div class="mt-5 flex flex-wrap items-center gap-3">
                 <x-filament::button wire:click="launchAudit" icon="heroicon-o-play" size="lg">
                     @if ($selected && ! $selected->hasRuns() && $selected->purchasable())

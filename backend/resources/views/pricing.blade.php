@@ -68,6 +68,8 @@
             </section>
         </div><!-- /fp-pricing-tabs -->
 
+        <x-audit.size-bands class="fp-pricing-section-head mt-10" />
+
         <x-plans.default-product />
     </div>
 </x-layouts.app>
