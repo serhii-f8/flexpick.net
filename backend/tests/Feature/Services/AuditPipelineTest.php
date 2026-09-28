@@ -422,4 +422,29 @@ class AuditPipelineTest extends FeatureTest
         $this->assertSame(1, $request->refresh()->extra_purchased_runs);
         $this->assertSame(2, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DIAGNOSTIC));
     }
+
+    public function test_a_queue_retry_after_an_awaiting_credit_close_does_not_reprocess(): void
+    {
+        $this->useTwoBands();
+        $tenant = $this->createTenant();
+
+        $request = $this->runPipelineWithFakes(tier: AuditTier::DIAGNOSTIC, totalLoc: 150000, requestAttributes: [
+            'tenant_id' => $tenant->id,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $this->assertSame(AuditRequestStatus::AWAITING_CREDIT->value, $request->status);
+        $startedAt = (string) $request->analysis_started_at;
+
+        // What Horizon does with GenerateAuditReport's remaining tries after
+        // run() already closed the request: the retry must be a no-op, not a
+        // second full pass that re-closes and re-emails a refunded customer.
+        (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
+
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::AWAITING_CREDIT->value, $request->status);
+        $this->assertSame(['scc'], $this->scannersInvoked);
+        $this->assertSame($startedAt, (string) $request->analysis_started_at);
+        $this->assertCount(1, Mail::queued(AuditCreditNeeded::class, fn (AuditCreditNeeded $mail) => $mail->hasTo($request->email)));
+    }
 }

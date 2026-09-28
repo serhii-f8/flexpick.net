@@ -322,6 +322,12 @@ class AuditEntitlementService
         }
 
         return DB::transaction(function () use ($auditRequest, $tenant, $tier, $extra): bool {
+            // The metered pool is derived from audit_requests rows, so two
+            // concurrent sizings of the same workspace must not measure the
+            // same headroom twice: serialise on the tenant row before any
+            // of it is read.
+            Tenant::query()->whereKey($tenant->getKey())->lockForUpdate()->first();
+
             $metered = min($extra, $this->meteredHeadroom($tenant, $tier, $auditRequest->funding));
             $purchased = $extra - $metered;
 

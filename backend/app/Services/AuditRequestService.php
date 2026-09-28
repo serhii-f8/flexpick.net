@@ -19,9 +19,11 @@ use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\RepositoryCloner;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
+use Throwable;
 
 class AuditRequestService
 {
@@ -213,20 +215,48 @@ class AuditRequestService
      */
     public function closeAwaitingCredit(AuditRequest $auditRequest, string $reason, bool $tooLarge): void
     {
-        $auditRequest->update([
-            'status' => AuditRequestStatus::AWAITING_CREDIT->value,
-            'failure_reason' => $reason,
-        ]);
+        // Atomic check-and-set: only the caller that flips a live request to
+        // awaiting_credit may refund it, so two callers racing on the same
+        // request can never refund or notify it twice.
+        $closed = DB::transaction(function () use ($auditRequest, $reason): bool {
+            $affected = AuditRequest::query()
+                ->whereKey($auditRequest->getKey())
+                ->where('status', '!=', AuditRequestStatus::AWAITING_CREDIT->value)
+                ->update([
+                    'status' => AuditRequestStatus::AWAITING_CREDIT->value,
+                    'failure_reason' => $reason,
+                ]);
 
-        if ($this->entitlements->refund($auditRequest)) {
-            $auditRequest->appendPipelineLog('refunded', 'Run refunded: the repository needs more runs than were available');
+            if ($affected === 0) {
+                return false;
+            }
+
+            $auditRequest->refresh();
+
+            if ($this->entitlements->refund($auditRequest)) {
+                $auditRequest->appendPipelineLog('refunded', 'Run refunded: the repository needs more runs than were available');
+            }
+
+            return true;
+        });
+
+        if (! $closed) {
+            return;
         }
 
-        $this->auditMailer->send(new AuditCreditNeeded($auditRequest, $tooLarge), $auditRequest->email, $auditRequest);
+        // The close and the refund are committed; a transport failure must
+        // not escape and have the queue retry the job, because run() will
+        // not reprocess a closed request and the customer would never hear.
+        // The AuditMailer log carries the failure for a manual resend.
+        try {
+            $this->auditMailer->send(new AuditCreditNeeded($auditRequest, $tooLarge), $auditRequest->email, $auditRequest);
 
-        // An oversized repo is a sales conversation, not a self-serve one.
-        if ($tooLarge) {
-            $this->notifyAdmin($auditRequest);
+            // An oversized repo is a sales conversation, not a self-serve one.
+            if ($tooLarge) {
+                $this->notifyAdmin($auditRequest);
+            }
+        } catch (Throwable $e) {
+            $auditRequest->appendPipelineLog('mail_failed', "Customer email could not be sent: {$e->getMessage()}");
         }
     }
 

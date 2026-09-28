@@ -11,6 +11,8 @@ use App\Models\Product;
 use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Services\AuditReport\AuditEntitlementService;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Tests\Feature\FeatureTest;
 
 class AuditExtraRunsTest extends FeatureTest
@@ -131,6 +133,39 @@ class AuditExtraRunsTest extends FeatureTest
             'tier' => AuditTier::DEEP_AI->value,
             'funding' => $funding->value,
         ]);
+    }
+
+    public function test_extras_are_metered_under_a_tenant_row_lock(): void
+    {
+        $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 5]);
+        $this->service->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 5);
+        $request = $this->request($tenant, AuditFunding::ALLOWANCE);
+
+        $queries = [];
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->assertTrue($this->service->chargeExtraRuns($request, 2));
+
+        $lockAt = null;
+        $meterAt = null;
+        foreach ($queries as $i => $sql) {
+            if ($lockAt === null
+                && str_contains($sql, 'for update')
+                && preg_match('/from\s+`?tenants`?\b/', $sql) === 1) {
+                $lockAt = $i;
+            }
+            if ($meterAt === null
+                && str_contains($sql, 'audit_requests')
+                && (str_contains($sql, 'count(') || str_contains($sql, 'sum('))) {
+                $meterAt = $i;
+            }
+        }
+
+        $this->assertNotNull($lockAt, 'chargeExtraRuns took no lock on the tenants row.');
+        $this->assertNotNull($meterAt);
+        $this->assertLessThan($meterAt, $lockAt, 'The metered audit_requests count must only be read under the tenants row lock.');
     }
 
     private function tenantWithAllowance(array $productMetadata): Tenant

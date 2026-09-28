@@ -10,10 +10,12 @@ use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Mail\Audit\AuditCreditNeeded;
 use App\Mapper\AuditRequestStatusMapper;
 use App\Models\AuditRequest;
+use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditRequestService;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
+use Mockery;
 use Tests\Feature\FeatureTest;
 
 class AuditAwaitingCreditTest extends FeatureTest
@@ -72,6 +74,30 @@ class AuditAwaitingCreditTest extends FeatureTest
         $this->assertNotNull($request->credit_refunded_at);
         $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
         Mail::assertQueued(AuditCreditNeeded::class, fn (AuditCreditNeeded $mail) => $mail->hasTo($request->email) && ! $mail->tooLarge);
+        $this->assertCount(1, Mail::queued(AuditCreditNeeded::class, fn (AuditCreditNeeded $mail) => $mail->hasTo($request->email)));
+    }
+
+    public function test_a_mail_transport_failure_does_not_undo_the_close_or_reach_the_caller(): void
+    {
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'tenant_id' => $tenant->id,
+            'status' => AuditRequestStatus::ANALYZING->value,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+
+        $mailer = Mockery::mock(AuditMailer::class);
+        $mailer->shouldReceive('send')
+            ->andThrow(new \RuntimeException('smtp down'));
+        $this->instance(AuditMailer::class, $mailer);
+
+        app(AuditRequestService::class)->closeAwaitingCredit($request, 'Needs 2 runs; 1 available.', tooLarge: false);
+
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::AWAITING_CREDIT->value, $request->status);
+        $this->assertNotNull($request->credit_refunded_at);
+        $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
     public function test_the_insufficient_credit_email_sends_them_to_buy_and_run_again(): void

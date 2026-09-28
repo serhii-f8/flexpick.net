@@ -55,6 +55,20 @@ class AuditPipeline
 
     public function run(AuditRequest $auditRequest): void
     {
+        // A retried job must never reprocess a request an earlier attempt
+        // already closed and refunded: a second pass would spend that refund
+        // on a fresh charge and re-email a customer who has been told. Only
+        // the refunded terminal closes are off-limits — a retry after a
+        // delivery failure is expected to re-run and re-bill.
+        $currentStatus = AuditRequest::query()->whereKey($auditRequest->getKey())->value('status');
+
+        if (in_array($currentStatus, [
+            AuditRequestStatus::AWAITING_CREDIT->value,
+            AuditRequestStatus::NOT_ANALYZABLE->value,
+        ], true)) {
+            return;
+        }
+
         $auditRequest->update([
             'status' => AuditRequestStatus::ANALYZING->value,
             'analysis_started_at' => now(),
