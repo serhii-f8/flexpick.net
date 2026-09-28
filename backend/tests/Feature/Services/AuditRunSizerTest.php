@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditRunSizer;
 use App\Services\ConfigService;
+use ReflectionMethod;
 use Tests\Feature\FeatureTest;
 
 class AuditRunSizerTest extends FeatureTest
@@ -123,6 +124,23 @@ class AuditRunSizerTest extends FeatureTest
         $this->assertSame(2, $request->refresh()->run_count);
         $this->assertSame(1, $request->extra_purchased_runs);
         $this->assertSame(2, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
+    public function test_the_insufficient_message_drops_the_tier_clause_when_the_tier_is_null(): void
+    {
+        // audit_requests.tier is NOT NULL, so this shape only exists
+        // in-memory; exercise the defensive fallback directly.
+        $request = new AuditRequest;
+        $request->setAttribute('funding', AuditFunding::PURCHASE->value);
+        $request->setAttribute('tier', null);
+
+        $method = new ReflectionMethod(AuditRunSizer::class, 'insufficientMessage');
+        $message = $method->invokeArgs(app(AuditRunSizer::class), [$request, 2, 150000]);
+
+        $this->assertStringContainsString('150,000 lines of code', $message);
+        $this->assertStringContainsString('an audit takes 2 runs', $message);
+        $this->assertStringNotContainsString('a  audit', $message);
+        $this->assertStringNotContainsString(AuditTier::DEEP_AI->label(), $message);
     }
 
     private function request(Tenant $tenant, ?AuditFunding $funding): AuditRequest
