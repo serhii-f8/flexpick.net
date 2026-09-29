@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Services\AuditReport\RepositoryCloner;
 use App\Services\GitProviders\GitCredential;
+use App\Services\GitProviders\GitRepoAccess;
 use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Process\PendingProcess;
@@ -63,6 +64,7 @@ class RepositoryClonerTest extends FeatureTest
             $this->fail('Expected AuditNotAnalyzableException');
         } catch (AuditNotAnalyzableException $e) {
             $this->assertTrue($e->accessDenied);
+            $this->assertFalse($e->reconnect);
             $this->assertStringContainsString('Repository is not publicly accessible', $e->getMessage());
         }
 
@@ -190,7 +192,7 @@ class RepositoryClonerTest extends FeatureTest
     public function test_a_real_clone_never_writes_the_token_into_git_config(): void
     {
         $resolver = Mockery::mock(GitRepoAccessResolver::class);
-        $resolver->shouldReceive('resolveCredential')->andReturn(new GitCredential('x-access-token', 'ghp_on_disk_probe', 'file://'));
+        $resolver->shouldReceive('resolveAccess')->andReturn(new GitRepoAccess(new GitCredential('x-access-token', 'ghp_on_disk_probe', 'file://'), connected: true));
         $cloner = new RepositoryCloner($resolver);
         $uuid = 'test-clone-disk-'.uniqid();
 
@@ -427,5 +429,85 @@ class RepositoryClonerTest extends FeatureTest
 
         $this->assertDirectoryDoesNotExist(rtrim(config('audit.workdir'), '/').'/'.$uuid);
         Process::assertNothingRan();
+    }
+
+    /**
+     * A connected tenant whose token no longer reads the repo (revoked, or scope
+     * lost) must be told to reconnect, not to connect for the first time.
+     */
+    public function test_preflight_failing_with_a_connection_asks_for_a_reconnect(): void
+    {
+        Process::fake(['*' => Process::result(exitCode: 128)]);
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github', 'access_token' => 'ghp_revoked']);
+
+        try {
+            app(RepositoryCloner::class)->preflight('https://github.com/acme/private', tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertTrue($e->accessDenied);
+            $this->assertTrue($e->reconnect);
+            $this->assertStringNotContainsString('ghp_revoked', $e->getMessage());
+        }
+    }
+
+    /**
+     * The refresh was rejected (invalid_grant), so the resolver deleted the connection
+     * and git ran anonymously. The tenant still HAD a connection: reconnect.
+     */
+    public function test_preflight_after_an_invalid_grant_deletion_asks_for_a_reconnect(): void
+    {
+        Process::fake(['*' => Process::result(exitCode: 128)]);
+        Http::fake(['gitlab.com/oauth/token' => Http::response(['error' => 'invalid_grant'], 400)]);
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab', 'refresh_token' => 'revoked', 'expires_at' => now()->subMinute(),
+        ]);
+
+        try {
+            app(RepositoryCloner::class)->preflight('https://gitlab.com/acme/private', tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertTrue($e->accessDenied);
+            $this->assertTrue($e->reconnect);
+        }
+
+        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'gitlab']);
+    }
+
+    /**
+     * Preflight passed, then the clone itself was refused with a connection on file:
+     * the token went bad in between, so this is the reconnect case too.
+     */
+    public function test_a_clone_failing_after_preflight_with_a_connection_asks_for_a_reconnect(): void
+    {
+        Process::fake(['*' => Process::result(exitCode: 128)]);
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github', 'access_token' => 'ghp_revoked']);
+        $uuid = 'test-clone-reconnect-'.uniqid();
+
+        try {
+            app(RepositoryCloner::class)->clone('https://github.com/acme/private', $uuid, tenant: $tenant);
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertTrue($e->accessDenied);
+            $this->assertTrue($e->reconnect);
+        }
+
+        $this->assertDirectoryDoesNotExist(rtrim(config('audit.workdir'), '/').'/'.$uuid);
+    }
+
+    public function test_a_clone_failing_without_a_connection_is_not_a_reconnect(): void
+    {
+        Process::fake(['*' => Process::result(exitCode: 128)]);
+        $uuid = 'test-clone-plain-'.uniqid();
+
+        try {
+            app(RepositoryCloner::class)->clone('https://github.com/acme/private', $uuid, tenant: Tenant::factory()->create());
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertFalse($e->accessDenied);
+            $this->assertFalse($e->reconnect);
+        }
     }
 }

@@ -8,7 +8,31 @@
             <p style="margin: 0; line-height: 24px">
                 {{ __('Hi :name,', ['name' => $auditRequest->name]) }}
             </p>
-            @if ($auditRequest->repo_url && $accessProblem)
+            @if ($auditRequest->repo_url && $accessProblem && $reconnect)
+                <p style="margin: 16px 0 0; line-height: 24px">
+                    {{ __("We couldn't access :url with your connected :provider account — its access may have been revoked or expired, or it can no longer read this repository.", ['url' => $auditRequest->repo_url, 'provider' => $providerLabel]) }}
+                </p>
+                <p style="margin: 16px 0 0; line-height: 24px">
+                    {{ __("This audit request is now closed and won't restart on its own. You haven't been charged for it.") }}
+                </p>
+                <p style="margin: 16px 0 0; line-height: 24px">
+                    <strong>{{ __('1. Reconnect your :provider account.', ['provider' => $providerLabel]) }}</strong>
+                    {{ __('On the Git Connections page, reconnect the :provider account that can read this repository.', ['provider' => $providerLabel]) }}
+                    <a href="{{ $gitConnectionsUrl }}" style="color: #2563eb;">{{ __('Open Git Connections') }}</a>
+                </p>
+                <p style="margin: 16px 0 0; line-height: 24px">
+                    <strong>{{ __('2. Then run a new audit.') }}</strong>
+                    {{ __('Start it from your dashboard — the repository is already filled in. Reconnecting takes effect immediately, so there is no waiting.') }}
+                </p>
+                <p style="margin: 24px 0 0; line-height: 24px; text-align: center;">
+                    <a href="{{ $rerunUrl }}" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
+                        {{ __('Run the audit again') }}
+                    </a>
+                </p>
+                <p style="margin: 24px 0 0; line-height: 24px; font-size: 13px; color: #64748b;">
+                    {{ __('Need help? Just reply to this email.') }}
+                </p>
+            @elseif ($auditRequest->repo_url && $accessProblem)
                 <p style="margin: 16px 0 0; line-height: 24px">
                     {{ __("We couldn't access :url — it looks private (or the link isn't a reachable git repository).", ['url' => $auditRequest->repo_url]) }}
                 </p>

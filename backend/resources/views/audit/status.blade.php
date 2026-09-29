@@ -41,7 +41,7 @@
                             spinner.style.display = 'none';
                             return;
                         }
-                        if (data.failed) { spinner.style.display = 'none'; return; }
+                        if (data.failed || data.closed) { spinner.style.display = 'none'; return; }
                         setTimeout(poll, 5000);
                     })
                     .catch(function () { setTimeout(poll, 10000); });

@@ -338,4 +338,50 @@ class GitRepoAccessResolverTest extends FeatureTest
         $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'github']);
         Http::assertNothingSent();
     }
+
+    /**
+     * Whether the tenant has a connection for the repo's provider travels with the
+     * credential: RepositoryCloner needs it to tell "connect" from "reconnect".
+     */
+    public function test_resolve_access_reports_a_live_connection(): void
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create(['provider' => 'github', 'access_token' => 'ghp_live']);
+
+        $access = app(GitRepoAccessResolver::class)->resolveAccess('https://github.com/acme/app', $tenant);
+
+        $this->assertTrue($access->connected);
+        $this->assertSame('ghp_live', $access->credential?->password);
+    }
+
+    public function test_resolve_access_reports_no_connection(): void
+    {
+        $tenant = Tenant::factory()->create();
+
+        $access = app(GitRepoAccessResolver::class)->resolveAccess('https://github.com/acme/app', $tenant);
+
+        $this->assertFalse($access->connected);
+        $this->assertNull($access->credential);
+    }
+
+    /**
+     * A connection whose refresh the provider just rejected is deleted, and git goes
+     * anonymous -- but the tenant DID have one, so the customer must be told to
+     * reconnect, not to connect for the first time.
+     */
+    #[DataProvider('refreshableProviders')]
+    public function test_resolve_access_still_reports_a_connection_deleted_by_invalid_grant(string $provider, string $repoUrl, string $tokenEndpoint): void
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => $provider, 'refresh_token' => 'revoked', 'expires_at' => now()->subMinute(),
+        ]);
+        Http::fake([$tokenEndpoint => Http::response(['error' => 'invalid_grant'], 400)]);
+
+        $access = app(GitRepoAccessResolver::class)->resolveAccess($repoUrl, $tenant);
+
+        $this->assertNull($access->credential);
+        $this->assertTrue($access->connected);
+        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
+    }
 }

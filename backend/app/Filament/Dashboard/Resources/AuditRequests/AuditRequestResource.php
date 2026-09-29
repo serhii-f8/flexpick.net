@@ -4,12 +4,15 @@ namespace App\Filament\Dashboard\Resources\AuditRequests;
 
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
+use App\Constants\AwaitingCreditReason;
+use App\Filament\Dashboard\Pages\GitConnections;
 use App\Filament\Dashboard\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Filament\Dashboard\Resources\AuditRequests\Pages\ViewAuditRequest;
 use App\Mapper\AuditRequestStatusMapper;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\GitProviders\GitProviderResolver;
 use App\Support\RepoName;
 use App\Support\ScoreBand;
 use Filament\Facades\Filament;
@@ -257,6 +260,7 @@ class AuditRequestResource extends Resource
             'statusLabel' => $mapper->mapForDisplay($status),
             'statusColor' => $mapper->mapColor($status),
             'statusHint' => static::statusDescription($record),
+            'statusHintLink' => static::statusHintLink($record),
             'failureReason' => $record->failure_reason,
             'blocked' => in_array($status, [
                 AuditRequestStatus::NEEDS_FOLLOWUP->value,
@@ -277,12 +281,39 @@ class AuditRequestResource extends Resource
             AuditRequestStatus::FAILED->value => __('This audit failed — see the reason below.'),
             AuditRequestStatus::NEEDS_FOLLOWUP->value => __('We need more information — please check your email.'),
             AuditRequestStatus::AWAITING_ACCESS->value => __('Connect your GitHub, GitLab, or Bitbucket account from your workspace, then run a new audit from the Run an audit page.'),
-            AuditRequestStatus::NOT_ANALYZABLE->value => __("We couldn't analyze this repository, so this audit is closed and you weren't charged for it. If it's private, connect the matching account from your workspace, then run a new audit."),
-            AuditRequestStatus::AWAITING_CREDIT->value => __("This repository needs more runs than your workspace had available, so this audit is closed and you weren't charged for it. See the reason below — buy credit or upgrade, then run a new audit."),
+            AuditRequestStatus::NOT_ANALYZABLE->value => $record->git_reconnect_required
+                ? __("We couldn't access this repository with your connected account, so this audit is closed and you weren't charged for it. Please reconnect your :provider account from Git Connections, then run a new audit.", ['provider' => self::providerLabel($record)])
+                : __("We couldn't analyze this repository, so this audit is closed and you weren't charged for it. If it's private, connect the matching account from your workspace, then run a new audit."),
+            AuditRequestStatus::AWAITING_CREDIT->value => $record->awaiting_credit_reason === AwaitingCreditReason::TOO_LARGE
+                ? __("Above the self-serve size limit — contact us for a custom quote: reply to the email we sent you, or write to :email. This audit is closed and you weren't charged for it.", ['email' => config('app.support_email')])
+                : __("This repository needs more runs than your workspace had available, so this audit is closed and you weren't charged for it. See the reason below — buy credit or upgrade, then run a new audit."),
             AuditRequestStatus::AWAITING_PAYMENT->value => __('This audit is waiting for an available analysis. Upgrade your plan or buy a run to start it.'),
             AuditRequestStatus::EXPERT_REVIEW->value => __('Your report is complete and is being reviewed by our expert auditor before delivery.'),
             default => '',
         };
+    }
+
+    /**
+     * A link shown under the hint when the fix lives on another page: the
+     * reconnect case sends them to Git Connections.
+     *
+     * @return array{url: string, label: string}|null
+     */
+    public static function statusHintLink(AuditRequest $record): ?array
+    {
+        if ($record->status !== AuditRequestStatus::NOT_ANALYZABLE->value || ! $record->git_reconnect_required || $record->tenant === null) {
+            return null;
+        }
+
+        return [
+            'url' => GitConnections::getUrl(panel: 'dashboard', tenant: $record->tenant),
+            'label' => __('Open Git Connections'),
+        ];
+    }
+
+    private static function providerLabel(AuditRequest $record): string
+    {
+        return ($record->repo_url !== null ? app(GitProviderResolver::class)->forUrl($record->repo_url)?->label() : null) ?? 'Git';
     }
 
     public static function getPages(): array

@@ -4,6 +4,7 @@ namespace Tests\Feature\Mail;
 
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
+use App\Filament\Dashboard\Pages\GitConnections;
 use App\Mail\Audit\AuditQuotaExhausted;
 use App\Mail\Audit\AuditRepoAccessNeeded;
 use App\Mail\Audit\AuditReportReady;
@@ -64,6 +65,37 @@ class AuditMailablesTest extends FeatureTest
         $this->assertStringContainsString('Connect your GitLab account', $rendered);
         $this->assertStringNotContainsString('read-only collaborator', $rendered);
         $this->assertStringNotContainsString('business day', $rendered);
+    }
+
+    /**
+     * The workspace had a connection and it no longer reads the repo: tell them
+     * to reconnect it, and link the Git Connections page.
+     */
+    public function test_access_needed_mailable_asks_a_formerly_connected_workspace_to_reconnect(): void
+    {
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'https://gitlab.com/acme/private-app',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $rendered = (new AuditRepoAccessNeeded($request, accessProblem: true, reconnect: true))->render();
+
+        $this->assertStringContainsString('Reconnect your GitLab account', $rendered);
+        $this->assertStringContainsString(e(GitConnections::getUrl(panel: 'dashboard', tenant: $tenant)), $rendered);
+        $this->assertStringNotContainsString('Connect your GitLab account', $rendered);
+        $this->assertStringNotContainsString('it looks private', $rendered);
+        $this->assertStringContainsString('Run the audit again', $rendered);
+    }
+
+    public function test_access_needed_mailable_keeps_the_connect_copy_without_a_connection(): void
+    {
+        $request = AuditRequest::factory()->create(['repo_url' => 'https://gitlab.com/acme/private-app']);
+
+        $rendered = (new AuditRepoAccessNeeded($request, accessProblem: true))->render();
+
+        $this->assertStringContainsString('Connect your GitLab account', $rendered);
+        $this->assertStringNotContainsString('Reconnect', $rendered);
     }
 
     public function test_access_needed_mailable_sends_a_workspaceless_visitor_to_sign_in(): void

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
+use App\Constants\AwaitingCreditReason;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Jobs\GenerateAuditReport;
 use App\Mail\Audit\AuditCreditNeeded;
@@ -134,7 +135,7 @@ class AuditRequestService
             // (AuditReports::launchAudit()). Nothing was spent yet, so closing
             // refunds nothing; the email sends them to the dashboard to run
             // it again once they have connected their account.
-            $this->closeNotAnalyzable($auditRequest, $e->getMessage(), $e->accessDenied);
+            $this->closeNotAnalyzable($auditRequest, $e->getMessage(), $e->accessDenied, $e->reconnect);
             $this->notifyAdmin($auditRequest);
 
             return;
@@ -195,10 +196,13 @@ class AuditRequestService
      * hand back whatever it spent. It never restarts: the customer fixes
      * access and starts a new audit, which the refund keeps free of a double
      * charge.
+     *
+     * $reconnect (from AuditNotAnalyzableException::$reconnect) is kept on the
+     * row as well as passed to the email: the dashboard hint reads it later.
      */
-    public function closeNotAnalyzable(AuditRequest $auditRequest, string $reason, bool $accessDenied = true): void
+    public function closeNotAnalyzable(AuditRequest $auditRequest, string $reason, bool $accessDenied = true, bool $reconnect = false): void
     {
-        $closed = DB::transaction(function () use ($auditRequest, $reason): bool {
+        $closed = DB::transaction(function () use ($auditRequest, $reason, $reconnect): bool {
             if ($this->keepDeliveredReport($auditRequest, $reason)) {
                 return false;
             }
@@ -206,6 +210,7 @@ class AuditRequestService
             $auditRequest->update([
                 'status' => AuditRequestStatus::NOT_ANALYZABLE->value,
                 'failure_reason' => $reason,
+                'git_reconnect_required' => $reconnect,
             ]);
 
             if ($this->entitlements->refund($auditRequest)) {
@@ -224,7 +229,7 @@ class AuditRequestService
         // queue retry a request run() will not reprocess. The AuditMailer
         // log carries the failure for a manual resend.
         try {
-            $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest, $accessDenied), $auditRequest->email, $auditRequest);
+            $this->auditMailer->send(new AuditRepoAccessNeeded($auditRequest, $accessDenied, $reconnect), $auditRequest->email, $auditRequest);
         } catch (Throwable $e) {
             $auditRequest->appendPipelineLog('mail_failed', "Customer email could not be sent: {$e->getMessage()}");
         }
@@ -241,7 +246,7 @@ class AuditRequestService
         // Atomic check-and-set: only the caller that flips a live request to
         // awaiting_credit may refund it, so two callers racing on the same
         // request can never refund or notify it twice.
-        $closed = DB::transaction(function () use ($auditRequest, $reason): bool {
+        $closed = DB::transaction(function () use ($auditRequest, $reason, $tooLarge): bool {
             if ($this->keepDeliveredReport($auditRequest, $reason)) {
                 return false;
             }
@@ -252,6 +257,9 @@ class AuditRequestService
                 ->update([
                     'status' => AuditRequestStatus::AWAITING_CREDIT->value,
                     'failure_reason' => $reason,
+                    // Kept for the dashboard hint, which must not tell a
+                    // too-large repo to buy credit.
+                    'awaiting_credit_reason' => ($tooLarge ? AwaitingCreditReason::TOO_LARGE : AwaitingCreditReason::INSUFFICIENT)->value,
                 ]);
 
             if ($affected === 0) {

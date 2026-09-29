@@ -42,25 +42,44 @@ class GitRepoAccessResolver
      */
     public function resolveCredential(string $repoUrl, ?Tenant $tenant): ?GitCredential
     {
+        return $this->resolveAccess($repoUrl, $tenant)->credential;
+    }
+
+    /**
+     * resolveCredential(), plus whether the tenant has a connection for the repo's
+     * provider. A connection deleted during this call because the provider rejected
+     * its refresh (invalid_grant) still counts: the tenant connected once, so a
+     * failure that follows calls for a reconnect, not a first connect.
+     *
+     * @throws GitAccessTemporarilyUnavailableException see resolveCredential()
+     */
+    public function resolveAccess(string $repoUrl, ?Tenant $tenant): GitRepoAccess
+    {
         $provider = $this->providers->forUrl($repoUrl);
 
         if ($provider === null || $tenant === null || ! $this->isCanonicalHttpsUrl($repoUrl)) {
-            return null;
+            return new GitRepoAccess(null, connected: false);
         }
 
-        $connection = $this->freshConnection($repoUrl, $tenant);
+        $stored = $this->storedConnection($provider, $tenant);
+
+        if ($stored === null) {
+            return new GitRepoAccess(null, connected: false);
+        }
+
+        $connection = $this->freshen($provider, $stored);
 
         if ($connection === null) {
-            return null;
+            return new GitRepoAccess(null, connected: true);
         }
 
         $pair = $provider->cloneCredentials($connection);
 
-        return new GitCredential(
+        return new GitRepoAccess(new GitCredential(
             $pair['username'],
             $pair['password'],
             'https://'.strtolower((string) parse_url($repoUrl, PHP_URL_HOST)),
-        );
+        ), connected: true);
     }
 
     /**
@@ -92,23 +111,34 @@ class GitRepoAccessResolver
      */
     public function connectionFor(string $repoUrl, Tenant $tenant): ?TenantGitConnection
     {
-        return $this->freshConnection($repoUrl, $tenant);
-    }
-
-    private function freshConnection(string $repoUrl, Tenant $tenant): ?TenantGitConnection
-    {
         $provider = $this->providers->forUrl($repoUrl);
 
         if ($provider === null) {
             return null;
         }
 
-        $connection = TenantGitConnection::query()
+        $connection = $this->storedConnection($provider, $tenant);
+
+        return $connection === null ? null : $this->freshen($provider, $connection);
+    }
+
+    private function storedConnection(GitProvider $provider, Tenant $tenant): ?TenantGitConnection
+    {
+        return TenantGitConnection::query()
             ->where('tenant_id', $tenant->id)
             ->where('provider', $provider->name())
             ->first();
+    }
 
-        if ($connection === null || ! $this->isExpired($connection)) {
+    /**
+     * The connection with a usable token: as is, refreshed, or null when the provider
+     * rejected the refresh and the connection was deleted.
+     *
+     * @throws GitAccessTemporarilyUnavailableException
+     */
+    private function freshen(GitProvider $provider, TenantGitConnection $connection): ?TenantGitConnection
+    {
+        if (! $this->isExpired($connection)) {
             return $connection;
         }
 

@@ -17,7 +17,7 @@ class RepositoryCloner
 
     public function preflight(string $url, ?Tenant $tenant = null): void
     {
-        $result = $this->runGit(
+        [$result, $connected] = $this->runGit(
             $url,
             $tenant,
             config('audit.preflight_timeout'),
@@ -26,9 +26,11 @@ class RepositoryCloner
         );
 
         if (! $result->successful()) {
-            throw AuditNotAnalyzableException::accessDenied(
-                'Repository is not publicly accessible: '.$this->redactUrl($url)
-            );
+            // With a connection on file the repo is private and the token no
+            // longer reads it (revoked, expired, scope lost): reconnect.
+            throw $connected
+                ? AuditNotAnalyzableException::reconnectNeeded('Repository could not be reached with the connected account: '.$this->redactUrl($url))
+                : AuditNotAnalyzableException::accessDenied('Repository is not publicly accessible: '.$this->redactUrl($url));
         }
     }
 
@@ -47,7 +49,7 @@ class RepositoryCloner
         }
 
         try {
-            $result = $this->runGit(
+            [$result, $connected] = $this->runGit(
                 $url,
                 $tenant,
                 config('audit.clone_timeout'),
@@ -63,7 +65,11 @@ class RepositoryCloner
         if (! $result->successful()) {
             $this->cleanup($uuid);
 
-            throw new AuditNotAnalyzableException('Repository could not be cloned: '.$this->redactUrl($url));
+            // Preflight passed, so a refused clone with a connection on file
+            // means the token went bad in between: same fix as at preflight.
+            throw $connected
+                ? AuditNotAnalyzableException::reconnectNeeded('Repository could not be cloned with the connected account: '.$this->redactUrl($url))
+                : new AuditNotAnalyzableException('Repository could not be cloned: '.$this->redactUrl($url));
         }
 
         $sizeMb = $this->directorySizeMb($path);
@@ -93,7 +99,7 @@ class RepositoryCloner
         $ref = $branch !== null ? 'refs/heads/'.$branch : 'HEAD';
 
         try {
-            $result = $this->runGit(
+            [$result] = $this->runGit(
                 $url,
                 $tenant,
                 config('audit.preflight_timeout'),
@@ -134,22 +140,29 @@ class RepositoryCloner
      * A GitAccessTemporarilyUnavailableException from the resolver is the one exception to
      * that conversion: it propagates as is (see the exception's docblock).
      *
+     * Alongside the result it returns whether the tenant has (or had, see
+     * GitRepoAccessResolver::resolveAccess()) a connection for the repo's provider, so
+     * callers can ask a failed connected tenant to reconnect rather than connect.
+     *
      * @param  list<string>  $arguments  git arguments after the global options
+     * @return array{ProcessResult, bool}
      *
      * @throws GitAccessTemporarilyUnavailableException
      */
-    private function runGit(string $url, ?Tenant $tenant, mixed $timeout, array $arguments, string $failurePrefix): ProcessResult
+    private function runGit(string $url, ?Tenant $tenant, mixed $timeout, array $arguments, string $failurePrefix): array
     {
         try {
-            $credential = $this->accessResolver->resolveCredential($url, $tenant);
+            $access = $this->accessResolver->resolveAccess($url, $tenant);
 
-            return Process::timeout((int) $timeout)
+            $result = Process::timeout((int) $timeout)
                 ->env([
                     'GIT_CONFIG_NOSYSTEM' => '1',
                     'GIT_TERMINAL_PROMPT' => '0',
-                    ...($credential?->gitEnv() ?? []),
+                    ...($access->credential?->gitEnv() ?? []),
                 ])
                 ->run(['git', '-c', 'credential.helper=', ...$arguments]);
+
+            return [$result, $access->connected];
         } catch (GitAccessTemporarilyUnavailableException $e) {
             // Not a verdict on the repo: let it reach the queue (retry) or the caller
             // (try again). Its message is fixed text, never token material.

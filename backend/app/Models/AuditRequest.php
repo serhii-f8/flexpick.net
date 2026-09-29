@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
+use App\Constants\AwaitingCreditReason;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -34,6 +35,7 @@ class AuditRequest extends Model
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
         'risk_files', 'deep_review_input_tokens', 'deep_review_output_tokens', 'deep_review_ms',
         'run_count', 'extra_metered_runs', 'extra_purchased_runs', 'from_schedule',
+        'awaiting_credit_reason', 'git_reconnect_required',
     ];
 
     protected $casts = [
@@ -64,6 +66,8 @@ class AuditRequest extends Model
         'extra_metered_runs' => 'integer',
         'extra_purchased_runs' => 'integer',
         'from_schedule' => 'boolean',
+        'awaiting_credit_reason' => AwaitingCreditReason::class,
+        'git_reconnect_required' => 'boolean',
     ];
 
     /**

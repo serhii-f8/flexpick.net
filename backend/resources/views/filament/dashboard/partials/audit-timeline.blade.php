@@ -4,7 +4,12 @@
         <span class="font-medium text-gray-950 dark:text-white">{{ $statusLabel }}</span>
     </p>
     @if ($statusHint !== '')
-        <p class="fp-timeline-hint {{ $blocked ? 'fp-timeline-hint-blocked' : '' }}">{{ $statusHint }}</p>
+        <p class="fp-timeline-hint {{ $blocked ? 'fp-timeline-hint-blocked' : '' }}">
+            {{ $statusHint }}
+            @if ($statusHintLink)
+                <a href="{{ $statusHintLink['url'] }}" class="font-medium underline">{{ $statusHintLink['label'] }}</a>
+            @endif
+        </p>
     @endif
     @if ($failureReason)
         <p class="fp-timeline-failure">{{ $failureReason }}</p>

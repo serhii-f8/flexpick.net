@@ -3,6 +3,7 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\AuditRequestStatus;
+use App\Exceptions\AuditNotAnalyzableException;
 use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Jobs\GenerateAuditReport;
 use App\Jobs\RouteVerifiedAuditRequest;
@@ -125,6 +126,23 @@ class AuditRequestRoutingTest extends FeatureTest
 
         $this->assertSame(AuditRequestStatus::NEEDS_FOLLOWUP->value, $request->refresh()->status);
         Mail::assertQueued(AuditRepoAccessNeeded::class);
+    }
+
+    public function test_a_preflight_reconnect_failure_closes_with_the_reconnect_variant(): void
+    {
+        $mock = Mockery::mock(RepositoryCloner::class, [app(GitRepoAccessResolver::class)])->makePartial();
+        $mock->shouldReceive('preflight')->andThrow(AuditNotAnalyzableException::reconnectNeeded('Repository could not be reached with the connected account: https://github.com/acme/private'));
+        $this->instance(RepositoryCloner::class, $mock);
+        $request = AuditRequest::factory()->verified()->create([
+            'repo_url' => 'https://github.com/acme/private',
+            'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
+        ]);
+
+        $this->route($request);
+
+        $this->assertSame(AuditRequestStatus::NOT_ANALYZABLE->value, $request->refresh()->status);
+        $this->assertTrue($request->git_reconnect_required);
+        Mail::assertQueued(AuditRepoAccessNeeded::class, fn (AuditRepoAccessNeeded $mail) => $mail->hasTo($request->email) && $mail->reconnect);
     }
 
     private function cloneThatIsTransientlyUnavailable(): void

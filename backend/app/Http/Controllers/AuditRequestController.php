@@ -63,6 +63,12 @@ class AuditRequestController extends Controller
             'label' => $this->label($auditRequest->status),
             'done' => $ready,
             'failed' => $auditRequest->status === AuditRequestStatus::FAILED->value,
+            // Refunded terminal closes: nothing more will happen to this
+            // request, so the page stops polling and leaves the label up.
+            'closed' => in_array($auditRequest->status, [
+                AuditRequestStatus::AWAITING_CREDIT->value,
+                AuditRequestStatus::NOT_ANALYZABLE->value,
+            ], true),
             'report_url' => $ready ? $reportService->signedUrl($report) : null,
         ]);
     }
@@ -134,6 +140,7 @@ class AuditRequestController extends Controller
             'needs_followup', 'awaiting_access' => __('We need access to your repository — check your email'),
             'not_analyzable' => __("We couldn't reach your repository — check your email for next steps"),
             'awaiting_payment' => __('Payment needed to continue — check your email for options'),
+            'awaiting_credit' => __('This repository needs more audit credit — check your email for next steps.'),
             'expert_review' => __('Your report is complete and is being reviewed by our expert auditor before delivery.'),
             default => __('Processing'),
         };

@@ -224,7 +224,7 @@ class AuditPipeline
             $this->requestService->closeAwaitingCredit($auditRequest, $e->getMessage(), $e->tooLarge);
         } catch (AuditNotAnalyzableException $e) {
             $auditRequest->appendPipelineLog('not_analyzable', $e->getMessage());
-            $this->requestService->closeNotAnalyzable($auditRequest, $e->getMessage(), $e->accessDenied);
+            $this->requestService->closeNotAnalyzable($auditRequest, $e->getMessage(), $e->accessDenied, $e->reconnect);
         } finally {
             $this->cloner->cleanup($auditRequest->uuid);
         }

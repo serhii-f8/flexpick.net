@@ -5,14 +5,20 @@ namespace Tests\Feature\Services;
 use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
+use App\Constants\AwaitingCreditReason;
+use App\Exceptions\AuditNotAnalyzableException;
 use App\Filament\Admin\Resources\AuditRequests\Pages\ListAuditRequests;
 use App\Filament\Dashboard\Resources\AuditRequests\AuditRequestResource;
 use App\Mail\Audit\AuditCreditNeeded;
+use App\Mail\Audit\AuditRepoAccessNeeded;
 use App\Mapper\AuditRequestStatusMapper;
 use App\Models\AuditRequest;
 use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\AuditPipeline;
+use App\Services\AuditReport\RepositoryCloner;
 use App\Services\AuditRequestService;
+use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Mockery;
@@ -124,6 +130,69 @@ class AuditAwaitingCreditTest extends FeatureTest
         $this->assertNotNull($request->credit_refunded_at);
         $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
         $this->assertContains('mail_failed', array_column($request->pipeline_log ?? [], 'step'));
+    }
+
+    /**
+     * The dashboard hint is read long after the email: why the request is
+     * awaiting credit has to be on the row.
+     */
+    public function test_closing_records_why_the_request_is_awaiting_credit(): void
+    {
+        Mail::fake();
+        $service = app(AuditRequestService::class);
+        $insufficient = AuditRequest::factory()->create(['status' => AuditRequestStatus::ANALYZING->value]);
+        $tooLarge = AuditRequest::factory()->create(['status' => AuditRequestStatus::ANALYZING->value]);
+
+        $service->closeAwaitingCredit($insufficient, 'Needs 2 runs; 1 available.', tooLarge: false);
+        $service->closeAwaitingCredit($tooLarge, 'Above the largest size band.', tooLarge: true);
+
+        $this->assertSame(AwaitingCreditReason::INSUFFICIENT, $insufficient->fresh()->awaiting_credit_reason);
+        $this->assertSame(AwaitingCreditReason::TOO_LARGE, $tooLarge->fresh()->awaiting_credit_reason);
+    }
+
+    /**
+     * The reconnect flag travels from the exception to the row (for the
+     * dashboard hint) and to the email.
+     */
+    public function test_close_not_analyzable_records_and_mails_the_reconnect_variant(): void
+    {
+        Mail::fake();
+        $service = app(AuditRequestService::class);
+        $reconnect = AuditRequest::factory()->create(['status' => AuditRequestStatus::ANALYZING->value]);
+        $connect = AuditRequest::factory()->create(['status' => AuditRequestStatus::ANALYZING->value]);
+
+        $service->closeNotAnalyzable($reconnect, 'Repository could not be reached with the connected account.', accessDenied: true, reconnect: true);
+        $service->closeNotAnalyzable($connect, 'Repository is not publicly accessible.', accessDenied: true);
+
+        $this->assertTrue($reconnect->fresh()->git_reconnect_required);
+        $this->assertFalse($connect->fresh()->git_reconnect_required);
+        Mail::assertQueued(AuditRepoAccessNeeded::class, fn (AuditRepoAccessNeeded $mail) => $mail->hasTo($reconnect->email) && $mail->reconnect);
+        Mail::assertQueued(AuditRepoAccessNeeded::class, fn (AuditRepoAccessNeeded $mail) => $mail->hasTo($connect->email) && ! $mail->reconnect);
+    }
+
+    /**
+     * End to end through the pipeline: a clone refused after preflight, with
+     * a connection on file, closes with the reconnect variant.
+     */
+    public function test_the_pipeline_carries_the_reconnect_flag_from_the_cloner(): void
+    {
+        Mail::fake();
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'https://github.com/acme/private',
+            'status' => AuditRequestStatus::QUEUED->value,
+            'tenant_id' => $this->createTenant()->id,
+        ]);
+        $mock = Mockery::mock(RepositoryCloner::class, [app(GitRepoAccessResolver::class)])->makePartial();
+        $mock->shouldReceive('preflight')->andReturnNull();
+        $mock->shouldReceive('clone')->andThrow(AuditNotAnalyzableException::reconnectNeeded('Repository could not be cloned with the connected account: https://github.com/acme/private'));
+        $this->instance(RepositoryCloner::class, $mock);
+
+        app(AuditPipeline::class)->run($request);
+
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::NOT_ANALYZABLE->value, $request->status);
+        $this->assertTrue($request->git_reconnect_required);
+        Mail::assertQueued(AuditRepoAccessNeeded::class, fn (AuditRepoAccessNeeded $mail) => $mail->hasTo($request->email) && $mail->reconnect && $mail->accessProblem);
     }
 
     public function test_the_insufficient_credit_email_sends_them_to_buy_and_run_again(): void
