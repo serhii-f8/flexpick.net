@@ -10,6 +10,7 @@ use App\Models\Config;
 use App\Models\Tenant;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditRunSizer;
+use App\Services\AuditReport\AuditSize;
 use App\Services\ConfigService;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Events\TransactionBeginning;
@@ -43,7 +44,7 @@ class AuditRunSizerTest extends FeatureTest
     {
         $request = $this->request($this->createTenant(), AuditFunding::PURCHASE);
 
-        $this->assertSame(1, app(AuditRunSizer::class)->settle($request, 5000));
+        $this->assertSame(1, app(AuditRunSizer::class)->settle($request, AuditSize::measured(5000)));
         $this->assertSame(1, $request->refresh()->run_count);
         $this->assertSame(0, $request->extra_purchased_runs);
     }
@@ -54,7 +55,7 @@ class AuditRunSizerTest extends FeatureTest
         app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 1);
         $request = $this->request($tenant, AuditFunding::PURCHASE);
 
-        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, 150000));
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, AuditSize::measured(150000)));
 
         $this->assertSame(2, $request->refresh()->run_count);
         $this->assertSame(1, $request->extra_purchased_runs);
@@ -66,7 +67,7 @@ class AuditRunSizerTest extends FeatureTest
         $request = $this->request($this->createTenant(), AuditFunding::PURCHASE);
 
         try {
-            app(AuditRunSizer::class)->settle($request, 150000);
+            app(AuditRunSizer::class)->settle($request, AuditSize::measured(150000));
             $this->fail('Expected AuditAwaitingCreditException');
         } catch (AuditAwaitingCreditException $e) {
             $this->assertFalse($e->tooLarge);
@@ -84,7 +85,7 @@ class AuditRunSizerTest extends FeatureTest
         $request = $this->request($tenant, AuditFunding::PURCHASE);
 
         try {
-            app(AuditRunSizer::class)->settle($request, 412000);
+            app(AuditRunSizer::class)->settle($request, AuditSize::measured(412000));
             $this->fail('Expected AuditAwaitingCreditException');
         } catch (AuditAwaitingCreditException $e) {
             $this->assertTrue($e->tooLarge);
@@ -94,11 +95,39 @@ class AuditRunSizerTest extends FeatureTest
         $this->assertSame(50, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
+    public function test_a_size_from_the_fallback_inventory_settles_at_one_run_and_charges_nothing(): void
+    {
+        $tenant = $this->createTenant();
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 3);
+        $request = $this->request($tenant, AuditFunding::PURCHASE);
+
+        $runs = app(AuditRunSizer::class)->settle($request, AuditSize::unavailable('scc unavailable; used a file walk'));
+
+        $this->assertSame(1, $runs);
+        $request->refresh();
+        $this->assertSame(1, $request->run_count);
+        $this->assertSame(0, $request->extra_purchased_runs);
+        $this->assertSame(0, $request->extra_metered_runs);
+        $this->assertSame(3, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+
+        $entry = collect($request->pipeline_log)->firstWhere('step', 'sizing_skipped');
+        $this->assertNotNull($entry, 'No sizing_skipped pipeline-log entry.');
+        $this->assertStringContainsString('scc unavailable; used a file walk', $entry['message']);
+    }
+
+    public function test_the_too_large_ceiling_does_not_apply_to_an_unavailable_size(): void
+    {
+        $request = $this->request($this->createTenant(), AuditFunding::PURCHASE);
+
+        $this->assertSame(1, app(AuditRunSizer::class)->settle($request, AuditSize::unavailable('scc failed')));
+        $this->assertSame(1, $request->refresh()->run_count);
+    }
+
     public function test_an_operator_provisioned_request_is_never_charged_extras(): void
     {
         $request = $this->request($this->createTenant(), null);
 
-        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, 150000));
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, AuditSize::measured(150000)));
         $this->assertSame(0, $request->refresh()->extra_purchased_runs);
     }
 
@@ -108,9 +137,9 @@ class AuditRunSizerTest extends FeatureTest
         app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 3);
         $request = $this->request($tenant, AuditFunding::PURCHASE);
 
-        app(AuditRunSizer::class)->settle($request, 150000);
+        app(AuditRunSizer::class)->settle($request, AuditSize::measured(150000));
         // A retry sees a bigger branch; the settled count stands.
-        $this->assertSame(2, app(AuditRunSizer::class)->settle($request->refresh(), 250000));
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($request->refresh(), AuditSize::measured(250000)));
 
         $this->assertSame(2, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
@@ -124,9 +153,9 @@ class AuditRunSizerTest extends FeatureTest
         // its in-memory run_count is still null.
         $retry = AuditRequest::find($request->id);
 
-        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, 150000));
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, AuditSize::measured(150000)));
         // The retry's clone grew past the ceiling; the settled count stands.
-        $this->assertSame(2, app(AuditRunSizer::class)->settle($retry, 412000));
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($retry, AuditSize::measured(412000)));
 
         $this->assertSame(2, $request->refresh()->run_count);
         $this->assertSame(1, $request->extra_purchased_runs);
@@ -143,7 +172,7 @@ class AuditRunSizerTest extends FeatureTest
         app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 1);
         $request = $this->request($tenant, AuditFunding::PURCHASE);
 
-        $events = $this->recordConfigReadsAndTransactions(fn () => app(AuditRunSizer::class)->settle($request, 150000));
+        $events = $this->recordConfigReadsAndTransactions(fn () => app(AuditRunSizer::class)->settle($request, AuditSize::measured(150000)));
 
         $this->assertConfigsReadOnlyBeforeTheTransaction($events);
     }
@@ -154,7 +183,7 @@ class AuditRunSizerTest extends FeatureTest
 
         $events = $this->recordConfigReadsAndTransactions(function () use ($request): void {
             try {
-                app(AuditRunSizer::class)->settle($request, 412000);
+                app(AuditRunSizer::class)->settle($request, AuditSize::measured(412000));
                 $this->fail('Expected AuditAwaitingCreditException');
             } catch (AuditAwaitingCreditException $e) {
                 $this->assertTrue($e->tooLarge);
@@ -183,7 +212,7 @@ class AuditRunSizerTest extends FeatureTest
             $log[] = 'begin';
         });
 
-        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, 150000));
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, AuditSize::measured(150000)));
         $this->assertSame(1, $request->refresh()->extra_metered_runs);
 
         $begin = array_search('begin', $log, true);

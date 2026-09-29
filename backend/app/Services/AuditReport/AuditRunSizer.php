@@ -18,7 +18,7 @@ class AuditRunSizer
     ) {}
 
     /** @throws AuditAwaitingCreditException */
-    public function settle(AuditRequest $auditRequest, int $totalLoc): int
+    public function settle(AuditRequest $auditRequest, AuditSize $size): int
     {
         // Settled once per request. The queue's retries and the admin's
         // "Retry pipeline" re-enter from the clone; charging again there
@@ -36,10 +36,14 @@ class AuditRunSizer
         // would hide runs a concurrent sizing of the same workspace committed
         // while we waited for it. The request re-read below is a locking
         // read, which opens no snapshot. See chargeExtraRuns().
-        $runs = $this->bands->runsFor($totalLoc);
+        //
+        // An unmeasured size (scc missing, failed or timed out) reads no
+        // bands at all: it settles at one run below.
+        $totalLoc = $size->codeLoc;
+        $runs = $totalLoc === null ? 1 : $this->bands->runsFor($totalLoc);
         $ceiling = $runs === null ? $this->bands->ceiling() : null;
 
-        return DB::transaction(function () use ($auditRequest, $totalLoc, $runs, $ceiling): int {
+        return DB::transaction(function () use ($auditRequest, $size, $totalLoc, $runs, $ceiling): int {
             // Two workers can run this request's retries at once, each with
             // its own stale copy that still shows a null run_count. Re-read
             // the row under a write lock and recheck, so the settle and its
@@ -52,6 +56,19 @@ class AuditRunSizer
                 $auditRequest->refresh();
 
                 return $settled->run_count;
+            }
+
+            // No measured count means no basis for extras, and none for the
+            // too-large ceiling either: charge nothing, and say so in the log.
+            if ($totalLoc === null) {
+                $settled->update(['run_count' => 1]);
+                $auditRequest->refresh();
+                $auditRequest->appendPipelineLog('sizing_skipped', sprintf(
+                    'Size not measured (%s); settled at 1 run with no extras',
+                    $size->unavailableReason ?? 'no code count',
+                ));
+
+                return 1;
             }
 
             if ($runs === null) {

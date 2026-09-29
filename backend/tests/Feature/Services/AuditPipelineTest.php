@@ -417,6 +417,19 @@ class AuditPipelineTest extends FeatureTest
         $this->assertGreaterThan(0, $request->fresh()->metrics['files_total']);
     }
 
+    public function test_a_fallback_inventory_is_never_billed_extras_and_logs_the_skip(): void
+    {
+        $this->useTwoBands();
+
+        $request = $this->runPipelineWithFakes(failingScanners: ['scc'], requestAttributes: [
+            'funding' => AuditFunding::PURCHASE,
+        ]);
+
+        $this->assertSame(1, $request->run_count);
+        $this->assertSame(0, $request->extra_purchased_runs);
+        $this->assertNotNull(collect($request->pipeline_log)->firstWhere('step', 'sizing_skipped'));
+    }
+
     private function useTwoBands(): void
     {
         app(ConfigService::class)->set('audit.size_bands', json_encode([

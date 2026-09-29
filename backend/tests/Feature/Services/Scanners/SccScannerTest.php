@@ -7,6 +7,9 @@ use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\SccInventory;
 use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
+use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Process\FakeProcessResult;
+use Illuminate\Support\Facades\Process;
 use Tests\Feature\FeatureTest;
 
 class SccScannerTest extends FeatureTest
@@ -86,5 +89,69 @@ class SccScannerTest extends FeatureTest
         config()->set('audit.scanners.scc.bin', '/nonexistent/scc');
 
         $this->assertFalse(app(SccScanner::class)->isAvailable());
+    }
+
+    /** @param  callable(list<string>): ProcessResult|FakeProcessResult  $respond */
+    private function scanWithFakedScc(callable $respond): RepoContext
+    {
+        Process::fake(fn ($process) => $respond((array) $process->command));
+
+        $context = new RepoContext(
+            path: self::ROOT,
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
+        );
+        app(SccScanner::class)->scan($context);
+
+        return $context;
+    }
+
+    private function sccOutput(array $command): string
+    {
+        $fixture = in_array('--by-file', $command, true) ? 'scc.json' : 'scc-sizing.json';
+
+        return (string) file_get_contents(base_path('tests/Feature/Services/Fixtures/Scanners/'.$fixture));
+    }
+
+    public function test_billable_code_is_scc_code_not_lines_and_excludes_generated_and_minified(): void
+    {
+        // The sizing fixture has 120,000 Lines but only 61,500 Code: blanks and
+        // comments are not billable, and neither is anything scc flags generated
+        // or minified.
+        $context = $this->scanWithFakedScc(fn (array $command) => Process::result($this->sccOutput($command)));
+
+        $this->assertSame(61500, $context->inventory->billableCode);
+        Process::assertRan(fn ($process) => in_array('--no-gen', (array) $process->command, true)
+            && in_array('--no-min-gen', (array) $process->command, true)
+            && ! in_array('--by-file', (array) $process->command, true));
+    }
+
+    public function test_the_inventory_run_keeps_generated_files_so_other_metrics_do_not_change_meaning(): void
+    {
+        $this->scanWithFakedScc(fn (array $command) => Process::result($this->sccOutput($command)));
+
+        Process::assertRan(fn ($process) => in_array('--by-file', (array) $process->command, true)
+            && ! in_array('--no-gen', (array) $process->command, true)
+            && ! in_array('--no-min-gen', (array) $process->command, true));
+        $this->assertSame(690, app(SccScanner::class)->toInventory(
+            json_decode((string) file_get_contents(base_path('tests/Feature/Services/Fixtures/Scanners/scc.json')), true),
+            self::ROOT,
+        )->totalLoc);
+    }
+
+    public function test_a_failed_sizing_run_leaves_billable_code_unknown(): void
+    {
+        $context = $this->scanWithFakedScc(fn (array $command) => in_array('--by-file', $command, true)
+            ? Process::result($this->sccOutput($command))
+            : Process::result('', 'boom', 1));
+
+        $this->assertNotNull($context->inventory);
+        $this->assertNull($context->inventory->billableCode);
+    }
+
+    public function test_the_fallback_inventory_has_no_billable_code(): void
+    {
+        $inventory = app(SccScanner::class)->fallbackInventory(base_path('app/Services/AuditReport'));
+
+        $this->assertNull($inventory->billableCode);
     }
 }

@@ -6,6 +6,7 @@ use App\Constants\AuditFunding;
 use App\Constants\AuditTier;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditRunSizer;
+use App\Services\AuditReport\AuditSize;
 use Illuminate\Support\Facades\DB;
 use Tests\Feature\FeatureTest;
 
@@ -53,7 +54,7 @@ class GrandfatherAuditRunCountMigrationTest extends FeatureTest
             (require database_path(self::MIGRATION))->up();
 
             // A repo far above any band: a NULL row would be sized or closed.
-            $this->assertSame(1, app(AuditRunSizer::class)->settle($request->fresh(), 5_000_000));
+            $this->assertSame(1, app(AuditRunSizer::class)->settle($request->fresh(), AuditSize::measured(5_000_000)));
 
             $fresh = $request->fresh();
             $this->assertSame(1, $fresh->run_count);

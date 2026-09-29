@@ -129,6 +129,7 @@ trait RunsAuditPipelineWithFakes
                         languages: ['PHP' => ['files' => count($files), 'loc' => 3 + count($fillerFiles)]],
                         totalLoc: $totalLoc ?? (3 + count($fillerFiles)),
                         totalComplexity: 1,
+                        billableCode: $totalLoc ?? (3 + count($fillerFiles)),
                     ));
 
                     return [];

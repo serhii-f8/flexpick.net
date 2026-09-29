@@ -15,6 +15,7 @@ use App\Models\Config;
 use App\Models\Tenant;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditRunSizer;
+use App\Services\AuditReport\AuditSize;
 use App\Services\AuditRequestService;
 use App\Services\ConfigService;
 use Filament\Actions\DeleteAction;
@@ -145,7 +146,7 @@ class AuditRequestResourceTest extends FeatureTest
             $record->refresh();
             $this->assertNull($record->funding);
 
-            $this->assertSame(2, app(AuditRunSizer::class)->settle($record, 150000));
+            $this->assertSame(2, app(AuditRunSizer::class)->settle($record, AuditSize::measured(150000)));
             $record->refresh();
             $this->assertSame(2, $record->run_count);
             $this->assertSame(0, $record->extra_purchased_runs);

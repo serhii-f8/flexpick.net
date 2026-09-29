@@ -96,18 +96,24 @@ class AuditPipeline
 
             // scc failing must not leave later stages without a basis (spec §10).
             $inventory = $context->inventory;
+            $fellBack = $inventory === null;
             if ($inventory === null) {
                 $inventory = $this->sccScanner->fallbackInventory($path);
                 $context->withInventory($inventory);
                 $auditRequest->appendPipelineLog('inventory', 'scc unavailable; used a walked file inventory');
             }
 
-            $runs = $this->runSizer->settle($auditRequest, $inventory->totalLoc);
-            $auditRequest->appendPipelineLog('sized', sprintf(
-                '%s lines of code; %d run(s)',
-                number_format($inventory->totalLoc),
-                $runs,
-            ));
+            // Billed on scc's code count only. A walked inventory (or an scc
+            // whose sizing run failed) carries none, and the sizer never
+            // charges extras off it.
+            $size = $inventory->billableCode === null
+                ? AuditSize::unavailable($fellBack ? 'scc unavailable, failed or timed out' : 'scc code count unavailable')
+                : AuditSize::measured($inventory->billableCode);
+
+            $runs = $this->runSizer->settle($auditRequest, $size);
+            $auditRequest->appendPipelineLog('sized', $size->isMeasured()
+                ? sprintf('%s lines of code; %d run(s)', number_format((int) $size->codeLoc), $runs)
+                : sprintf('%d run(s); size not measured', $runs));
 
             $suite = $sccSuite->merge($this->scannerRunner->run(
                 array_values(array_filter($profile->scanners, fn (string $name): bool => $name !== 'scc')),

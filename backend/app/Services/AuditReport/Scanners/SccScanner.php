@@ -45,9 +45,52 @@ class SccScanner implements Scanner
 
         $decoded = json_decode(Utf8::scrub($result->output()), true, flags: JSON_THROW_ON_ERROR);
 
-        $context->withInventory($this->toInventory(is_array($decoded) ? $decoded : [], $context->path));
+        $context->withInventory($this->toInventory(
+            is_array($decoded) ? $decoded : [],
+            $context->path,
+            $this->billableCode($context->path),
+        ));
 
         return $this->normalize($decoded);
+    }
+
+    /**
+     * What the audit is billed on: scc's code lines summed across languages,
+     * generated and minified files left out. A separate run from the
+     * inventory's, because those flags would also drop files from the
+     * inventory that the report's size metrics and the excerpt and scanner
+     * budgets read. Null when the run fails: the sizer then bills nothing
+     * extra rather than guess.
+     */
+    private function billableCode(string $path): ?int
+    {
+        try {
+            $result = Process::timeout((int) config('audit.scanners.scc.timeout'))
+                ->run([
+                    (string) config('audit.scanners.scc.bin'),
+                    '--format', 'json',
+                    '--no-gen',
+                    '--no-min-gen',
+                    '--exclude-dir', implode(',', self::EXCLUDED_DIRS),
+                    $path,
+                ]);
+
+            if (! $result->successful()) {
+                return null;
+            }
+
+            $decoded = json_decode(Utf8::scrub($result->output()), true, flags: JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_array($decoded) ? $this->sumCode($decoded) : null;
+    }
+
+    /** @param  array<int, array<string, mixed>>  $raw */
+    public function sumCode(array $raw): int
+    {
+        return (int) array_sum(array_map(fn (array $language): int => (int) ($language['Code'] ?? 0), $raw));
     }
 
     /** scc measures; it never reports a defect. @return list<never> */
@@ -63,7 +106,7 @@ class SccScanner implements Scanner
      *
      * @param  array<int, array<string, mixed>>  $raw
      */
-    public function toInventory(array $raw, string $repoPath): SccInventory
+    public function toInventory(array $raw, string $repoPath, ?int $billableCode = null): SccInventory
     {
         $files = [];
         $languages = [];
@@ -104,6 +147,7 @@ class SccScanner implements Scanner
             languages: $languages,
             totalLoc: array_sum(array_column($files, 'loc')),
             totalComplexity: $totalComplexity,
+            billableCode: $billableCode,
         );
     }
 
