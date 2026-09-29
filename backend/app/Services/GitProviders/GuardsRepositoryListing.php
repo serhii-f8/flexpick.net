@@ -5,6 +5,7 @@ namespace App\Services\GitProviders;
 use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Exceptions\GitRepositoryListingRejectedException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Shared status handling for the providers' repository-listing calls. Messages are
@@ -29,14 +30,19 @@ trait GuardsRepositoryListing
         $rateLimited = $response->header('X-RateLimit-Remaining') === '0' || $response->header('Retry-After') !== '';
 
         if ($status === 401 || ($status === 403 && ! $rateLimited)) {
+            Log::warning('Git repository listing rejected', ['provider' => $label, 'status' => $status]);
+
             throw new GitRepositoryListingRejectedException("{$label} rejected the repository listing");
         }
 
-        throw $this->listingUnavailable($label);
+        throw $this->listingUnavailable($label, "HTTP {$status}");
     }
 
-    protected function listingUnavailable(string $label): GitAccessTemporarilyUnavailableException
+    /** $reason is a short fixed description (a status code or "connection failed"), never response or request content. */
+    protected function listingUnavailable(string $label, string $reason = 'connection failed'): GitAccessTemporarilyUnavailableException
     {
+        Log::warning('Git repository listing unavailable', ['provider' => $label, 'reason' => $reason]);
+
         return new GitAccessTemporarilyUnavailableException("{$label} repository listing is temporarily unavailable");
     }
 

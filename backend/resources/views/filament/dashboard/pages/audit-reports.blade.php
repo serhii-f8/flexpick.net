@@ -16,9 +16,10 @@
                         <span class="fp-mono-label">{{ __('Repository') }}</span>
 
                         @if ($repoUrl)
-                            <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 dark:border-white/10">
-                                <span class="fp-repo truncate font-medium text-gray-950 dark:text-white">{{ \App\Support\RepoName::short($repoUrl) }}</span>
-                                <x-filament::link tag="button" wire:click="clearRepository" size="sm">{{ __('Choose another') }}</x-filament::link>
+                            {{-- Inline layout styles: this row must not depend on which utility classes the compiled theme happens to contain. --}}
+                            <div class="mt-2 rounded-lg border border-gray-200 px-3 py-2 dark:border-white/10" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;width:100%">
+                                <span class="fp-repo font-medium text-gray-950 dark:text-white" style="min-width:0;flex:1 1 auto;overflow-wrap:anywhere">{{ \App\Support\RepoName::short($repoUrl) }}</span>
+                                <span style="flex:none;white-space:nowrap"><x-filament::link tag="button" wire:click="clearRepository" size="sm">{{ __('Choose another') }}</x-filament::link></span>
                             </div>
                         @else
                             @if (count($pickerProviders) > 1)
@@ -76,7 +77,7 @@
                             @endif
                         @endif
 
-                        <p class="mt-2 text-sm">
+                        <p class="mt-2 text-sm" style="white-space:nowrap">
                             <x-filament::link tag="button" wire:click="useUrlInput" size="sm">{{ __('Paste a URL instead') }}</x-filament::link>
                         </p>
                     @else
@@ -106,7 +107,7 @@
                 </div>
 
                 @if ($launchBranches !== null)
-                    <div class="min-w-48">
+                    <div class="min-w-48" style="width:min(16rem,100%)">
                         <label class="fp-mono-label" for="audit-branch">{{ __('Branch') }}</label>
                         @if ($launchBranches !== [])
                             <x-filament::input.wrapper class="mt-2">
