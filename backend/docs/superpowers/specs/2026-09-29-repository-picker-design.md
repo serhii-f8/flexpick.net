@@ -51,47 +51,50 @@ New value objects under `App\Services\GitProviders\`:
   shape `GitRepoAccessResolver::isCanonicalHttpsUrl()` accepts), `bool $private`,
   `?string $defaultBranch`, `?string $updatedAt` (ISO-8601 string as the provider returns it, not a Carbon instance).
 
-Per provider (endpoints to be confirmed against current provider docs in the plan; see
-"Open items"):
+Per provider, as implemented:
 
-| Provider | Endpoint | Scope already requested |
+| Provider | Endpoint | Scope requested |
 |---|---|---|
-| GitHub | `GET /user/repos?affiliation=owner,collaborator,organization_member&sort=pushed&per_page=20&page=N`; search filtered server-side over the fetched pages, or the repository search API when a term is given | `repo` |
-| GitLab | `GET /projects?membership=true&simple=true&order_by=last_activity_at&per_page=20&page=N&search=…` | `read_api` |
-| Bitbucket | `GET /2.0/repositories?role=member&sort=-updated_on&pagelen=20&page=N&q=…` | `repository` + `account` (see below) |
+| GitHub | `GET /user/repos?affiliation=owner,collaborator,organization_member&sort=pushed&per_page=100`, following `Link: rel="next"` for up to 5 pages (`audit.repo_picker.max_pages`); no search API. The search term is filtered locally over the cached listing | `repo` |
+| GitLab | `GET /projects?membership=true&simple=true&order_by=last_activity_at&per_page=20&page=N&search=...` | `read_api` |
+| Bitbucket | `GET /2.0/workspaces?role=member` (first 5 workspaces only), then `GET /2.0/repositories/{workspace}?role=member&sort=-updated_on&pagelen=100` per workspace (first 100 repositories per workspace); merged newest first, cached, filtered and paged locally | `repository` + `account` |
 
-Bitbucket, as implemented: `GET /2.0/workspaces?role=member`, then
-`GET /2.0/repositories/{workspace}?role=member&sort=-updated_on&pagelen=100` per workspace. The global
-and `user/permissions` Bitbucket listing endpoints are deprecated and are not used. Workspace listing
-needs the `account` scope in addition to `repository` (the OAuth consumer needs *Account: Read*);
-existing connections must reconnect to enable the picker.
+Bitbucket: the deprecated global and `user/permissions` listing endpoints are not used.
+Listing workspaces needs the `account` scope in addition to `repository` (the OAuth consumer
+needs *Account: Read*); existing connections must reconnect to enable the picker. Only a
+rejection of the workspace list means "reconnect"; a workspace that rejects the member is
+skipped and the others are still listed. Non-string slugs and repository names are skipped.
 
-- Results are cached per `connection id + search + page` for 5 minutes (same idiom as the
-  existing `github_branches:*` cache key).
+- Results are cached per connection (GitHub, Bitbucket) for 5 minutes and filtered/paged
+  locally; GitLab is cached per `connection id + search + page`.
 - The connection is obtained through `GitRepoAccessResolver` so token refresh, `invalid_grant`
   deletion and the transient-unavailable exception all behave as they already do. The picker
   needs a resolver entry point that returns a fresh connection for a *provider* (not a URL),
   reusing `storedConnection()` + `freshen()`.
-- Errors: a transient failure raises the existing `GitAccessTemporarilyUnavailableException`;
-  a rejected token (`invalid_grant` / 401 after refresh) yields the "reconnect" state; any other
-  API failure returns an empty page and is logged without token material.
+- Errors: a transient failure raises `GitAccessTemporarilyUnavailableException`; a rejected token
+  (`invalid_grant` / 401 or non-rate-limit 403) yields the "reconnect" state. Unexpected
+  failures on the page (cache, limiter, anything else) are mapped to the "try again" state and
+  reported through Laravel's exception handler. Dedicated logging of provider failures is NOT
+  implemented.
 
 ### Dashboard page (`AuditReports`)
 
 New Livewire state and methods on the existing page:
 
-- `pickerProvider` (`github|gitlab|bitbucket|null`), `repoSearch`, `repoPage`.
-- `repositoryChoices()` computed/`loadRepositories()` action returning the current
-  `RepositoryPage` for the selected provider.
-- `chooseRepository(string $url)` sets `$this->repoUrl` after re-validating the URL is canonical
-  and its provider matches `pickerProvider`; it then triggers the existing `loadBranches()`.
-- `usingPicker` boolean toggled by "Paste a URL instead" / "Choose from a connected account".
+- `pickerMode` (`picker|url`), `pickerProvider` (`github|gitlab|bitbucket|null`, reset to the first available provider when stale), `repoSearch`, `repoPage`.
+- `pickerProviders()` and `pickerResult()` return the available providers and the current
+  `RepositoryPickerResult`; the listing is only fetched while the list is shown (no repo chosen yet).
+- `chooseRepository(string $url)` sets `$this->repoUrl` only when the URL exactly matches an
+  entry of the account's current listing (provider/search/page); otherwise it is silently ignored
+  with a warning notification and no state change. It then triggers the existing `loadBranches()`.
+- `pickerMode` is toggled by "Paste a URL instead" / "Choose from a connected account".
 
 **Security invariants**
 
-1. Every picker method aborts 403 unless the user passes
+1. Every picker listing is refused unless the user passes
    `GitConnectionService::userMayManage($tenant, $user)` (tenant-settings permission), checked
-   server-side in each method, not only in the view.
+   server-side in the service, not only in the view. The page treats a refusal as no picker
+   and no state change (silently ignored, not a 403).
 2. The connection is always the *current workspace's* connection for `pickerProvider`. No
    client-supplied connection id, URL host or token is ever used to select it.
 3. `chooseRepository()` never trusts the client-supplied URL as evidence of visibility:
@@ -144,11 +147,11 @@ no global-count assertions).
   transient exception propagates.
 - **Page (Livewire):**
   - no connection → URL box only, connect link shown to permitted members;
-  - with connection → picker listed, provider switch, search, load more;
+  - with connection → picker listed, provider switch, search, Previous/Next paging;
   - choosing an entry sets `repoUrl` and loads branches;
   - `chooseRepository()` rejects a URL not in the current listing, a provider mismatch and a
     non-canonical URL;
-  - member without tenant-settings permission cannot call any picker method (403) and sees no
+  - member without tenant-settings permission cannot choose a repository (no state change) and sees no
     picker;
   - another workspace's connection is never used;
   - rate limit trips after the cap;
@@ -159,19 +162,18 @@ no global-count assertions).
 
 ## Open items (all resolved in implementation)
 
-1. **Provider scopes.** RESOLVED: GitHub and GitLab scopes confirmed sufficient; Bitbucket needs `account` added (see Provider layer). Confirm against current docs that the scopes already requested
-   (`repo`, `read_api`, `repository`) permit the listing calls above. If one does not, add the
-   minimal extra scope and a "reconnect to enable the picker" hint for existing connections
-   (the picker falls back to URL mode meanwhile).
-2. **GitHub search.** RESOLVED: walk up to 5 pages of 100, cache per connection, filter locally. Decide between filtering the user's repos client-side after fetching
-   pages and the search API (`q=…+user:…`), based on rate limits and organisation coverage.
-3. **Rate-limit numbers.** RESOLVED: default 60/min per user. and cache TTL stay configurable in `config/audit.php`.
+1. **Provider scopes.** Resolved: GitHub (`repo`) and GitLab (`read_api`) suffice. Bitbucket needs
+   `account` added; existing Bitbucket connections reconnect to enable the picker.
+2. **GitHub search.** Resolved: no search API; walk up to 5 pages of 100, cache per connection,
+   filter locally.
+3. **Rate-limit numbers.** Resolved: default 60 per minute per user and a 5-minute cache, both
+   configurable in `config/audit.php`.
 
 ## Risks
 
 - **Organisation visibility on GitHub:** OAuth-App tokens see organisation repos only after the
   organisation approves the app; the empty state explains this.
-- **Provider rate limits:** mitigated by the 5-minute cache, page size 20, and per-user rate
+- **Provider rate limits:** mitigated by the 5-minute cache, 20 per page in the UI, and per-user rate
   limit.
 - **Oracle risk:** mitigated by invariants 1–4 above; the picker returns only repos the
   member's own workspace connection can already list.

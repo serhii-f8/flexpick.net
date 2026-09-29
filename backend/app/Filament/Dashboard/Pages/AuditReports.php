@@ -24,6 +24,7 @@ use App\Services\GitProviders\GitProviderResolver;
 use App\Services\GitProviders\GitRepoAccessResolver;
 use App\Services\GitProviders\RepositoryPicker;
 use App\Services\GitProviders\RepositoryPickerResult;
+use App\Services\GitProviders\RepositoryPickerState;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -31,6 +32,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Throwable;
 
 class AuditReports extends Page
 {
@@ -161,7 +163,15 @@ class AuditReports extends Page
      */
     public function pickerProviders(): array
     {
-        return app(RepositoryPicker::class)->providersFor(Filament::getTenant(), auth()->user());
+        $providers = app(RepositoryPicker::class)->providersFor(Filament::getTenant(), auth()->user());
+
+        // pickerProvider is client-editable and can go stale (connection deleted or removed
+        // elsewhere): keep it pointing at a provider that is actually available.
+        if ($this->pickerProvider === null || ! in_array($this->pickerProvider, $providers, true)) {
+            $this->pickerProvider = $providers[0] ?? null;
+        }
+
+        return $providers;
     }
 
     public function pickerResult(): ?RepositoryPickerResult
@@ -176,6 +186,11 @@ class AuditReports extends Page
             // The property is client-editable; a member who lost the permission mid-session
             // simply loses the picker.
             return null;
+        } catch (Throwable $e) {
+            // A cache/limiter/unexpected failure must not 500 the whole page.
+            report($e);
+
+            return RepositoryPickerResult::of(RepositoryPickerState::Unavailable);
         }
     }
 

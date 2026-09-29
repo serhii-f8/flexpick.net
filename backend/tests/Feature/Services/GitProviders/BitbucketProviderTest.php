@@ -252,6 +252,46 @@ class BitbucketProviderTest extends FeatureTest
         (new BitbucketProvider)->listRepositories($connection, null, 1);
     }
 
+    public function test_a_workspace_that_rejects_the_member_is_skipped_not_fatal(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9306]);
+        Http::fake([
+            'api.bitbucket.org/2.0/workspaces*' => Http::response(['values' => [['slug' => 'locked'], ['slug' => 'acme']]]),
+            'api.bitbucket.org/2.0/repositories/locked*' => Http::response([], 403),
+            'api.bitbucket.org/2.0/repositories/acme*' => Http::response(['values' => [$this->bitbucketRepo('acme/api')]]),
+        ]);
+
+        $items = (new BitbucketProvider)->listRepositories($connection, null, 1)->items;
+
+        $this->assertSame(['acme/api'], array_map(fn ($e) => $e->fullName, $items));
+    }
+
+    public function test_a_transient_failure_on_one_workspace_still_fails_the_listing(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9307]);
+        Http::fake([
+            'api.bitbucket.org/2.0/workspaces*' => Http::response(['values' => [['slug' => 'acme']]]),
+            'api.bitbucket.org/2.0/repositories/acme*' => Http::response([], 503),
+        ]);
+
+        $this->expectException(GitAccessTemporarilyUnavailableException::class);
+
+        (new BitbucketProvider)->listRepositories($connection, null, 1);
+    }
+
+    public function test_malformed_slugs_and_repository_rows_are_skipped(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9308]);
+        Http::fake([
+            'api.bitbucket.org/2.0/workspaces*' => Http::response(['values' => [['slug' => ['x']], 'junk', ['slug' => 'acme']]]),
+            'api.bitbucket.org/2.0/repositories/acme*' => Http::response(['values' => [['full_name' => ['bad']], 'junk', $this->bitbucketRepo('acme/api')]]),
+        ]);
+
+        $items = (new BitbucketProvider)->listRepositories($connection, null, 1)->items;
+
+        $this->assertSame(['acme/api'], array_map(fn ($e) => $e->fullName, $items));
+    }
+
     public function test_transient_failures_are_distinguished_from_rejections(): void
     {
         $connection = TenantGitConnection::factory()->make(['id' => 9305]);

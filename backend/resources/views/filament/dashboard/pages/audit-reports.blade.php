@@ -4,7 +4,7 @@
             $selected = collect($quotas)->firstWhere(fn ($q) => $q->tier->value === $tier);
             $launchBranches = $repoUrl ? ($branchesByRepo[rtrim($repoUrl, '/')] ?? null) : null;
             $pickerProviders = $this->pickerProviders();
-            $picker = $pickerProviders !== [] && $pickerMode === 'picker' ? $this->pickerResult() : null;
+            $picker = $pickerProviders !== [] && $pickerMode === 'picker' && ! $repoUrl ? $this->pickerResult() : null;
             $pickerLabels = ['github' => 'GitHub', 'gitlab' => 'GitLab', 'bitbucket' => 'Bitbucket'];
             $canManageConnections = \App\Filament\Dashboard\Pages\GitConnections::canAccess();
         @endphp

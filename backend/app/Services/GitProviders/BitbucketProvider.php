@@ -108,22 +108,30 @@ class BitbucketProvider implements GitProvider
     /** @return list<array<string, mixed>> */
     private function fetchRepositories(TenantGitConnection $connection): array
     {
-        $slugs = collect($this->get($connection, 'https://api.bitbucket.org/2.0/workspaces', ['role' => 'member', 'pagelen' => 20])->json('values') ?? [])
-            ->pluck('slug')
-            ->filter()
+        // A rejection here (missing `account` scope, revoked token) is what calls for a reconnect.
+        $values = $this->get($connection, 'https://api.bitbucket.org/2.0/workspaces', ['role' => 'member', 'pagelen' => 20])->json('values');
+
+        $slugs = collect(is_array($values) ? $values : [])
+            ->map(fn (mixed $workspace): mixed => is_array($workspace) ? ($workspace['slug'] ?? null) : null)
+            ->filter(fn (mixed $slug): bool => is_string($slug) && $slug !== '')
             ->take(self::MAX_WORKSPACES);
 
         $rows = [];
 
         foreach ($slugs as $slug) {
-            $repos = $this->get($connection, 'https://api.bitbucket.org/2.0/repositories/'.rawurlencode($slug), [
-                'role' => 'member',
-                'sort' => '-updated_on',
-                'pagelen' => 100,
-            ])->json('values') ?? [];
+            try {
+                $repos = $this->get($connection, 'https://api.bitbucket.org/2.0/repositories/'.rawurlencode($slug), [
+                    'role' => 'member',
+                    'sort' => '-updated_on',
+                    'pagelen' => 100,
+                ])->json('values');
+            } catch (GitRepositoryListingRejectedException) {
+                // One workspace refusing the member is not a reason to hide the others.
+                continue;
+            }
 
-            foreach ($repos as $repo) {
-                if (! isset($repo['full_name'])) {
+            foreach (is_array($repos) ? $repos : [] as $repo) {
+                if (! is_array($repo) || ! isset($repo['full_name']) || ! is_string($repo['full_name'])) {
                     continue;
                 }
 
@@ -131,8 +139,8 @@ class BitbucketProvider implements GitProvider
                     $repo['full_name'],
                     'https://bitbucket.org/'.$repo['full_name'],
                     (bool) ($repo['is_private'] ?? true),
-                    $repo['mainbranch']['name'] ?? null,
-                    $repo['updated_on'] ?? null,
+                    is_string($repo['mainbranch']['name'] ?? null) ? $repo['mainbranch']['name'] : null,
+                    is_string($repo['updated_on'] ?? null) ? $repo['updated_on'] : null,
                 ))->toArray();
             }
         }

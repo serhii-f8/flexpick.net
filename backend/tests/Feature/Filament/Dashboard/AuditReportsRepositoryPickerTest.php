@@ -9,6 +9,7 @@ use App\Models\AuditRequest;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Models\User;
+use App\Services\GitProviders\RepositoryPicker;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
@@ -135,7 +136,7 @@ class AuditReportsRepositoryPickerTest extends FeatureTest
             ->assertSet('repoUrl', null);
     }
 
-    public function test_a_forged_provider_is_ignored_and_a_member_without_the_permission_gets_a_403(): void
+    public function test_a_forged_provider_is_ignored_and_a_member_without_the_permission_cannot_choose(): void
     {
         [$user, $tenant] = $this->manager();
         $this->connect($tenant);
@@ -231,5 +232,51 @@ class AuditReportsRepositoryPickerTest extends FeatureTest
             ->test(AuditReports::class)
             ->assertSet('repoUrl', 'https://github.com/acme/api')
             ->assertSet('pickerMode', 'url');
+    }
+
+    public function test_no_listing_or_rate_limit_hit_happens_while_a_repository_is_chosen(): void
+    {
+        [$user, $tenant] = $this->manager();
+        $this->connect($tenant);
+        $this->fakeGithub();
+
+        $component = Livewire::test(AuditReports::class)
+            ->call('chooseRepository', 'https://github.com/acme/api');
+
+        RateLimiter::clear("repo-picker:{$user->id}");
+        Http::fake(); // forget recorded requests
+
+        $component->set('tier', 'diagnostic')->call('nextCalendarMonth');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, RateLimiter::attempts("repo-picker:{$user->id}"));
+    }
+
+    public function test_an_unexpected_listing_failure_degrades_to_try_again_instead_of_a_500(): void
+    {
+        [$user, $tenant] = $this->manager();
+        $this->connect($tenant);
+        $this->fakeGithub();
+
+        $this->mock(RepositoryPicker::class, function ($mock) {
+            $mock->shouldReceive('providersFor')->andReturn(['github']);
+            $mock->shouldReceive('list')->andThrow(new \RuntimeException('cache down'));
+        });
+
+        Livewire::test(AuditReports::class)
+            ->assertSee("Couldn't reach GitHub")
+            ->assertSee('Paste a URL instead');
+    }
+
+    public function test_a_stale_provider_falls_back_to_the_first_available_one(): void
+    {
+        [$user, $tenant] = $this->manager();
+        $this->connect($tenant);
+        $this->fakeGithub();
+
+        Livewire::test(AuditReports::class)
+            ->set('pickerProvider', 'gitlab') // no such connection
+            ->assertSet('pickerProvider', 'github')
+            ->assertSee('acme/api');
     }
 }
