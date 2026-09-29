@@ -2,6 +2,8 @@
 
 namespace App\Services\GitProviders;
 
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
+use App\Exceptions\GitRepositoryListingRejectedException;
 use App\Exceptions\GitTokenRefreshUnavailableException;
 use App\Models\TenantGitConnection;
 
@@ -16,6 +18,17 @@ interface GitProvider
 
     /** @return list<string> */
     public function listBranches(TenantGitConnection $connection, string $repoUrl): array;
+
+    /**
+     * One page (RepositoryPage::PAGE_SIZE) of the repositories the connection's token can
+     * see, optionally narrowed by a name search. Listings are cached briefly per connection.
+     *
+     * @throws GitRepositoryListingRejectedException when the provider refuses the listing
+     *                                               (revoked token, missing scope): reconnect
+     * @throws GitAccessTemporarilyUnavailableException on a transient failure (network,
+     *                                                  provider 5xx, rate limit)
+     */
+    public function listRepositories(TenantGitConnection $connection, ?string $search, int $page): RepositoryPage;
 
     /**
      * The HTTP basic-auth pair git presents to this provider for the connection.

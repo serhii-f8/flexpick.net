@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\Services\GitProviders;
 
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
+use App\Exceptions\GitRepositoryListingRejectedException;
 use App\Exceptions\GitTokenRefreshUnavailableException;
 use App\Models\TenantGitConnection;
 use App\Services\GitProviders\BitbucketProvider;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\FeatureTest;
 
@@ -18,7 +22,7 @@ class BitbucketProviderTest extends FeatureTest
 
         $this->assertSame('bitbucket', $provider->name());
         $this->assertSame('Bitbucket', $provider->label());
-        $this->assertSame(['repository'], $provider->authorizationScopes());
+        $this->assertSame(['repository', 'account'], $provider->authorizationScopes());
     }
 
     public function test_credentials_are_the_connections_own_token(): void
@@ -166,5 +170,103 @@ class BitbucketProviderTest extends FeatureTest
         $this->expectException(GitTokenRefreshUnavailableException::class);
 
         (new BitbucketProvider)->refreshToken($connection);
+    }
+
+    private function bitbucketRepo(string $fullName, bool $private = true, ?string $branch = 'main', string $updated = '2026-09-03T09:00:00.000000+00:00'): array
+    {
+        return [
+            'full_name' => $fullName,
+            'is_private' => $private,
+            'mainbranch' => $branch === null ? null : ['name' => $branch],
+            'updated_on' => $updated,
+        ];
+    }
+
+    private function fakeBitbucket(array $workspaces, array $reposBySlug): void
+    {
+        Http::fake(array_merge(
+            ['api.bitbucket.org/2.0/workspaces*' => Http::response(['values' => array_map(fn ($s) => ['slug' => $s], $workspaces)])],
+            collect($reposBySlug)->mapWithKeys(fn ($repos, $slug) => ["api.bitbucket.org/2.0/repositories/{$slug}*" => Http::response(['values' => $repos])])->all(),
+        ));
+    }
+
+    public function test_lists_repositories_across_the_members_workspaces_newest_first(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9301, 'access_token' => 'bb_list_token']);
+        $this->fakeBitbucket(['acme', 'side'], [
+            'acme' => [$this->bitbucketRepo('acme/api', true, 'main', '2026-09-01T00:00:00.000000+00:00')],
+            'side' => [$this->bitbucketRepo('side/blog', false, null, '2026-09-05T00:00:00.000000+00:00')],
+        ]);
+
+        $page = (new BitbucketProvider)->listRepositories($connection, null, 1);
+
+        $this->assertSame(['side/blog', 'acme/api'], array_map(fn ($e) => $e->fullName, $page->items));
+        $this->assertSame('https://bitbucket.org/side/blog', $page->items[0]->url);
+        $this->assertFalse($page->items[0]->private);
+        $this->assertNull($page->items[0]->defaultBranch);
+        $this->assertSame('main', $page->items[1]->defaultBranch);
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer bb_list_token')
+            && str_contains($request->url(), 'role=member'));
+    }
+
+    public function test_search_filters_locally_and_the_listing_is_cached(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9302]);
+        $this->fakeBitbucket(['acme'], ['acme' => [$this->bitbucketRepo('acme/api'), $this->bitbucketRepo('acme/web')]]);
+
+        $provider = new BitbucketProvider;
+        $hit = $provider->listRepositories($connection, 'WEB', 1);
+        $all = $provider->listRepositories($connection, null, 1);
+
+        $this->assertSame(['acme/web'], array_map(fn ($e) => $e->fullName, $hit->items));
+        $this->assertCount(2, $all->items);
+        Http::assertSentCount(2); // one workspaces call + one repositories call, then cached
+    }
+
+    public function test_a_malformed_cached_listing_is_a_miss(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9306]);
+        Cache::put('bitbucket_repos:9306', ['garbage' => true], 60);
+        $this->fakeBitbucket(['acme'], ['acme' => [$this->bitbucketRepo('acme/api')]]);
+
+        $page = (new BitbucketProvider)->listRepositories($connection, null, 1);
+
+        $this->assertSame(['acme/api'], array_map(fn ($e) => $e->fullName, $page->items));
+    }
+
+    public function test_a_member_with_no_workspaces_gets_an_empty_page(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9303]);
+        $this->fakeBitbucket([], []);
+
+        $this->assertSame([], (new BitbucketProvider)->listRepositories($connection, null, 1)->items);
+    }
+
+    public function test_a_403_on_the_workspace_list_means_the_account_scope_is_missing(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9304]);
+        Http::fake(['api.bitbucket.org/2.0/workspaces*' => Http::response(['error' => ['message' => 'Your credentials lack one or more required privilege scopes.']], 403)]);
+
+        $this->expectException(GitRepositoryListingRejectedException::class);
+
+        (new BitbucketProvider)->listRepositories($connection, null, 1);
+    }
+
+    public function test_transient_failures_are_distinguished_from_rejections(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9305]);
+
+        Http::fake(['api.bitbucket.org/2.0/workspaces*' => Http::response([], 500)]);
+        try {
+            (new BitbucketProvider)->listRepositories($connection, null, 1);
+            $this->fail('expected a transient failure');
+        } catch (GitAccessTemporarilyUnavailableException) {
+            $this->addToAssertionCount(1);
+        }
+
+        Http::swap(new HttpFactory);
+        Http::fake(['api.bitbucket.org/2.0/workspaces*' => fn () => throw new ConnectionException('timeout')]);
+        $this->expectException(GitAccessTemporarilyUnavailableException::class);
+        (new BitbucketProvider)->listRepositories($connection, null, 1);
     }
 }
