@@ -13,6 +13,7 @@ use App\Mail\Audit\AuditRequestFailed;
 use App\Mail\Audit\AuditRequestReceived;
 use App\Mail\Audit\AuditVerifyEmail;
 use App\Mail\Audit\NewAuditRequestAdminNotification;
+use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\User;
 use App\Services\AuditMail\AuditMailer;
@@ -195,13 +196,25 @@ class AuditRequestService
      */
     public function closeNotAnalyzable(AuditRequest $auditRequest, string $reason, bool $accessDenied = true): void
     {
-        $auditRequest->update([
-            'status' => AuditRequestStatus::NOT_ANALYZABLE->value,
-            'failure_reason' => $reason,
-        ]);
+        $closed = DB::transaction(function () use ($auditRequest, $reason): bool {
+            if ($this->keepDeliveredReport($auditRequest, $reason)) {
+                return false;
+            }
 
-        if ($this->entitlements->refund($auditRequest)) {
-            $auditRequest->appendPipelineLog('refunded', 'Run refunded: the repository could not be analyzed');
+            $auditRequest->update([
+                'status' => AuditRequestStatus::NOT_ANALYZABLE->value,
+                'failure_reason' => $reason,
+            ]);
+
+            if ($this->entitlements->refund($auditRequest)) {
+                $auditRequest->appendPipelineLog('refunded', 'Run refunded: the repository could not be analyzed');
+            }
+
+            return true;
+        });
+
+        if (! $closed) {
+            return;
         }
 
         // Same hazard as closeAwaitingCredit(): the close and refund are
@@ -227,6 +240,10 @@ class AuditRequestService
         // awaiting_credit may refund it, so two callers racing on the same
         // request can never refund or notify it twice.
         $closed = DB::transaction(function () use ($auditRequest, $reason): bool {
+            if ($this->keepDeliveredReport($auditRequest, $reason)) {
+                return false;
+            }
+
             $affected = AuditRequest::query()
                 ->whereKey($auditRequest->getKey())
                 ->where('status', '!=', AuditRequestStatus::AWAITING_CREDIT->value)
@@ -270,6 +287,27 @@ class AuditRequestService
                 $auditRequest->appendPipelineLog('mail_failed', "Admin email could not be sent: {$e->getMessage()}");
             }
         }
+    }
+
+    /**
+     * A request with a persisted report is delivered: a failed re-run (the
+     * admin "Retry pipeline") must not demote it, refund it or email the
+     * customer, only leave a trace in the pipeline log. Call inside the
+     * close's transaction: the row lock makes the report check hold against
+     * a concurrent delivery (the report insert waits on the parent row).
+     */
+    private function keepDeliveredReport(AuditRequest $auditRequest, string $reason): bool
+    {
+        AuditRequest::query()->whereKey($auditRequest->getKey())->lockForUpdate()->first();
+
+        if (! AuditReport::query()->where('audit_request_id', $auditRequest->getKey())->exists()) {
+            return false;
+        }
+
+        $auditRequest->refresh();
+        $auditRequest->appendPipelineLog('retry_failed', "Retry failed, delivered report kept: {$reason}");
+
+        return true;
     }
 
     public function markFailed(AuditRequest $auditRequest, string $reason): void

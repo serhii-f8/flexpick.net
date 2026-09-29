@@ -4,6 +4,7 @@ namespace App\Services\AuditReport;
 
 use App\Constants\AuditFunding;
 use App\Constants\AuditTier;
+use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\Plan;
 use App\Models\Product;
@@ -104,11 +105,16 @@ class AuditEntitlementService
      * was paid by card), so it earns a fresh credit of its tier.
      *
      * Idempotent: returns false, and changes nothing, when the request was
-     * already refunded.
+     * already refunded or has a delivered report.
      */
     public function refund(AuditRequest $auditRequest): bool
     {
         return DB::transaction(function () use ($auditRequest): bool {
+            // A delivered report is never refunded, whatever the caller.
+            if (AuditReport::query()->where('audit_request_id', $auditRequest->getKey())->exists()) {
+                return false;
+            }
+
             $claimed = AuditRequest::query()
                 ->whereKey($auditRequest->getKey())
                 ->whereNull('credit_refunded_at')
