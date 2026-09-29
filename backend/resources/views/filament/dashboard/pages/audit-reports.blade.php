@@ -10,15 +10,16 @@
         @endphp
 
         <x-filament::section class="fp-launch">
-            <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                <div class="min-w-0">
+            {{-- Flex, not grid: the repository column takes the free space (never below 18rem), the branch column keeps 16rem, and they wrap onto separate lines when narrow. Inline so it does not depend on the compiled theme. --}}
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:1.5rem">
+                <div style="flex:1 1 18rem;min-width:0">
                     @if ($pickerProviders !== [] && $pickerMode === 'picker')
                         <span class="fp-mono-label">{{ __('Repository') }}</span>
 
                         @if ($repoUrl)
                             {{-- Inline layout styles: this row must not depend on which utility classes the compiled theme happens to contain. --}}
                             <div class="mt-2 rounded-lg border border-gray-200 px-3 py-2 dark:border-white/10" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;width:100%">
-                                <span class="fp-repo font-medium text-gray-950 dark:text-white" style="min-width:0;flex:1 1 auto;overflow-wrap:anywhere">{{ \App\Support\RepoName::short($repoUrl) }}</span>
+                                <span class="fp-repo font-medium text-gray-950 dark:text-white" title="{{ \App\Support\RepoName::short($repoUrl) }}" style="min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal">{{ \App\Support\RepoName::short($repoUrl) }}</span>
                                 <span style="flex:none;white-space:nowrap"><x-filament::link tag="button" wire:click="clearRepository" size="sm">{{ __('Choose another') }}</x-filament::link></span>
                             </div>
                         @else
@@ -57,7 +58,7 @@
                                                 @foreach ($picker->page->items as $entry)
                                                     <li wire:key="repo-{{ $pickerProvider }}-{{ $entry->fullName }}">
                                                         <button type="button" x-on:click="open = false" wire:click="chooseRepository({{ \Illuminate\Support\Js::from($entry->url) }})" class="hover:bg-gray-50 dark:hover:bg-white/5" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.5rem 0.75rem;text-align:left;font-size:0.875rem" role="option">
-                                                            <span class="fp-repo font-medium text-gray-950 dark:text-white" style="min-width:0">{{ $entry->fullName }}</span>
+                                                            <span class="fp-repo font-medium text-gray-950 dark:text-white" title="{{ $entry->fullName }}" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal">{{ $entry->fullName }}</span>
                                                             <span class="fp-mono-label" style="flex:none">{{ $entry->private ? __('private') : __('public') }}</span>
                                                         </button>
                                                     </li>
@@ -117,7 +118,7 @@
                 </div>
 
                 @if ($launchBranches !== null)
-                    <div class="min-w-48" style="width:min(16rem,100%)">
+                    <div style="flex:0 0 16rem;max-width:100%">
                         <label class="fp-mono-label" for="audit-branch">{{ __('Branch') }}</label>
                         @if ($launchBranches !== [])
                             <x-filament::input.wrapper class="mt-2">
