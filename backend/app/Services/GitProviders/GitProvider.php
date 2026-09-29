@@ -17,7 +17,14 @@ interface GitProvider
     /** @return list<string> */
     public function listBranches(TenantGitConnection $connection, string $repoUrl): array;
 
-    public function cloneUrl(TenantGitConnection $connection, string $repoUrl): string;
+    /**
+     * The HTTP basic-auth pair git presents to this provider for the connection.
+     * The single source of truth for the username; the password is the access
+     * token, so callers must never place it in argv, a URL, a log or on disk.
+     *
+     * @return array{username:string, password:string}
+     */
+    public function cloneCredentials(TenantGitConnection $connection): array;
 
     /**
      * Attempt to refresh an expired token using the connection's refresh_token.

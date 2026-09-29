@@ -59,7 +59,8 @@ class ScheduledAuditChangeCheckerTest extends FeatureTest
 
         $this->assertTrue($result->shouldRun);
         $this->assertNull($result->sha);
-        Process::assertRan(fn (PendingProcess $process) => ($process->command[1] ?? null) === 'ls-remote'
-            && str_contains(implode(' ', (array) $process->command), 'ghp_schedule_token@github.com'));
+        Process::assertRan(fn (PendingProcess $process) => ($process->command[3] ?? null) === 'ls-remote'
+            && ! str_contains(implode(' ', (array) $process->command), 'ghp_schedule_token')
+            && str_contains($process->environment['GIT_CONFIG_VALUE_0'] ?? '', base64_encode('x-access-token:ghp_schedule_token')));
     }
 }

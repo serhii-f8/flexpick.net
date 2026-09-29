@@ -21,13 +21,14 @@ class BitbucketProviderTest extends FeatureTest
         $this->assertSame(['repository'], $provider->authorizationScopes());
     }
 
-    public function test_clone_url_embeds_the_connections_own_token(): void
+    public function test_credentials_are_the_connections_own_token(): void
     {
         $connection = TenantGitConnection::factory()->make(['access_token' => 'bb_tenant_token']);
 
-        $url = (new BitbucketProvider)->cloneUrl($connection, 'https://bitbucket.org/acme/app');
-
-        $this->assertSame('https://x-token-auth:bb_tenant_token@bitbucket.org/acme/app', $url);
+        $this->assertSame(
+            ['username' => 'x-token-auth', 'password' => 'bb_tenant_token'],
+            (new BitbucketProvider)->cloneCredentials($connection),
+        );
     }
 
     public function test_returns_branch_names_for_a_valid_repo(): void

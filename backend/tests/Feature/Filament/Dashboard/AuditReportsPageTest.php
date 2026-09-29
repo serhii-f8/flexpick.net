@@ -199,7 +199,7 @@ class AuditReportsPageTest extends FeatureTest
 
         $this->assertSame(1, AuditRequest::where('user_id', $user->id)->where('repo_url', 'https://codeberg.org/acme/app')->count());
         Process::assertRan(fn (PendingProcess $process) => $process->command === [
-            'git', 'ls-remote', '--exit-code', 'https://codeberg.org/acme/app', 'HEAD',
+            'git', '-c', 'credential.helper=', 'ls-remote', '--exit-code', 'https://codeberg.org/acme/app', 'HEAD',
         ]);
         Queue::assertPushed(GenerateAuditReport::class);
     }

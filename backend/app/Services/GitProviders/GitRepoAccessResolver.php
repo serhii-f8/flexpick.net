@@ -19,8 +19,8 @@ class GitRepoAccessResolver
     public function __construct(private GitProviderResolver $providers) {}
 
     /**
-     * The URL git should use for this tenant: their own authenticated clone URL when
-     * they have a connection for the repo's provider, otherwise the URL unchanged.
+     * The credential git should present for this tenant: their own connection for the
+     * repo's provider, or null (clone anonymously) when there is none.
      *
      * A miss never throws. A tenant with no connection is cloned anonymously, exactly
      * like a tenantless landing request: a public repo succeeds, a private one fails
@@ -33,30 +33,35 @@ class GitRepoAccessResolver
      * The lookup itself stays tenant-scoped (connectionFor()), so another tenant's
      * connection can never be attached to this tenant's request.
      */
-    public function resolveCloneUrl(string $repoUrl, ?Tenant $tenant): string
+    public function resolveCredential(string $repoUrl, ?Tenant $tenant): ?GitCredential
     {
         $provider = $this->providers->forUrl($repoUrl);
 
         if ($provider === null || $tenant === null || ! $this->isCanonicalHttpsUrl($repoUrl)) {
-            return $repoUrl;
+            return null;
         }
 
         $connection = $this->freshConnection($repoUrl, $tenant);
 
         if ($connection === null) {
-            return $repoUrl;
+            return null;
         }
 
-        return $provider->cloneUrl($connection, $repoUrl);
+        $pair = $provider->cloneCredentials($connection);
+
+        return new GitCredential(
+            $pair['username'],
+            $pair['password'],
+            'https://'.strtolower((string) parse_url($repoUrl, PHP_URL_HOST)),
+        );
     }
 
     /**
-     * A provider is resolved by host alone (see GitProviderResolver::forUrl()), but every
-     * provider's cloneUrl() strips a literal 8-character "https://" prefix before embedding
-     * the tenant's token. A URL that isn't canonically https:// (wrong scheme, embedded
-     * userinfo, or an explicit port) would have that naive strip corrupt the host, sending
-     * the tenant's real token to the wrong domain. Treat anything non-canonical the same as
-     * an unrecognized host: pass it through unchanged, no credentials attached.
+     * A provider is resolved by host alone (see GitProviderResolver::forUrl()). A URL that
+     * isn't canonically https:// (wrong scheme, embedded userinfo, or an explicit port)
+     * never gets the tenant's token: the credential is scoped to "https://<host>" and
+     * would not even match such a URL. Treat anything non-canonical the same as an
+     * unrecognized host: no credentials attached.
      */
     private function isCanonicalHttpsUrl(string $url): bool
     {

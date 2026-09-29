@@ -5,7 +5,6 @@ namespace App\Services\AuditReport;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\Tenant;
 use App\Services\GitProviders\GitRepoAccessResolver;
-use Closure;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -21,7 +20,7 @@ class RepositoryCloner
             $url,
             $tenant,
             config('audit.preflight_timeout'),
-            fn (string $resolvedUrl) => ['git', 'ls-remote', '--exit-code', $resolvedUrl, 'HEAD'],
+            ['ls-remote', '--exit-code', $url, 'HEAD'],
             'Repository could not be reached: ',
         );
 
@@ -35,9 +34,12 @@ class RepositoryCloner
     public function clone(string $url, string $uuid, ?Tenant $tenant = null, ?string $branch = null): string
     {
         $path = $this->workdirPath($uuid);
+        // A job hard-killed at its timeout skips the pipeline's finally, leaving this
+        // target behind; git clone would then refuse the retry.
+        $this->cleanup($uuid);
         File::ensureDirectoryExists(dirname($path));
 
-        $command = ['git', 'clone', '--depth', (string) config('audit.clone_depth'), '--no-tags', '--single-branch'];
+        $command = ['clone', '--depth', (string) config('audit.clone_depth'), '--no-tags', '--single-branch'];
         if ($branch !== null) {
             $command[] = '--branch';
             $command[] = $branch;
@@ -48,7 +50,7 @@ class RepositoryCloner
                 $url,
                 $tenant,
                 config('audit.clone_timeout'),
-                fn (string $resolvedUrl) => [...$command, $resolvedUrl, $path],
+                [...$command, $url, $path],
                 'Repository could not be cloned: ',
             );
         } catch (AuditNotAnalyzableException $e) {
@@ -90,7 +92,7 @@ class RepositoryCloner
                 $url,
                 $tenant,
                 config('audit.preflight_timeout'),
-                fn (string $resolvedUrl) => ['git', 'ls-remote', $resolvedUrl, $ref],
+                ['ls-remote', $url, $ref],
                 'Repository could not be reached: ',
             );
         } catch (AuditNotAnalyzableException) {
@@ -108,27 +110,36 @@ class RepositoryCloner
     }
 
     /**
-     * Resolve the (possibly credentialed) URL and run git against it, converting ANY
-     * throwable into an AuditNotAnalyzableException whose message is built from the raw,
-     * redacted URL alone.
+     * Run git against the plain repo URL, converting ANY throwable into an
+     * AuditNotAnalyzableException whose message is built from the raw, redacted URL alone.
      *
-     * The resolved URL carries the tenant's real token, and a process timeout throws
-     * ProcessTimedOutException whose message is the full command line -- token included.
-     * Left alone, that message would reach failure_reason, the pipeline log, funnel events,
-     * Sentry and the audit timeline every workspace member sees. The caught exception is
-     * deliberately neither used for the message nor chained as `previous`. The same guard
-     * covers resolution failures (e.g. a DecryptException after an APP_KEY rotation).
+     * The tenant's credential reaches git only through the process environment (an
+     * http.<origin>/.extraHeader config entry), never argv, so it appears in no command
+     * line, no /proc/<pid>/cmdline and no .git/config. Config-source hardening applies to
+     * every call: no system config, no terminal prompt, no credential helper that could
+     * store or supply credentials.
      *
-     * @param  Closure(string): list<string>  $command  builds the argv from the resolved URL
+     * A process timeout throws ProcessTimedOutException whose message is the full command
+     * line. Left alone, an exception message could reach failure_reason, the pipeline log,
+     * funnel events, Sentry and the audit timeline every workspace member sees. The caught
+     * exception is deliberately neither used for the message nor chained as `previous`. The
+     * same guard covers resolution failures (e.g. a DecryptException after an APP_KEY
+     * rotation).
+     *
+     * @param  list<string>  $arguments  git arguments after the global options
      */
-    private function runGit(string $url, ?Tenant $tenant, mixed $timeout, Closure $command, string $failurePrefix): ProcessResult
+    private function runGit(string $url, ?Tenant $tenant, mixed $timeout, array $arguments, string $failurePrefix): ProcessResult
     {
         try {
-            $resolvedUrl = $this->accessResolver->resolveCloneUrl($url, $tenant);
+            $credential = $this->accessResolver->resolveCredential($url, $tenant);
 
             return Process::timeout((int) $timeout)
-                ->env(['GIT_TERMINAL_PROMPT' => '0'])
-                ->run($command($resolvedUrl));
+                ->env([
+                    'GIT_CONFIG_NOSYSTEM' => '1',
+                    'GIT_TERMINAL_PROMPT' => '0',
+                    ...($credential?->gitEnv() ?? []),
+                ])
+                ->run(['git', '-c', 'credential.helper=', ...$arguments]);
         } catch (Throwable) {
             throw new AuditNotAnalyzableException($failurePrefix.$this->redactUrl($url));
         }

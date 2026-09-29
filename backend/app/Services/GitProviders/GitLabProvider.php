@@ -58,9 +58,9 @@ class GitLabProvider implements GitProvider
         );
     }
 
-    public function cloneUrl(TenantGitConnection $connection, string $repoUrl): string
+    public function cloneCredentials(TenantGitConnection $connection): array
     {
-        return 'https://oauth2:'.$connection->access_token.'@'.substr($repoUrl, strlen('https://'));
+        return ['username' => 'oauth2', 'password' => $connection->access_token];
     }
 
     /**

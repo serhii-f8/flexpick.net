@@ -18,13 +18,14 @@ class GitHubProviderTest extends FeatureTest
         $this->assertSame(['repo'], $provider->authorizationScopes());
     }
 
-    public function test_clone_url_embeds_the_connections_own_token(): void
+    public function test_credentials_are_the_connections_own_token(): void
     {
         $connection = TenantGitConnection::factory()->make(['access_token' => 'ghp_tenant_token']);
 
-        $url = (new GitHubProvider)->cloneUrl($connection, 'https://github.com/acme/app');
-
-        $this->assertSame('https://x-access-token:ghp_tenant_token@github.com/acme/app', $url);
+        $this->assertSame(
+            ['username' => 'x-access-token', 'password' => 'ghp_tenant_token'],
+            (new GitHubProvider)->cloneCredentials($connection),
+        );
     }
 
     public function test_returns_branch_names_for_a_valid_repo(): void

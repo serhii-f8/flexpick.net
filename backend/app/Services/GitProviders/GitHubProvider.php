@@ -51,9 +51,9 @@ class GitHubProvider implements GitProvider
         );
     }
 
-    public function cloneUrl(TenantGitConnection $connection, string $repoUrl): string
+    public function cloneCredentials(TenantGitConnection $connection): array
     {
-        return 'https://x-access-token:'.$connection->access_token.'@'.substr($repoUrl, strlen('https://'));
+        return ['username' => 'x-access-token', 'password' => $connection->access_token];
     }
 
     /**

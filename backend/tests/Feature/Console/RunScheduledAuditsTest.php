@@ -215,7 +215,7 @@ class RunScheduledAuditsTest extends FeatureTest
         $this->artisan('app:run-scheduled-audits')->assertSuccessful();
 
         Queue::assertPushed(GenerateAuditReport::class);
-        Process::assertRan(fn (PendingProcess $process) => ($process->command[1] ?? null) === 'ls-remote');
+        Process::assertRan(fn (PendingProcess $process) => ($process->command[3] ?? null) === 'ls-remote');
     }
 
     /**

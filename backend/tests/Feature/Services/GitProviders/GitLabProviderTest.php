@@ -20,13 +20,14 @@ class GitLabProviderTest extends FeatureTest
         $this->assertSame(['read_repository', 'read_api'], $provider->authorizationScopes());
     }
 
-    public function test_clone_url_embeds_the_connections_own_token(): void
+    public function test_credentials_are_the_connections_own_token(): void
     {
         $connection = TenantGitConnection::factory()->make(['access_token' => 'glpat_tenant_token']);
 
-        $url = (new GitLabProvider)->cloneUrl($connection, 'https://gitlab.com/acme/app');
-
-        $this->assertSame('https://oauth2:glpat_tenant_token@gitlab.com/acme/app', $url);
+        $this->assertSame(
+            ['username' => 'oauth2', 'password' => 'glpat_tenant_token'],
+            (new GitLabProvider)->cloneCredentials($connection),
+        );
     }
 
     public function test_returns_branch_names_for_a_nested_group_path(): void

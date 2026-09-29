@@ -6,12 +6,15 @@ use App\Exceptions\AuditNotAnalyzableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Services\AuditReport\RepositoryCloner;
+use App\Services\GitProviders\GitCredential;
+use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Process\ProcessResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Mockery;
 use Symfony\Component\Process\Exception\ProcessTimedOutException as SymfonyProcessTimedOutException;
 use Symfony\Component\Process\Process as SymfonyProcess;
 use Tests\Feature\FeatureTest;
@@ -62,7 +65,7 @@ class RepositoryClonerTest extends FeatureTest
         }
 
         Process::assertRan(fn (PendingProcess $process) => $process->command === [
-            'git', 'ls-remote', '--exit-code', 'https://github.com/acme/private', 'HEAD',
+            'git', '-c', 'credential.helper=', 'ls-remote', '--exit-code', 'https://github.com/acme/private', 'HEAD',
         ]);
     }
 
@@ -102,10 +105,22 @@ class RepositoryClonerTest extends FeatureTest
         }
 
         Process::assertRan(fn (PendingProcess $process) => in_array('https://github.com/acme/app', $process->command, true));
-        Process::assertDidntRun(fn (PendingProcess $process) => str_contains(implode(' ', (array) $process->command), 'ghp_tenant_a_secret_token'));
+        Process::assertDidntRun(fn (PendingProcess $process) => str_contains(implode(' ', (array) $process->command).implode(' ', $process->environment), 'ghp_tenant_a_secret_token')
+            || str_contains(implode(' ', $process->environment), base64_encode('x-access-token:ghp_tenant_a_secret_token')));
     }
 
-    public function test_preflight_hands_git_the_connected_tenants_authenticated_url(): void
+    private function expectedEnv(string $origin, string $user, string $token): array
+    {
+        return [
+            'GIT_CONFIG_NOSYSTEM' => '1',
+            'GIT_TERMINAL_PROMPT' => '0',
+            'GIT_CONFIG_COUNT' => '1',
+            'GIT_CONFIG_KEY_0' => "http.{$origin}/.extraHeader",
+            'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode("{$user}:{$token}"),
+        ];
+    }
+
+    public function test_preflight_hands_git_the_credential_in_env_and_a_plain_url_in_argv(): void
     {
         Process::fake(['*' => Process::result(output: "abc123\tHEAD\n")]);
         $tenant = Tenant::factory()->create();
@@ -117,11 +132,11 @@ class RepositoryClonerTest extends FeatureTest
         app(RepositoryCloner::class)->preflight('https://github.com/acme/private', tenant: $tenant);
 
         Process::assertRan(fn (PendingProcess $process) => $process->command === [
-            'git', 'ls-remote', '--exit-code', 'https://x-access-token:ghp_connected_tenant_token@github.com/acme/private', 'HEAD',
-        ]);
+            'git', '-c', 'credential.helper=', 'ls-remote', '--exit-code', 'https://github.com/acme/private', 'HEAD',
+        ] && $process->environment === $this->expectedEnv('https://github.com', 'x-access-token', 'ghp_connected_tenant_token'));
     }
 
-    public function test_clone_hands_git_the_connected_tenants_authenticated_url(): void
+    public function test_clone_hands_git_the_credential_in_env_and_a_plain_url_in_argv(): void
     {
         Process::fake(['*' => Process::result()]);
         $tenant = Tenant::factory()->create();
@@ -138,8 +153,75 @@ class RepositoryClonerTest extends FeatureTest
             $cloner->cleanup($uuid);
         }
 
-        Process::assertRan(fn (PendingProcess $process) => ($process->command[1] ?? null) === 'clone'
-            && str_contains(implode(' ', (array) $process->command), 'glpat-connected-tenant-token@gitlab.com/acme/private'));
+        Process::assertRan(fn (PendingProcess $process) => ($process->command[3] ?? null) === 'clone'
+            && in_array('https://gitlab.com/acme/private', $process->command, true)
+            && ! str_contains(implode(' ', $process->command), 'glpat-connected-tenant-token')
+            && $process->environment === $this->expectedEnv('https://gitlab.com', 'oauth2', 'glpat-connected-tenant-token'));
+    }
+
+    public function test_every_git_invocation_disables_system_config_prompts_and_credential_helpers(): void
+    {
+        Process::fake(['*' => Process::result(output: "abc123\tHEAD\n")]);
+        $cloner = app(RepositoryCloner::class);
+        $uuid = 'test-clone-hardening-'.uniqid();
+
+        $cloner->preflight('https://github.com/acme/public');
+        $cloner->remoteHeadSha('https://github.com/acme/public');
+        try {
+            $cloner->clone('https://github.com/acme/public', $uuid);
+        } finally {
+            $cloner->cleanup($uuid);
+        }
+
+        $git = fn (PendingProcess $p) => ($p->command[0] ?? null) === 'git';
+        Process::assertRanTimes(fn (PendingProcess $p) => $git($p)
+            && array_slice($p->command, 1, 2) === ['-c', 'credential.helper=']
+            && ($p->environment['GIT_CONFIG_NOSYSTEM'] ?? null) === '1'
+            && ($p->environment['GIT_TERMINAL_PROMPT'] ?? null) === '0'
+            && ! isset($p->environment['GIT_CONFIG_COUNT']), 3);
+    }
+
+    /**
+     * A real clone (file:// with the auth header harmlessly in env): git must never write
+     * the credential into the checkout's .git/config.
+     */
+    public function test_a_real_clone_never_writes_the_token_into_git_config(): void
+    {
+        $resolver = Mockery::mock(GitRepoAccessResolver::class);
+        $resolver->shouldReceive('resolveCredential')->andReturn(new GitCredential('x-access-token', 'ghp_on_disk_probe', 'file://'));
+        $cloner = new RepositoryCloner($resolver);
+        $uuid = 'test-clone-disk-'.uniqid();
+
+        $path = $cloner->clone('file://'.$this->fixtureRepo, $uuid, tenant: Tenant::factory()->create());
+
+        try {
+            $this->assertFileExists($path.'/README.md');
+            $config = File::get($path.'/.git/config');
+            $this->assertStringContainsString('url = file://'.$this->fixtureRepo, $config);
+            $this->assertStringNotContainsString('ghp_on_disk_probe', $config);
+            $this->assertStringNotContainsString(base64_encode('x-access-token:ghp_on_disk_probe'), $config);
+            $this->assertStringNotContainsString('extraHeader', $config);
+        } finally {
+            $cloner->cleanup($uuid);
+        }
+    }
+
+    public function test_clone_replaces_a_stale_workdir_left_by_a_killed_attempt(): void
+    {
+        $cloner = app(RepositoryCloner::class);
+        $uuid = 'test-clone-stale-'.uniqid();
+        $stale = rtrim(config('audit.workdir'), '/').'/'.$uuid;
+        File::ensureDirectoryExists($stale.'/.git');
+        File::put($stale.'/leftover.txt', 'from the killed run');
+
+        $path = $cloner->clone('file://'.$this->fixtureRepo, $uuid);
+
+        try {
+            $this->assertFileExists($path.'/README.md');
+            $this->assertFileDoesNotExist($path.'/leftover.txt');
+        } finally {
+            $cloner->cleanup($uuid);
+        }
     }
 
     /**
@@ -175,8 +257,8 @@ class RepositoryClonerTest extends FeatureTest
             $cloner->cleanup($uuid);
         }
 
-        // Proves the token really was in play -- otherwise the assertions above are vacuous.
-        Process::assertRan(fn (PendingProcess $process) => str_contains(implode(' ', (array) $process->command), 'ghp_secret_connected_token'));
+        // Proves the token really was in play (in env) -- otherwise the assertions above are vacuous.
+        Process::assertRan(fn (PendingProcess $process) => str_contains(implode(' ', $process->environment), base64_encode('x-access-token:ghp_secret_connected_token')));
     }
 
     public function test_remote_head_sha_returns_null_when_no_connection_exists_and_the_repo_is_private(): void
@@ -243,6 +325,8 @@ class RepositoryClonerTest extends FeatureTest
             $this->fail('Expected AuditNotAnalyzableException');
         } catch (AuditNotAnalyzableException $e) {
             $this->assertSame('Repository could not be reached: https://github.com/acme/private', $e->getMessage());
+            $this->assertStringNotContainsString('ghp_timeout_secret_token', $e->getMessage());
+            $this->assertStringNotContainsString(base64_encode('x-access-token:ghp_timeout_secret_token'), $e->getMessage());
             $this->assertNull($e->getPrevious());
         }
     }
@@ -259,6 +343,7 @@ class RepositoryClonerTest extends FeatureTest
             $this->fail('Expected AuditNotAnalyzableException');
         } catch (AuditNotAnalyzableException $e) {
             $this->assertStringNotContainsString('ghp_timeout_secret_token', $e->getMessage());
+            $this->assertStringNotContainsString(base64_encode('x-access-token:ghp_timeout_secret_token'), $e->getMessage());
             $this->assertStringContainsString('https://github.com/acme/private', $e->getMessage());
             $this->assertNull($e->getPrevious());
         } finally {

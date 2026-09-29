@@ -53,9 +53,9 @@ class BitbucketProvider implements GitProvider
         );
     }
 
-    public function cloneUrl(TenantGitConnection $connection, string $repoUrl): string
+    public function cloneCredentials(TenantGitConnection $connection): array
     {
-        return 'https://x-token-auth:'.$connection->access_token.'@'.substr($repoUrl, strlen('https://'));
+        return ['username' => 'x-token-auth', 'password' => $connection->access_token];
     }
 
     /**

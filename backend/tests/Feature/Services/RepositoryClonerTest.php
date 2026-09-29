@@ -18,6 +18,8 @@ class RepositoryClonerTest extends FeatureTest
         parent::setUp();
         $this->fixtureRepo = storage_path('framework/testing/fixture-repo');
 
+        $this->discardFixtureNotOwnedByUs($this->fixtureRepo);
+
         if (! File::isDirectory($this->fixtureRepo.'/.git')) {
             File::ensureDirectoryExists($this->fixtureRepo);
             File::put($this->fixtureRepo.'/README.md', "# Fixture\n");
@@ -28,8 +30,22 @@ class RepositoryClonerTest extends FeatureTest
         }
     }
 
+    /**
+     * git runs with GIT_CONFIG_NOSYSTEM, so a system-level safe.directory can no longer
+     * excuse a fixture left behind by another user (e.g. host runs vs. the root container);
+     * rebuild it as ourselves.
+     */
+    private function discardFixtureNotOwnedByUs(string $path): void
+    {
+        if (File::isDirectory($path) && fileowner($path) !== posix_geteuid()) {
+            File::deleteDirectory($path);
+        }
+    }
+
     public function test_clones_a_reachable_repo_shallow(): void
     {
+        // The shared fixture may carry extra commits from other suites' helpers.
+        config(['audit.clone_depth' => 1]);
         $cloner = app(RepositoryCloner::class);
         $uuid = 'test-clone-'.uniqid();
 
@@ -78,6 +94,8 @@ class RepositoryClonerTest extends FeatureTest
         }
 
         $this->branchFixtureRepo = storage_path('framework/testing/fixture-repo-branches');
+
+        $this->discardFixtureNotOwnedByUs($this->branchFixtureRepo);
 
         if (! File::isDirectory($this->branchFixtureRepo.'/.git')) {
             File::ensureDirectoryExists($this->branchFixtureRepo);
