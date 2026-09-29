@@ -122,6 +122,21 @@ class GitRepoAccessResolver
         return $connection === null ? null : $this->freshen($provider, $connection);
     }
 
+    /**
+     * connectionFor(), keyed by provider name rather than a repo URL: the repository picker
+     * lists a provider's repos before any URL exists. Same refresh, `invalid_grant` deletion
+     * and transient-failure behavior.
+     *
+     * @throws GitAccessTemporarilyUnavailableException
+     */
+    public function connectionForProvider(string $providerName, Tenant $tenant): ?TenantGitConnection
+    {
+        $provider = $this->providers->forProviderName($providerName);
+        $connection = $this->storedConnection($provider, $tenant);
+
+        return $connection === null ? null : $this->freshen($provider, $connection);
+    }
+
     private function storedConnection(GitProvider $provider, Tenant $tenant): ?TenantGitConnection
     {
         return TenantGitConnection::query()

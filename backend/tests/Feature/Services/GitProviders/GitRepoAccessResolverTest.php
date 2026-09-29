@@ -384,4 +384,17 @@ class GitRepoAccessResolverTest extends FeatureTest
         $this->assertTrue($access->connected);
         $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
     }
+
+    public function test_connection_for_provider_returns_the_tenants_own_connection_and_refreshes_like_connection_for(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $other = Tenant::factory()->create();
+        $mine = TenantGitConnection::factory()->create(['tenant_id' => $tenant->id, 'provider' => 'github']);
+        TenantGitConnection::factory()->create(['tenant_id' => $other->id, 'provider' => 'github']);
+
+        $resolver = app(GitRepoAccessResolver::class);
+
+        $this->assertSame($mine->id, $resolver->connectionForProvider('github', $tenant)?->id);
+        $this->assertNull($resolver->connectionForProvider('gitlab', $tenant));
+    }
 }
