@@ -446,6 +446,30 @@ class AuditEntitlementServiceTest extends FeatureTest
         $this->assertSame(0, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
+    /**
+     * The interleaving of two launches racing for one last credit, made
+     * deterministic: both read the quota (one credit left) before either
+     * takes the tenant lock; the other one spends the credit first.
+     */
+    public function test_consume_refuses_purchase_funding_once_the_credit_was_spent_after_the_quota_read(): void
+    {
+        [$user, $tenant] = $this->subscribedTenant(['audit_deep_ai_credits' => 1]);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+        $this->service->grantPurchasedCredit($tenant, AuditTier::DEEP_AI);
+        $quota = $this->service->quotaFor($tenant, AuditTier::DEEP_AI);
+        $this->assertTrue($quota->hasRuns());
+
+        $this->service->spendPurchasedCredit($tenant, AuditTier::DEEP_AI);
+
+        $this->assertNull($this->service->consume($tenant, AuditTier::DEEP_AI, $quota));
+        $this->assertSame(0, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
     public function test_consume_never_dips_the_balance_below_zero(): void
     {
         $user = $this->createUser();

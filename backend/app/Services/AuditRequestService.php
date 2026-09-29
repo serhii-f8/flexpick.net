@@ -24,8 +24,11 @@ use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\RepositoryCloner;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Sentry\Severity;
+use Sentry\State\Scope;
 use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Throwable;
 
@@ -114,8 +117,23 @@ class AuditRequestService
         return URL::signedRoute('audit-requests.status', ['auditRequest' => $auditRequest->uuid]);
     }
 
+    /**
+     * Route a freshly verified landing request: close it, ask for payment, or
+     * spend a free run and queue it.
+     *
+     * RouteVerifiedAuditRequest retries, so this must be safe to run again.
+     * Only a request still pending verification is routed: an attempt that
+     * threw after routing (a mail or funnel write) must not route it a second
+     * time -- that would count its own free run against it, or dispatch the
+     * pipeline twice. The decision and the status flip are taken together
+     * under the row lock; the network probe before it is not held under it.
+     */
     public function routeVerified(AuditRequest $auditRequest): void
     {
+        if (! $this->isAwaitingRouting($auditRequest)) {
+            return;
+        }
+
         if ($auditRequest->repo_url === null) {
             $this->markNeedsFollowup($auditRequest, 'No repository URL provided');
             $this->notifyAdmin($auditRequest);
@@ -141,8 +159,28 @@ class AuditRequestService
             return;
         }
 
-        if (! $this->entitlements->hasFreeRunForEmail($auditRequest->email)) {
-            $auditRequest->update(['status' => AuditRequestStatus::AWAITING_PAYMENT->value]);
+        $routed = DB::transaction(function () use ($auditRequest): ?AuditRequestStatus {
+            if (! $this->isAwaitingRouting($auditRequest, lock: true)) {
+                return null;
+            }
+
+            if (! $this->entitlements->hasFreeRunForEmail($auditRequest->email)) {
+                $auditRequest->update(['status' => AuditRequestStatus::AWAITING_PAYMENT->value]);
+
+                return AuditRequestStatus::AWAITING_PAYMENT;
+            }
+
+            $this->entitlements->consumeFreeRun($auditRequest);
+            $auditRequest->update(['status' => AuditRequestStatus::QUEUED->value]);
+
+            return AuditRequestStatus::QUEUED;
+        });
+
+        if ($routed === null) {
+            return;
+        }
+
+        if ($routed === AuditRequestStatus::AWAITING_PAYMENT) {
             $this->funnel->record(AuditFunnelRecorder::STAGE_AWAITING_PAYMENT, $auditRequest);
             $this->auditMailer->send(new AuditQuotaExhausted($auditRequest, $this->purchaseRunUrl($auditRequest)), $auditRequest->email, $auditRequest);
             $this->notifyAdmin($auditRequest);
@@ -150,12 +188,21 @@ class AuditRequestService
             return;
         }
 
-        $this->entitlements->consumeFreeRun($auditRequest);
-        $auditRequest->update(['status' => AuditRequestStatus::QUEUED->value]);
         GenerateAuditReport::dispatch($auditRequest);
         $this->funnel->record(AuditFunnelRecorder::STAGE_QUEUED, $auditRequest);
         $this->auditMailer->send(new AuditRequestReceived($auditRequest, $this->statusUrl($auditRequest)), $auditRequest->email, $auditRequest);
         $this->notifyAdmin($auditRequest);
+    }
+
+    /** Read fresh (a retried job carries the row as it was first queued). */
+    public function isAwaitingRouting(AuditRequest $auditRequest, bool $lock = false): bool
+    {
+        $status = AuditRequest::query()
+            ->whereKey($auditRequest->getKey())
+            ->when($lock, fn ($query) => $query->lockForUpdate())
+            ->value('status');
+
+        return $status === AuditRequestStatus::PENDING_VERIFICATION->value;
     }
 
     /**
@@ -202,8 +249,11 @@ class AuditRequestService
      */
     public function closeNotAnalyzable(AuditRequest $auditRequest, string $reason, bool $accessDenied = true, bool $reconnect = false): void
     {
-        $closed = DB::transaction(function () use ($auditRequest, $reason, $reconnect): bool {
-            if ($this->keepDeliveredReport($auditRequest, $reason)) {
+        $kept = null;
+        $closed = DB::transaction(function () use ($auditRequest, $reason, $reconnect, &$kept): bool {
+            $kept = $this->keepDeliveredReport($auditRequest, $reason);
+
+            if ($kept !== null) {
                 return false;
             }
 
@@ -219,6 +269,10 @@ class AuditRequestService
 
             return true;
         });
+
+        if ($kept !== null) {
+            $this->alertIfUndelivered($auditRequest, $kept, $reason);
+        }
 
         if (! $closed) {
             return;
@@ -246,8 +300,11 @@ class AuditRequestService
         // Atomic check-and-set: only the caller that flips a live request to
         // awaiting_credit may refund it, so two callers racing on the same
         // request can never refund or notify it twice.
-        $closed = DB::transaction(function () use ($auditRequest, $reason, $tooLarge): bool {
-            if ($this->keepDeliveredReport($auditRequest, $reason)) {
+        $kept = null;
+        $closed = DB::transaction(function () use ($auditRequest, $reason, $tooLarge, &$kept): bool {
+            $kept = $this->keepDeliveredReport($auditRequest, $reason);
+
+            if ($kept !== null) {
                 return false;
             }
 
@@ -274,6 +331,10 @@ class AuditRequestService
 
             return true;
         });
+
+        if ($kept !== null) {
+            $this->alertIfUndelivered($auditRequest, $kept, $reason);
+        }
 
         if (! $closed) {
             return;
@@ -306,15 +367,19 @@ class AuditRequestService
      * the delivered status and leave a trace in the pipeline log. Call inside
      * the caller's transaction: the row lock makes the report check hold
      * against a concurrent delivery (the report insert waits on the parent row).
+     *
+     * Returns the restored status, or null when there is no report to keep.
+     * The caller hands a restored status to alertIfUndelivered() once its
+     * transaction has committed.
      */
-    private function keepDeliveredReport(AuditRequest $auditRequest, string $reason): bool
+    private function keepDeliveredReport(AuditRequest $auditRequest, string $reason): ?AuditRequestStatus
     {
         AuditRequest::query()->whereKey($auditRequest->getKey())->lockForUpdate()->first();
 
         $report = AuditReport::query()->where('audit_request_id', $auditRequest->getKey())->first();
 
         if ($report === null) {
-            return false;
+            return null;
         }
 
         $auditRequest->refresh();
@@ -329,19 +394,62 @@ class AuditRequestService
         $heldForExpert = $auditRequest->tier === AuditTier::EXPERT
             && empty($report->payload['expert_review']['reviewed_at']);
 
-        $auditRequest->update(['status' => match (true) {
-            $heldForExpert => AuditRequestStatus::EXPERT_REVIEW->value,
-            $sent => AuditRequestStatus::SENT->value,
-            default => AuditRequestStatus::REPORT_READY->value,
-        }]);
+        $restored = match (true) {
+            $heldForExpert => AuditRequestStatus::EXPERT_REVIEW,
+            $sent => AuditRequestStatus::SENT,
+            default => AuditRequestStatus::REPORT_READY,
+        };
+
+        $auditRequest->update(['status' => $restored->value]);
         $auditRequest->appendPipelineLog('retry_failed', "Retry failed, delivered report kept: {$reason}");
 
-        return true;
+        return $restored;
+    }
+
+    /**
+     * A kept report restored to report_ready was saved but never mailed: a
+     * first run whose PDF render or delivery kept failing lands here, and so
+     * does its queue retry failing preflight or sizing. The customer still is
+     * not told the run failed (the report exists and is theirs), but nobody
+     * would ever notice otherwise -- report_ready is terminal, so no stuck-run
+     * check sees it -- so the operator is alerted to deliver it by hand.
+     * A sent report, or one held for expert review (the operator's queue by
+     * design), stays silent.
+     */
+    private function alertIfUndelivered(AuditRequest $auditRequest, AuditRequestStatus $restored, string $reason): void
+    {
+        if ($restored !== AuditRequestStatus::REPORT_READY) {
+            return;
+        }
+
+        $message = 'Audit report was saved but never delivered to the customer';
+
+        Log::error($message, ['audit_request' => $auditRequest->uuid, 'reason' => $reason]);
+
+        \Sentry\withScope(function (Scope $scope) use ($auditRequest, $reason, $message): void {
+            $scope->setTag('audit_request', (string) $auditRequest->uuid);
+            $scope->setExtra('reason', $reason);
+            \Sentry\captureMessage($message, Severity::error());
+        });
+
+        $auditRequest->appendPipelineLog('undelivered', 'Report kept but never delivered; operator alerted');
+
+        // This runs from a job's failed() hook or after a committed close: a
+        // transport failure must not escape either.
+        try {
+            $this->notifyAdmin($auditRequest);
+        } catch (Throwable $e) {
+            $auditRequest->appendPipelineLog('mail_failed', "Admin email could not be sent: {$e->getMessage()}");
+        }
     }
 
     public function markFailed(AuditRequest $auditRequest, string $reason): void
     {
-        if (DB::transaction(fn (): bool => $this->keepDeliveredReport($auditRequest, $reason))) {
+        $kept = DB::transaction(fn (): ?AuditRequestStatus => $this->keepDeliveredReport($auditRequest, $reason));
+
+        if ($kept !== null) {
+            $this->alertIfUndelivered($auditRequest, $kept, $reason);
+
             return;
         }
 

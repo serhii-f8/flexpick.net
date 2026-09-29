@@ -300,11 +300,17 @@ class AuditEntitlementService
      * purchased credit never expires, so spending the credit before the
      * allowance would waste it for nothing.
      *
+     * Returns null when nothing is left after all: $quota was read before
+     * this lock, and another launch may have taken the last run since. The
+     * caller must then create no request.
+     *
      * Follows chargeExtraRuns()' lock order: the tenant row is locked before
      * the quota is read, so concurrent consume() and settle() quota
-     * read-and-writes of one workspace are serialised, and two launches
-     * cannot both read the same headroom inside consume() (nor both spend
-     * the same purchased credit).
+     * read-and-writes of one workspace are serialised and two launches
+     * cannot both read the same headroom inside consume(). PURCHASE is only
+     * returned for a credit actually taken off the balance here: the
+     * balance is re-checked under the lock, so a launch never gets purchase
+     * funding (and later a refund of a credit) it did not pay for.
      *
      * Residual gap: for free and allowance funding the slot is only taken
      * when the caller inserts the request row, after this transaction has
@@ -313,9 +319,9 @@ class AuditEntitlementService
      * RunScheduledAudits' hasRuns() check is likewise unlocked. Closing it
      * means inserting the request inside this lock.
      */
-    public function consume(Tenant $tenant, AuditTier $tier, TierQuota $quota): AuditFunding
+    public function consume(Tenant $tenant, AuditTier $tier, TierQuota $quota): ?AuditFunding
     {
-        return DB::transaction(function () use ($tenant, $tier, $quota): AuditFunding {
+        return DB::transaction(function () use ($tenant, $tier, $quota): ?AuditFunding {
             $this->lockTenant($tenant->getKey());
 
             if ($quota->isLifetime && $this->hasFreeRun($tenant)) {
@@ -326,10 +332,30 @@ class AuditEntitlementService
                 return AuditFunding::ALLOWANCE;
             }
 
-            $this->spendPurchasedCredit($tenant, $tier);
-
-            return AuditFunding::PURCHASE;
+            return $this->takePurchasedCredit($tenant, $tier) ? AuditFunding::PURCHASE : null;
         });
+    }
+
+    /**
+     * Takes one purchased credit of the tier off the balance, or returns
+     * false and changes nothing when there is none. Unlike
+     * spendPurchasedCredit(), an empty balance is a refusal, not a no-op.
+     */
+    private function takePurchasedCredit(Tenant $tenant, AuditTier $tier): bool
+    {
+        $param = TenantParameter::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('name', $this->purchasedCreditParam($tier))
+            ->lockForUpdate()
+            ->first();
+
+        if ($param === null || (int) $param->value < 1) {
+            return false;
+        }
+
+        $param->update(['value' => (string) ((int) $param->value - 1)]);
+
+        return true;
     }
 
     /**

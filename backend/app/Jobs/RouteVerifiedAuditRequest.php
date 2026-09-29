@@ -39,10 +39,19 @@ class RouteVerifiedAuditRequest implements ShouldQueue
      * Retries exhausted: surface the request as FAILED (customer and operator are told, as
      * for a failed report run) rather than leaving it verified but never routed. Nothing
      * was charged, so nothing is refunded.
+     *
+     * Only while it is still unrouted: an attempt that routed it and then threw (a mail, the
+     * funnel) left it queued, analysing or awaiting payment, and that outcome stands.
      */
     public function failed(?Throwable $exception): void
     {
-        app(AuditRequestService::class)->markFailed(
+        $service = app(AuditRequestService::class);
+
+        if (! $service->isAwaitingRouting($this->auditRequest)) {
+            return;
+        }
+
+        $service->markFailed(
             $this->auditRequest,
             $exception?->getMessage() ?? 'Unknown routing failure',
         );

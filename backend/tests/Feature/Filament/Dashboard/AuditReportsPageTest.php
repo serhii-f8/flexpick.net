@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\RepositoryCloner;
 use App\Services\GitProviders\GitRepoAccessResolver;
+use App\Services\SubscriptionService;
 use Filament\Facades\Filament;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Carbon;
@@ -27,6 +28,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
+use Mockery;
 use Tests\Feature\FeatureTest;
 
 class AuditReportsPageTest extends FeatureTest
@@ -339,6 +341,57 @@ class AuditReportsPageTest extends FeatureTest
         $this->assertSame(AuditFunding::PURCHASE, $request->funding);
         $this->assertSame(0, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
         Queue::assertPushed(GenerateAuditReport::class);
+    }
+
+    /**
+     * Another launch spends the last purchased credit between this launch's
+     * quota read and its consume(): nothing was paid for this one, so it must
+     * not start (and could otherwise be refunded a credit nobody bought).
+     */
+    public function test_launch_audit_starts_nothing_when_the_last_credit_is_spent_before_consume(): void
+    {
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_deep_ai_credits' => 1]);
+        AuditRequest::factory()->create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+        $real = app(AuditEntitlementService::class);
+        $real->grantPurchasedCredit($tenant, AuditTier::DEEP_AI);
+        // One-shot, armed only for the launch: the page's own render reads
+        // quotas too, and those reads must not spend anything.
+        $armed = false;
+        $mock = Mockery::mock(AuditEntitlementService::class, [app(SubscriptionService::class)])->makePartial();
+        $mock->shouldReceive('quotaFor')->andReturnUsing(function (Tenant $tenant, AuditTier $tier) use ($real, &$armed) {
+            $quota = $real->quotaFor($tenant, $tier);
+
+            if ($armed && $tier === AuditTier::DEEP_AI) {
+                $armed = false;
+                $real->spendPurchasedCredit($tenant, $tier);
+            }
+
+            return $quota;
+        });
+        $this->instance(AuditEntitlementService::class, $mock);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        $page = Livewire::actingAs($user)->test(AuditReports::class);
+        $armed = true;
+
+        $page->call('launchAudit', 'https://github.com/acme/my-app', AuditTier::DEEP_AI->value)
+            ->assertNotified(__('No :tier runs left', ['tier' => AuditTier::DEEP_AI->label()]))
+            ->assertNoRedirect();
+
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->where('repo_url', 'https://github.com/acme/my-app')->count());
+        $this->assertSame(0, $real->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+        Queue::assertNotPushed(GenerateAuditReport::class);
     }
 
     public function test_navigation_registers_for_user_with_only_free_runs(): void

@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\FeatureTest;
 
 class AuditRequestRoutingTest extends FeatureTest
@@ -186,6 +187,73 @@ class AuditRequestRoutingTest extends FeatureTest
         $this->assertNull($job->connection);
         $this->assertGreaterThan(70, $job->timeout);
         $this->assertLessThan((int) config('queue.connections.redis.retry_after'), $job->timeout);
+    }
+
+    /**
+     * @return array<string, array{0: AuditRequestStatus}>
+     */
+    public static function alreadyRoutedStatuses(): array
+    {
+        return [
+            'queued' => [AuditRequestStatus::QUEUED],
+            'analyzing' => [AuditRequestStatus::ANALYZING],
+            'awaiting_payment' => [AuditRequestStatus::AWAITING_PAYMENT],
+        ];
+    }
+
+    /**
+     * The routing job retries, so routing must be safe to run again: a
+     * request an earlier attempt already routed is left exactly as it is.
+     */
+    #[DataProvider('alreadyRoutedStatuses')]
+    public function test_routing_a_request_that_was_already_routed_is_a_no_op(AuditRequestStatus $status): void
+    {
+        config(['audit.free_reports_limit' => 3]);
+        $request = AuditRequest::factory()->verified()->create([
+            'repo_url' => 'file://'.$this->fixtureRepo,
+            'status' => $status->value,
+        ]);
+
+        $this->route($request);
+
+        $request->refresh();
+        $this->assertSame($status->value, $request->status);
+        $this->assertFalse($request->free_run);
+        Queue::assertNotPushed(GenerateAuditReport::class);
+        Mail::assertNothingQueued();
+        Mail::assertNothingSent();
+    }
+
+    public function test_a_second_routing_pass_after_a_late_failure_does_not_route_again(): void
+    {
+        config(['audit.free_reports_limit' => 1]);
+        $request = AuditRequest::factory()->verified()->create([
+            'repo_url' => 'file://'.$this->fixtureRepo,
+            'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
+        ]);
+
+        $this->route($request);
+        // The retry after a throw late in the first pass (mail, funnel).
+        (new RouteVerifiedAuditRequest($request->fresh()))->handle(app(AuditRequestService::class));
+
+        $this->assertSame(AuditRequestStatus::QUEUED->value, $request->fresh()->status);
+        Queue::assertPushed(GenerateAuditReport::class, 1);
+        Mail::assertQueued(AuditRequestReceived::class, 1);
+        Mail::assertNotQueued(AuditQuotaExhausted::class);
+    }
+
+    #[DataProvider('alreadyRoutedStatuses')]
+    public function test_exhausting_the_routing_job_leaves_an_already_routed_request_alone(AuditRequestStatus $status): void
+    {
+        $request = AuditRequest::factory()->verified()->create(['status' => $status->value]);
+
+        (new RouteVerifiedAuditRequest($request))->failed(new \RuntimeException('Mail transport down'));
+
+        $request->refresh();
+        $this->assertSame($status->value, $request->status);
+        $this->assertNull($request->failure_reason);
+        Mail::assertNothingQueued();
+        Mail::assertNothingSent();
     }
 
     public function test_exhausting_the_routing_job_marks_the_request_failed_without_refund(): void

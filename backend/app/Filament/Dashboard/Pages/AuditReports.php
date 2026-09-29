@@ -316,6 +316,18 @@ class AuditReports extends Page
 
         $funding = $entitlements->consume($tenant, $selected, $quota);
 
+        // The quota above was read before consume() took the workspace lock;
+        // another launch may have taken the last run in between.
+        if ($funding === null) {
+            Notification::make()
+                ->title(__('No :tier runs left', ['tier' => $quota->label]))
+                ->body(__('Upgrade your plan to run more audits.'))
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         $auditRequest = AuditRequest::create([
             'name' => $user->name,
             'email' => $user->email,
