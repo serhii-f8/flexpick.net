@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Constants\PartnerAttributionSource;
 use App\Constants\ReferralConstants;
 use App\Constants\SessionConstants;
+use App\Models\TenantGitConnection;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Hash;
@@ -90,5 +91,8 @@ class UserService
         $user->save();
 
         $user->address()?->delete();
+
+        // Anonymizing is how accounts are retired here; their git tokens must not stay behind.
+        TenantGitConnection::query()->where('connected_by_user_id', $user->id)->delete();
     }
 }

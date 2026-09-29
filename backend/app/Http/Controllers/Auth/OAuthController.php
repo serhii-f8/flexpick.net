@@ -63,17 +63,16 @@ class OAuthController extends RegisterController
     {
         abort_unless(Auth::check(), 403);
 
-        $tenantId = request()->query('tenant_id');
-        abort_unless(is_scalar($tenantId) && ctype_digit((string) $tenantId), 403);
-
-        abort_unless(
-            Auth::user()->tenants()->where('tenants.id', $tenantId)->exists(),
-            403
-        );
-
         abort_unless(in_array($provider, GitProviderResolver::KNOWN_PROVIDER_NAMES, true), 404);
 
-        session(['git_connection_tenant_id' => $tenantId]);
+        // The workspace comes from the session-bound nonce the Git Connections
+        // page issued, never from the query string: a GET link alone must not
+        // be able to bind this user's provider account to a workspace.
+        $tenant = app(GitConnectionService::class)
+            ->consumeConnectNonce(request()->query('nonce'), Auth::user(), $provider);
+        abort_unless($tenant !== null, 403);
+
+        session(['git_connection_tenant_id' => $tenant->id]);
 
         $scopes = app(GitProviderResolver::class)->forProviderName($provider)->authorizationScopes();
 
@@ -204,7 +203,9 @@ class OAuthController extends RegisterController
         $tenantId = session()->pull('git_connection_tenant_id');
         $tenant = Tenant::findOrFail($tenantId);
 
-        abort_unless(Auth::user()->tenants()->where('tenants.id', $tenant->id)->exists(), 403);
+        // Re-verify at the end of the round trip: membership or the permission
+        // may have been revoked since the nonce was issued.
+        abort_unless(app(GitConnectionService::class)->userMayManage($tenant, Auth::user()), 403);
 
         try {
             $oauthUser = Socialite::driver($provider)->user();

@@ -78,6 +78,12 @@ class User extends Authenticatable implements FilamentUser, HasTenants, MustVeri
     {
         // Ensure every user gets a UUID regardless of how it is created
         // (registration, social login, admin panel, factories, seeders).
+        // A departing user's git tokens go with them; the FK's nullOnDelete
+        // would otherwise leave them attached to the workspace, unowned.
+        static::deleting(function (User $user): void {
+            TenantGitConnection::query()->where('connected_by_user_id', $user->id)->delete();
+        });
+
         static::creating(function (User $user): void {
             if (empty($user->uuid)) {
                 $user->uuid = (string) Str::uuid();

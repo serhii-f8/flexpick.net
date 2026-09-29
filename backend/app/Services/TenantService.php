@@ -11,6 +11,7 @@ use App\Models\Invitation;
 use App\Models\Subscription;
 use App\Models\Team;
 use App\Models\Tenant;
+use App\Models\TenantGitConnection;
 use App\Models\User;
 use Exception;
 use Illuminate\Support\Facades\Cache;
@@ -267,6 +268,12 @@ class TenantService
                 DB::transaction(function () use ($tenant, $user) {
                     $this->tenantPermissionService->removeAllTenantUserRoles($tenant, $user);
                     $tenant->users()->detach($user);
+
+                    // Their git token must not outlive their membership.
+                    TenantGitConnection::query()
+                        ->where('tenant_id', $tenant->id)
+                        ->where('connected_by_user_id', $user->id)
+                        ->delete();
                 });
 
                 UserRemovedFromTenant::dispatch($user, $tenant);

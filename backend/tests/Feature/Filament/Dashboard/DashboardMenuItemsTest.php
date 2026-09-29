@@ -61,6 +61,7 @@ class DashboardMenuItemsTest extends FeatureTest
             TenancyPermissionConstants::PERMISSION_MANAGE_TEAM,
             TenancyPermissionConstants::PERMISSION_INVITE_MEMBERS,
             TenancyPermissionConstants::PERMISSION_VIEW_ROLES,
+            TenancyPermissionConstants::PERMISSION_UPDATE_TENANT_SETTINGS,
         ]);
 
         $this->actingAs($user);
