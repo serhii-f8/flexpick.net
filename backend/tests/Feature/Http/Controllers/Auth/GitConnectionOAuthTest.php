@@ -6,6 +6,7 @@ use App\Constants\TenancyPermissionConstants;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\GitProviders\GitConnectionService;
+use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as SocialiteUser;
 use Tests\Feature\FeatureTest;
@@ -236,6 +237,25 @@ class GitConnectionOAuthTest extends FeatureTest
         $this->get($response->headers->get('Location'))
             ->assertOk()
             ->assertSee('GitLab connected.');
+    }
+
+    public function test_a_failed_callback_logs_the_provider_and_reason(): void
+    {
+        [$user, $tenant] = $this->permittedMember();
+
+        Socialite::shouldReceive('driver')->with('bitbucket')->andReturnSelf();
+        Socialite::shouldReceive('user')->andThrow(new \RuntimeException('Client error: 403 insufficient scope'));
+
+        Log::shouldReceive('warning')->once()->withArgs(fn (string $message, array $context): bool => $message === 'Git connection OAuth callback failed.'
+            && $context['provider'] === 'bitbucket'
+            && $context['tenant_id'] === $tenant->id
+            && $context['exception'] === \RuntimeException::class
+            && str_contains($context['message'], '403 insufficient scope'));
+
+        $this->actingAs($user)
+            ->withSession(['git_connection_tenant_id' => $tenant->id])
+            ->get('/auth/bitbucket/callback')
+            ->assertRedirect();
     }
 
     public function test_a_declined_grant_shows_the_error_message_on_the_page(): void

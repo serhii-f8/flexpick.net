@@ -14,7 +14,9 @@ use App\Services\UserService;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
 class OAuthController extends RegisterController
@@ -209,7 +211,17 @@ class OAuthController extends RegisterController
 
         try {
             $oauthUser = Socialite::driver($provider)->user();
-        } catch (Exception) {
+        } catch (Exception $e) {
+            // The page shows one generic message; without this the operator cannot
+            // tell a wrong secret from a missing scope. Class and a clipped message
+            // only -- never the exception object, whose trace and request could hold a token.
+            Log::warning('Git connection OAuth callback failed.', [
+                'provider' => $provider,
+                'tenant_id' => $tenant->id,
+                'exception' => $e::class,
+                'message' => Str::limit($e->getMessage(), 500),
+            ]);
+
             return redirect()->route('filament.dashboard.pages.git-connections', ['tenant' => $tenant])
                 ->withErrors(['git_connection' => __('Connection was cancelled or failed. Please try again.')]);
         }
