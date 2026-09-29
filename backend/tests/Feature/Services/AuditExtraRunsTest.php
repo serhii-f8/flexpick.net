@@ -225,6 +225,23 @@ class AuditExtraRunsTest extends FeatureTest
         $this->assertSame(5, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
+    public function test_a_scheduled_request_with_partial_headroom_charges_nothing(): void
+    {
+        // One allowance slot left, two extras needed: the shortfall may not
+        // come from purchased credit, and all-or-nothing means the one slot
+        // that is available is not taken either.
+        $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 2]);
+        $this->service->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 5);
+        $request = $this->request($tenant, AuditFunding::ALLOWANCE, ['from_schedule' => true]);
+
+        $this->assertFalse($this->service->chargeExtraRuns($request, 2));
+
+        $this->assertSame(0, $request->refresh()->extra_metered_runs);
+        $this->assertSame(0, $request->extra_purchased_runs);
+        $this->assertSame(1, $this->service->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(5, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
     public function test_a_scheduled_request_still_draws_extras_from_the_allowance(): void
     {
         $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 3]);

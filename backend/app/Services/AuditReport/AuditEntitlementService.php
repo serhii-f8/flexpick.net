@@ -301,8 +301,17 @@ class AuditEntitlementService
      * allowance would waste it for nothing.
      *
      * Follows chargeExtraRuns()' lock order: the tenant row is locked before
-     * the quota is read, so a launch and a sizing of the same workspace
-     * cannot both take the last allowance slot.
+     * the quota is read, so concurrent consume() and settle() quota
+     * read-and-writes of one workspace are serialised, and two launches
+     * cannot both read the same headroom inside consume() (nor both spend
+     * the same purchased credit).
+     *
+     * Residual gap: for free and allowance funding the slot is only taken
+     * when the caller inserts the request row, after this transaction has
+     * committed. A sizing (or another launch) that takes the tenant lock in
+     * between counts without that row and can take the same last slot.
+     * RunScheduledAudits' hasRuns() check is likewise unlocked. Closing it
+     * means inserting the request inside this lock.
      */
     public function consume(Tenant $tenant, AuditTier $tier, TierQuota $quota): AuditFunding
     {

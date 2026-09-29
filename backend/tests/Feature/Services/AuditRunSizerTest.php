@@ -17,9 +17,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use ReflectionMethod;
 use Tests\Feature\FeatureTest;
+use Tests\Support\CreatesAuditSubscriptions;
 
 class AuditRunSizerTest extends FeatureTest
 {
+    use CreatesAuditSubscriptions;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -160,6 +163,49 @@ class AuditRunSizerTest extends FeatureTest
         });
 
         $this->assertConfigsReadOnlyBeforeTheTransaction($events);
+    }
+
+    public function test_settle_takes_the_tenant_lock_before_any_plain_read(): void
+    {
+        // Under REPEATABLE READ the first plain SELECT fixes the snapshot, so
+        // inside settle()'s transaction only locking reads may precede the
+        // tenants FOR UPDATE -- a lazy $auditRequest->tenant load, or reading
+        // usage first, would let two sizings measure the same headroom.
+        [, $tenant] = $this->userWithAllowance(diagnostic: 0, deepAi: 3);
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 5);
+        $request = $this->request($tenant, AuditFunding::ALLOWANCE);
+
+        $log = [];
+        DB::listen(function (QueryExecuted $query) use (&$log): void {
+            $log[] = strtolower($query->sql);
+        });
+        Event::listen(TransactionBeginning::class, function () use (&$log): void {
+            $log[] = 'begin';
+        });
+
+        $this->assertSame(2, app(AuditRunSizer::class)->settle($request, 150000));
+        $this->assertSame(1, $request->refresh()->extra_metered_runs);
+
+        $begin = array_search('begin', $log, true);
+        $lockAt = null;
+        foreach ($log as $i => $sql) {
+            if (str_contains($sql, 'for update') && preg_match('/from\s+`?tenants`?\b/', $sql) === 1) {
+                $lockAt = $i;
+                break;
+            }
+        }
+
+        $this->assertNotFalse($begin, 'settle() opened no transaction.');
+        $this->assertNotNull($lockAt, 'settle() took no lock on the tenants row.');
+        $this->assertGreaterThan($begin, $lockAt);
+
+        $between = array_slice($log, $begin + 1, $lockAt - $begin - 1);
+        $plainReads = array_values(array_filter(
+            $between,
+            fn (string $sql): bool => str_starts_with(ltrim($sql), 'select') && ! str_contains($sql, 'for update'),
+        ));
+
+        $this->assertSame([], $plainReads, 'A plain read ran in the transaction before the tenant lock.');
     }
 
     /** @return list<string> 'configs' for each configs query, 'begin' for each transaction (or savepoint) opened */
