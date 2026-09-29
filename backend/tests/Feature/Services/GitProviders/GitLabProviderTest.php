@@ -2,10 +2,15 @@
 
 namespace Tests\Feature\Services\GitProviders;
 
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
+use App\Exceptions\GitRepositoryListingRejectedException;
 use App\Exceptions\GitTokenRefreshUnavailableException;
 use App\Models\TenantGitConnection;
 use App\Services\GitProviders\GitLabProvider;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\FeatureTest;
 
@@ -166,5 +171,113 @@ class GitLabProviderTest extends FeatureTest
         $this->expectException(GitTokenRefreshUnavailableException::class);
 
         (new GitLabProvider)->refreshToken($connection);
+    }
+
+    private function gitlabProject(string $path, string $visibility = 'private', ?string $branch = 'main'): array
+    {
+        return [
+            'path_with_namespace' => $path,
+            'web_url' => "https://gitlab.com/{$path}",
+            'visibility' => $visibility,
+            'default_branch' => $branch,
+            'last_activity_at' => '2026-09-02T08:30:00.000Z',
+        ];
+    }
+
+    public function test_lists_projects_by_last_activity_with_server_side_search_and_paging(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9201, 'access_token' => 'glpat_list']);
+        Http::fake(['gitlab.com/api/v4/projects*' => Http::response(
+            [$this->gitlabProject('acme/team/app'), $this->gitlabProject('acme/site', 'public', null)],
+            200,
+            ['X-Next-Page' => '3'],
+        )]);
+
+        $page = (new GitLabProvider)->listRepositories($connection, ' app ', 2);
+
+        $this->assertSame(['acme/team/app', 'acme/site'], array_map(fn ($e) => $e->fullName, $page->items));
+        $this->assertSame('https://gitlab.com/acme/team/app', $page->items[0]->url);
+        $this->assertTrue($page->items[0]->private);
+        $this->assertFalse($page->items[1]->private); // public visibility
+        $this->assertNull($page->items[1]->defaultBranch);
+        $this->assertTrue($page->hasMore);
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer glpat_list')
+            && str_contains($request->url(), 'membership=true')
+            && str_contains($request->url(), 'archived=false')
+            && str_contains($request->url(), 'order_by=last_activity_at')
+            && str_contains($request->url(), 'per_page=20')
+            && str_contains($request->url(), 'page=2')
+            && str_contains($request->url(), 'search=app'));
+    }
+
+    public function test_an_empty_next_page_header_means_no_more_and_no_search_param_is_sent_when_blank(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9202]);
+        Http::fake(['gitlab.com/api/v4/projects*' => Http::response([$this->gitlabProject('acme/app')], 200, ['X-Next-Page' => ''])]);
+
+        $page = (new GitLabProvider)->listRepositories($connection, '   ', 1);
+
+        $this->assertFalse($page->hasMore);
+        Http::assertSent(fn ($request) => ! str_contains($request->url(), 'search='));
+    }
+
+    public function test_pages_are_cached_per_connection_search_and_page(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9203]);
+        Http::fake(['gitlab.com/api/v4/projects*' => Http::response([$this->gitlabProject('acme/app')])]);
+
+        $provider = new GitLabProvider;
+        $provider->listRepositories($connection, 'app', 1);
+        $provider->listRepositories($connection, 'APP ', 1); // same normalised search
+        Http::assertSentCount(1);
+
+        $provider->listRepositories($connection, 'app', 2);
+        Http::assertSentCount(2);
+    }
+
+    public function test_a_malformed_cached_page_is_a_miss(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9205]);
+        Http::fake(['gitlab.com/api/v4/projects*' => Http::response([$this->gitlabProject('acme/app')])]);
+
+        $provider = new GitLabProvider;
+        $provider->listRepositories($connection, null, 1);
+        Http::assertSentCount(1);
+
+        $key = "gitlab_repos:{$connection->id}:".md5('').':1';
+        $this->assertTrue(Cache::has($key));
+        Cache::put($key, ['items' => [['bogus' => 1]], 'has_more' => false], 60);
+
+        $page = $provider->listRepositories($connection, null, 1);
+
+        Http::assertSentCount(2);
+        $this->assertSame('acme/app', $page->items[0]->fullName);
+    }
+
+    public function test_rejections_and_transient_failures_are_distinguished(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9204]);
+
+        Http::fake(['gitlab.com/api/v4/projects*' => Http::response([], 403)]);
+        try {
+            (new GitLabProvider)->listRepositories($connection, null, 1);
+            $this->fail('expected a rejection');
+        } catch (GitRepositoryListingRejectedException) {
+            $this->addToAssertionCount(1);
+        }
+
+        Http::swap(new HttpFactory);
+        Http::fake(['gitlab.com/api/v4/projects*' => Http::response([], 503)]);
+        try {
+            (new GitLabProvider)->listRepositories($connection, null, 1);
+            $this->fail('expected a transient failure');
+        } catch (GitAccessTemporarilyUnavailableException) {
+            $this->addToAssertionCount(1);
+        }
+
+        Http::swap(new HttpFactory);
+        Http::fake(['gitlab.com/api/v4/projects*' => fn () => throw new ConnectionException('timeout')]);
+        $this->expectException(GitAccessTemporarilyUnavailableException::class);
+        (new GitLabProvider)->listRepositories($connection, null, 1);
     }
 }
