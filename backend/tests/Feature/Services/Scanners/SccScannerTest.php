@@ -91,6 +91,31 @@ class SccScannerTest extends FeatureTest
         $this->assertFalse(app(SccScanner::class)->isAvailable());
     }
 
+    public function test_the_real_scc_run_leaves_out_dependency_build_and_cache_directories_at_any_depth(): void
+    {
+        if (! app(SccScanner::class)->isAvailable()) {
+            $this->markTestSkipped('scc is not installed here.');
+        }
+
+        $root = sys_get_temp_dir().'/scc-billable-'.bin2hex(random_bytes(4));
+
+        // 1,000 code lines in every directory; only src and lib are real code.
+        foreach (['src', 'lib', 'vendor/a', 'node_modules/b', 'dist', 'build', '.git', 'storage', '.next', 'coverage',
+            'packages/x/node_modules/y', 'packages/x/vendor', 'packages/x/build'] as $dir) {
+            mkdir("{$root}/{$dir}", 0777, true);
+            file_put_contents("{$root}/{$dir}/f.js", implode("\n", array_map(fn (int $i): string => "x{$i} = {$i};", range(1, 1000)))."\n");
+        }
+
+        try {
+            $context = new RepoContext(path: $root, tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC));
+            app(SccScanner::class)->scan($context);
+
+            $this->assertSame(2000, $context->inventory->billableCode);
+        } finally {
+            exec('rm -rf '.escapeshellarg($root));
+        }
+    }
+
     /** @param  callable(list<string>): ProcessResult|FakeProcessResult  $respond */
     private function scanWithFakedScc(callable $respond): RepoContext
     {
