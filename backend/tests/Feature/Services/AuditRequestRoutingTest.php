@@ -3,16 +3,22 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\AuditRequestStatus;
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Jobs\GenerateAuditReport;
+use App\Jobs\RouteVerifiedAuditRequest;
 use App\Mail\Audit\AuditQuotaExhausted;
 use App\Mail\Audit\AuditRepoAccessNeeded;
+use App\Mail\Audit\AuditRequestFailed;
 use App\Mail\Audit\AuditRequestReceived;
 use App\Models\AuditRequest;
+use App\Services\AuditReport\RepositoryCloner;
 use App\Services\AuditRequestService;
+use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
 use Tests\Feature\FeatureTest;
 
 class AuditRequestRoutingTest extends FeatureTest
@@ -119,5 +125,57 @@ class AuditRequestRoutingTest extends FeatureTest
 
         $this->assertSame(AuditRequestStatus::NEEDS_FOLLOWUP->value, $request->refresh()->status);
         Mail::assertQueued(AuditRepoAccessNeeded::class);
+    }
+
+    private function cloneThatIsTransientlyUnavailable(): void
+    {
+        $mock = Mockery::mock(RepositoryCloner::class, [app(GitRepoAccessResolver::class)])->makePartial();
+        $mock->shouldReceive('preflight')->andThrow(new GitAccessTemporarilyUnavailableException('refresh unavailable'));
+        $this->instance(RepositoryCloner::class, $mock);
+    }
+
+    public function test_a_transient_git_failure_reaches_the_job_and_leaves_the_request_untouched(): void
+    {
+        $this->cloneThatIsTransientlyUnavailable();
+        $request = AuditRequest::factory()->verified()->create([
+            'repo_url' => 'https://gitlab.com/acme/private',
+            'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
+        ]);
+
+        try {
+            (new RouteVerifiedAuditRequest($request))->handle(app(AuditRequestService::class));
+            $this->fail('Expected GitAccessTemporarilyUnavailableException');
+        } catch (GitAccessTemporarilyUnavailableException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->assertSame(AuditRequestStatus::PENDING_VERIFICATION->value, $request->fresh()->status);
+        $this->assertNull($request->fresh()->credit_refunded_at);
+        Mail::assertNothingQueued();
+        Mail::assertNothingSent();
+    }
+
+    public function test_the_routing_job_retries_and_outlasts_the_worst_case_git_wait(): void
+    {
+        $job = new RouteVerifiedAuditRequest(AuditRequest::factory()->verified()->create());
+
+        $this->assertSame(3, $job->tries);
+        $this->assertSame([60, 300], $job->backoff);
+        // 25s refresh-lock wait + 15s refresh call + 30s ls-remote.
+        $this->assertGreaterThan(70, $job->timeout);
+    }
+
+    public function test_exhausting_the_routing_job_marks_the_request_failed_without_refund(): void
+    {
+        $request = AuditRequest::factory()->verified()->create([
+            'status' => AuditRequestStatus::PENDING_VERIFICATION->value,
+        ]);
+
+        (new RouteVerifiedAuditRequest($request))->failed(new GitAccessTemporarilyUnavailableException('Git token refresh is temporarily unavailable'));
+
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::FAILED->value, $request->status);
+        $this->assertNull($request->credit_refunded_at);
+        Mail::assertQueued(AuditRequestFailed::class);
     }
 }
