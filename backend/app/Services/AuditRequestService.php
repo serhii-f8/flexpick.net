@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Jobs\GenerateAuditReport;
 use App\Mail\Audit\AuditCreditNeeded;
@@ -13,6 +14,7 @@ use App\Mail\Audit\AuditRequestFailed;
 use App\Mail\Audit\AuditRequestReceived;
 use App\Mail\Audit\AuditVerifyEmail;
 use App\Mail\Audit\NewAuditRequestAdminNotification;
+use App\Models\AuditEmailLog;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\User;
@@ -292,19 +294,38 @@ class AuditRequestService
     /**
      * A request with a persisted report is delivered: a failed re-run (the
      * admin "Retry pipeline") must not demote it, refund it or email the
-     * customer, only leave a trace in the pipeline log. Call inside the
-     * close's transaction: the row lock makes the report check hold against
-     * a concurrent delivery (the report insert waits on the parent row).
+     * customer. The retry already moved it to queued/analyzing, so restore
+     * the delivered status and leave a trace in the pipeline log. Call inside
+     * the caller's transaction: the row lock makes the report check hold
+     * against a concurrent delivery (the report insert waits on the parent row).
      */
     private function keepDeliveredReport(AuditRequest $auditRequest, string $reason): bool
     {
         AuditRequest::query()->whereKey($auditRequest->getKey())->lockForUpdate()->first();
 
-        if (! AuditReport::query()->where('audit_request_id', $auditRequest->getKey())->exists()) {
+        $report = AuditReport::query()->where('audit_request_id', $auditRequest->getKey())->first();
+
+        if ($report === null) {
             return false;
         }
 
         $auditRequest->refresh();
+
+        // The pre-retry status is overwritten, so derive it the way delivery
+        // sets it: an expert report is held until publish() stamps
+        // reviewed_at; a report the customer was mailed is sent.
+        $sent = $auditRequest->emailLogs()
+            ->where('mailable', 'AuditReportReady')
+            ->where('status', AuditEmailLog::STATUS_SENT)
+            ->exists();
+        $heldForExpert = $auditRequest->tier === AuditTier::EXPERT
+            && empty($report->payload['expert_review']['reviewed_at']);
+
+        $auditRequest->update(['status' => match (true) {
+            $heldForExpert => AuditRequestStatus::EXPERT_REVIEW->value,
+            $sent => AuditRequestStatus::SENT->value,
+            default => AuditRequestStatus::REPORT_READY->value,
+        }]);
         $auditRequest->appendPipelineLog('retry_failed', "Retry failed, delivered report kept: {$reason}");
 
         return true;
@@ -312,6 +333,10 @@ class AuditRequestService
 
     public function markFailed(AuditRequest $auditRequest, string $reason): void
     {
+        if (DB::transaction(fn (): bool => $this->keepDeliveredReport($auditRequest, $reason))) {
+            return;
+        }
+
         $auditRequest->appendPipelineLog('failed', $reason);
 
         $auditRequest->update([

@@ -5,14 +5,23 @@ namespace Tests\Feature\Services;
 use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
+use App\Exceptions\AuditAwaitingCreditException;
+use App\Exceptions\AuditNotAnalyzableException;
 use App\Mail\Audit\AuditCreditNeeded;
 use App\Mail\Audit\AuditRepoAccessNeeded;
+use App\Mail\Audit\AuditRequestFailed;
+use App\Models\AuditEmailLog;
+use App\Models\AuditFunnelEvent;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\Tenant;
 use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\AuditPipeline;
+use App\Services\AuditReport\RepositoryCloner;
 use App\Services\AuditRequestService;
+use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Support\Facades\Mail;
+use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\FeatureTest;
 
@@ -23,14 +32,22 @@ class AuditDeliveredReportCloseTest extends FeatureTest
      */
     private function deliveredRequest(AuditRequestStatus $status): array
     {
+        $expert = $status === AuditRequestStatus::EXPERT_REVIEW;
         $tenant = $this->createTenant();
         $request = AuditRequest::factory()->create([
             'tenant_id' => $tenant->id,
             'status' => $status->value,
-            'tier' => AuditTier::DEEP_AI->value,
+            'tier' => ($expert ? AuditTier::EXPERT : AuditTier::DEEP_AI)->value,
             'funding' => AuditFunding::PURCHASE->value,
         ]);
         AuditReport::factory()->create(['audit_request_id' => $request->id]);
+
+        if ($status === AuditRequestStatus::SENT) {
+            AuditEmailLog::create([
+                'audit_request_id' => $request->id, 'mailable' => 'AuditReportReady', 'recipient' => $request->email,
+                'subject' => 's', 'body' => 'b', 'status' => AuditEmailLog::STATUS_SENT, 'sent_at' => now(),
+            ]);
+        }
 
         return [$request->refresh(), $tenant];
     }
@@ -120,5 +137,71 @@ class AuditDeliveredReportCloseTest extends FeatureTest
         $this->assertSame(2, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
         Mail::assertQueued(AuditRepoAccessNeeded::class);
         Mail::assertQueued(AuditCreditNeeded::class);
+    }
+
+    /**
+     * @return array<string, array{0: AuditRequestStatus, 1: \Throwable}>
+     */
+    public static function realRetryCases(): array
+    {
+        $cases = [];
+        foreach ([AuditRequestStatus::REPORT_READY, AuditRequestStatus::SENT, AuditRequestStatus::EXPERT_REVIEW] as $status) {
+            $cases["{$status->value} not analyzable"] = [$status, new AuditNotAnalyzableException('No access.', true)];
+            $cases["{$status->value} awaiting credit"] = [$status, new AuditAwaitingCreditException('Needs more.', false)];
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('realRetryCases')]
+    public function test_the_real_retry_sequence_ends_in_the_delivered_status(AuditRequestStatus $status, \Throwable $failure): void
+    {
+        Mail::fake();
+        [$request] = $this->deliveredRequest($status);
+
+        // The admin "Retry pipeline" action: queued, then the pipeline runs.
+        $request->update(['status' => AuditRequestStatus::QUEUED->value, 'failure_reason' => null]);
+        $mock = Mockery::mock(RepositoryCloner::class, [app(GitRepoAccessResolver::class)])->makePartial();
+        $mock->shouldReceive('preflight')->once()->andThrow($failure);
+        $this->instance(RepositoryCloner::class, $mock);
+
+        app(AuditPipeline::class)->run($request);
+
+        $request->refresh();
+        $this->assertSame($status->value, $request->status);
+        $this->assertNull($request->credit_refunded_at);
+        $this->assertNotNull(collect($request->pipeline_log)->firstWhere('step', 'retry_failed'));
+        Mail::assertNothingQueued();
+        Mail::assertNothingSent();
+    }
+
+    #[DataProvider('deliveredStatuses')]
+    public function test_mark_failed_keeps_a_delivered_report(AuditRequestStatus $status): void
+    {
+        Mail::fake();
+        [$request] = $this->deliveredRequest($status);
+        $request->update(['status' => AuditRequestStatus::ANALYZING->value]);
+
+        app(AuditRequestService::class)->markFailed($request, 'boom');
+
+        $request->refresh();
+        $this->assertSame($status->value, $request->status);
+        $this->assertNotNull(collect($request->pipeline_log)->firstWhere('step', 'retry_failed'));
+        $this->assertNull(collect($request->pipeline_log)->firstWhere('step', 'failed'));
+        $this->assertSame(0, AuditFunnelEvent::where('audit_request_id', $request->id)->where('stage', 'failed')->count());
+        Mail::assertNothingQueued();
+        Mail::assertNothingSent();
+    }
+
+    public function test_mark_failed_without_a_report_is_unchanged(): void
+    {
+        Mail::fake();
+        $request = AuditRequest::factory()->create(['status' => AuditRequestStatus::ANALYZING->value]);
+
+        app(AuditRequestService::class)->markFailed($request, 'boom');
+
+        $this->assertSame(AuditRequestStatus::FAILED->value, $request->refresh()->status);
+        $this->assertSame(1, AuditFunnelEvent::where('audit_request_id', $request->id)->where('stage', 'failed')->count());
+        Mail::assertQueued(AuditRequestFailed::class);
     }
 }
