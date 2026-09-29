@@ -294,7 +294,21 @@ class AuditRequestResource extends Resource
                             $entitlements->consumeFreeRun($record);
                         }
 
-                        $record->update(['status' => AuditRequestStatus::QUEUED->value, 'failure_reason' => null]);
+                        // Unless a free run is genuinely spent on this request,
+                        // the operator is comping it: funding = null, in the
+                        // same update that queues it. A purchase row awaiting
+                        // payment is unpaid by definition, and a stale `free`
+                        // funding with no run behind it would make the sizer
+                        // bill extra runs the customer has no quota for; left
+                        // as-is, a close would also refund a credit that was
+                        // never bought.
+                        $update = ['status' => AuditRequestStatus::QUEUED->value, 'failure_reason' => null];
+
+                        if (! $record->free_run) {
+                            $update['funding'] = null;
+                        }
+
+                        $record->update($update);
                         GenerateAuditReport::dispatch($record);
                     }),
                 Action::make('grantUnlock')

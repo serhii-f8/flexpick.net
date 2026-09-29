@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament\Admin\Resources;
 
+use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Filament\Admin\Resources\AuditRequests\AuditRequestResource;
@@ -10,8 +11,12 @@ use App\Jobs\GenerateAuditReport;
 use App\Models\AuditEmailLog;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Models\Config;
 use App\Models\Tenant;
+use App\Services\AuditReport\AuditEntitlementService;
+use App\Services\AuditReport\AuditRunSizer;
 use App\Services\AuditRequestService;
+use App\Services\ConfigService;
 use Filament\Actions\DeleteAction;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -88,6 +93,96 @@ class AuditRequestResourceTest extends FeatureTest
         $this->assertSame(AuditRequestStatus::QUEUED->value, $record->status);
         $this->assertFalse($record->free_run);
         Queue::assertPushed(GenerateAuditReport::class);
+    }
+
+    public function test_launching_an_unpaid_purchase_row_comps_it_and_a_close_grants_no_credit(): void
+    {
+        Queue::fake([GenerateAuditReport::class]);
+        $tenant = $this->createTenant();
+        $record = AuditRequest::factory()->verified()->create([
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::PURCHASE->value,
+            'status' => AuditRequestStatus::AWAITING_PAYMENT->value,
+        ]);
+
+        Livewire::actingAs($this->createAdminUser())
+            ->test(ListAuditRequests::class)
+            ->callTableAction('launch', $record);
+
+        $record->refresh();
+        $this->assertSame(AuditRequestStatus::QUEUED->value, $record->status);
+        $this->assertNull($record->funding);
+        $this->assertFalse($record->free_run);
+
+        app(AuditRequestService::class)->closeNotAnalyzable($record, 'No access.');
+
+        $this->assertSame(0, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
+    public function test_launching_a_tenantless_row_with_no_free_run_comps_a_multi_run_repo(): void
+    {
+        app(ConfigService::class)->set('audit.size_bands', json_encode([
+            ['max_loc' => 100000, 'runs' => 1],
+            ['max_loc' => 300000, 'runs' => 2],
+        ]));
+
+        try {
+            Queue::fake([GenerateAuditReport::class]);
+            AuditRequest::factory()->count(3)->freeRun()->create(['email' => 'spent@example.com']);
+            $record = AuditRequest::factory()->verified()->create([
+                'email' => 'spent@example.com',
+                'tier' => AuditTier::DEEP_AI->value,
+                'funding' => AuditFunding::FREE->value,
+                'free_run' => false,
+                'status' => AuditRequestStatus::AWAITING_ACCESS->value,
+            ]);
+
+            Livewire::actingAs($this->createAdminUser())
+                ->test(ListAuditRequests::class)
+                ->callTableAction('launch', $record);
+
+            $record->refresh();
+            $this->assertNull($record->funding);
+
+            $this->assertSame(2, app(AuditRunSizer::class)->settle($record, 150000));
+            $record->refresh();
+            $this->assertSame(2, $record->run_count);
+            $this->assertSame(0, $record->extra_purchased_runs);
+            $this->assertSame(0, $record->extra_metered_runs);
+        } finally {
+            Config::where('key', 'audit.size_bands')->delete();
+        }
+    }
+
+    public function test_launch_that_spends_a_free_run_keeps_free_funding(): void
+    {
+        config(['audit.free_reports_limit' => 3]);
+        Queue::fake([GenerateAuditReport::class]);
+        $record = AuditRequest::factory()->verified()->create([
+            'status' => AuditRequestStatus::AWAITING_ACCESS->value,
+        ]);
+
+        Livewire::actingAs($this->createAdminUser())
+            ->test(ListAuditRequests::class)
+            ->callTableAction('launch', $record);
+
+        $record->refresh();
+        $this->assertSame(AuditFunding::FREE, $record->funding);
+        $this->assertTrue($record->free_run);
+    }
+
+    public function test_refund_of_a_comped_run_grants_no_base_credit(): void
+    {
+        $tenant = $this->createTenant();
+        $record = AuditRequest::factory()->create([
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => null,
+        ]);
+
+        $this->assertTrue(app(AuditEntitlementService::class)->refund($record));
+        $this->assertSame(0, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
     public function test_retry_action_is_visible_for_expert_review_status(): void
