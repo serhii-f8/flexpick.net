@@ -66,10 +66,17 @@ class RepositoryPicker
         RateLimiter::hit($limiterKey, 60);
 
         try {
+            $hadConnection = TenantGitConnection::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('provider', $providerName)
+                ->exists();
+
             $connection = $this->access->connectionForProvider($providerName, $tenant);
 
             if ($connection === null) {
-                return RepositoryPickerResult::of(RepositoryPickerState::NoConnection);
+                // A connection that existed but came back null had its refresh rejected
+                // (invalid_grant) and was deleted: that calls for a reconnect, not a first connect.
+                return RepositoryPickerResult::of($hadConnection ? RepositoryPickerState::Reconnect : RepositoryPickerState::NoConnection);
             }
 
             return RepositoryPickerResult::ok(

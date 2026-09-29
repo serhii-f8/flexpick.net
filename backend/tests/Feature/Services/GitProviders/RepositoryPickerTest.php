@@ -174,4 +174,14 @@ class RepositoryPickerTest extends FeatureTest
         $this->assertFalse($picker->isListed($tenant, $user, 'github', null, 1, 'https://gitlab.com/acme/api'));
         $this->assertFalse($picker->isListed($tenant, $user, 'github', null, 1, 'https://github.com/acme/api/'));
     }
+
+    public function test_a_refresh_rejected_with_invalid_grant_is_reconnect_not_no_connection(): void
+    {
+        [$tenant, $user] = $this->member();
+        $this->connect($tenant, 'gitlab', ['expires_at' => now()->subMinute(), 'refresh_token' => 'revoked']);
+        Http::fake(['gitlab.com/oauth/token' => Http::response(['error' => 'invalid_grant'], 400)]);
+
+        $this->assertSame(RepositoryPickerState::Reconnect, app(RepositoryPicker::class)->list($tenant, $user, 'gitlab', null, 1)->state);
+        $this->assertDatabaseMissing('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'gitlab']);
+    }
 }
