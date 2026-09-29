@@ -10,6 +10,18 @@ return [
     // Seconds a worker waits for another worker's git token refresh (its HTTP call
     // allows up to 15s) before giving up transiently.
     'git_refresh_lock_wait' => 25,
+
+    // The dashboard repository picker: provider listings are cached per connection,
+    // GitHub/Bitbucket are walked at most `max_pages` pages (100 repos each) before
+    // being filtered locally, and each user may make `rate_limit_per_minute` listing
+    // calls a minute (every picker action costs about two: the action, then its render).
+    'repo_picker' => [
+        'cache_seconds' => 300,
+        'max_pages' => 5,
+        'rate_limit_per_minute' => 60,
+        'max_search_length' => 100,
+    ],
+
     'max_repo_size_mb' => 500,
     'report_link_days' => 30,
     'workdir' => storage_path('app/audit-workdirs'),
