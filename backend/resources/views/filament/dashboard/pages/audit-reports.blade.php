@@ -3,22 +3,106 @@
         @php
             $selected = collect($quotas)->firstWhere(fn ($q) => $q->tier->value === $tier);
             $launchBranches = $repoUrl ? ($branchesByRepo[rtrim($repoUrl, '/')] ?? null) : null;
+            $pickerProviders = $this->pickerProviders();
+            $picker = $pickerProviders !== [] && $pickerMode === 'picker' ? $this->pickerResult() : null;
+            $pickerLabels = ['github' => 'GitHub', 'gitlab' => 'GitLab', 'bitbucket' => 'Bitbucket'];
+            $canManageConnections = \App\Filament\Dashboard\Pages\GitConnections::canAccess();
         @endphp
 
         <x-filament::section class="fp-launch">
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                 <div class="min-w-0">
-                    <label class="fp-mono-label" for="audit-repo-url">{{ __('Repository URL') }}</label>
-                    <x-filament::input.wrapper class="fp-launch-url mt-2">
-                        <x-filament::input id="audit-repo-url" type="url" wire:model.live.blur="repoUrl" placeholder="https://github.com/you/repo" aria-describedby="audit-private-repo" autocomplete="off" spellcheck="false" />
-                    </x-filament::input.wrapper>
+                    @if ($pickerProviders !== [] && $pickerMode === 'picker')
+                        <span class="fp-mono-label">{{ __('Repository') }}</span>
 
-                    <details id="audit-private-repo" class="fp-disclosure mt-2">
-                        <summary>{{ __('Private repository?') }}</summary>
-                        <p>
-                            {{ __('Connect your GitHub, GitLab, or Bitbucket account from the Git Connections page, then paste the URL here — private repos need a connected account before they can be analyzed.') }}
+                        @if ($repoUrl)
+                            <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 dark:border-white/10">
+                                <span class="fp-repo truncate font-medium text-gray-950 dark:text-white">{{ \App\Support\RepoName::short($repoUrl) }}</span>
+                                <x-filament::link tag="button" wire:click="clearRepository" size="sm">{{ __('Choose another') }}</x-filament::link>
+                            </div>
+                        @else
+                            @if (count($pickerProviders) > 1)
+                                <div class="mt-2 flex gap-2" role="tablist" aria-label="{{ __('Git provider') }}">
+                                    @foreach ($pickerProviders as $name)
+                                        <x-filament::button size="sm" :color="$pickerProvider === $name ? 'primary' : 'gray'" wire:click="selectProvider('{{ $name }}')" role="tab" aria-selected="{{ $pickerProvider === $name ? 'true' : 'false' }}">
+                                            {{ $pickerLabels[$name] }}
+                                        </x-filament::button>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            <x-filament::input.wrapper class="mt-2">
+                                <x-filament::input type="search" wire:model.live.debounce.400ms="repoSearch" placeholder="{{ __('Search your repositories') }}" maxlength="100" autocomplete="off" spellcheck="false" aria-label="{{ __('Search your repositories') }}" />
+                            </x-filament::input.wrapper>
+
+                            @if ($picker?->state === \App\Services\GitProviders\RepositoryPickerState::Ok)
+                                @if ($picker->page->items === [])
+                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                        {{ __('No repositories found for this account.') }}
+                                        @if ($pickerProvider === 'github')
+                                            {{ __('Organization repositories appear only after the organization approves FlexPick on GitHub.') }}
+                                        @endif
+                                    </p>
+                                @else
+                                    <ul class="mt-2 divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-white/10 dark:border-white/10" role="listbox" aria-label="{{ __('Repositories') }}">
+                                        @foreach ($picker->page->items as $entry)
+                                            <li wire:key="repo-{{ $pickerProvider }}-{{ $entry->fullName }}">
+                                                <button type="button" wire:click="chooseRepository({{ \Illuminate\Support\Js::from($entry->url) }})" class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-white/5" role="option">
+                                                    <span class="truncate font-medium text-gray-950 dark:text-white">{{ $entry->fullName }}</span>
+                                                    <span class="fp-mono-label shrink-0">{{ $entry->private ? __('private') : __('public') }}</span>
+                                                </button>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+
+                                @if ($repoPage > 1 || $picker->page->hasMore)
+                                    <div class="mt-2 flex justify-between">
+                                        <x-filament::link tag="button" wire:click="previousRepositoryPage" size="sm" :disabled="$repoPage <= 1">{{ __('Previous') }}</x-filament::link>
+                                        @if ($picker->page->hasMore)
+                                            <x-filament::link tag="button" wire:click="nextRepositoryPage" size="sm">{{ __('Next') }}</x-filament::link>
+                                        @endif
+                                    </div>
+                                @endif
+                            @elseif ($picker?->state === \App\Services\GitProviders\RepositoryPickerState::Reconnect)
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                    {{ __('Reconnect your :provider account to list its repositories.', ['provider' => $pickerLabels[$pickerProvider]]) }}
+                                    <a class="underline" href="{{ \App\Filament\Dashboard\Pages\GitConnections::getUrl() }}">{{ __('Git Connections') }}</a>
+                                </p>
+                            @elseif ($picker?->state === \App\Services\GitProviders\RepositoryPickerState::Unavailable)
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ __("Couldn't reach :provider just now. Try again in a minute, or paste a URL instead.", ['provider' => $pickerLabels[$pickerProvider]]) }}</p>
+                            @elseif ($picker?->state === \App\Services\GitProviders\RepositoryPickerState::Throttled)
+                                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ __('Too many lookups — wait a moment, or paste a URL instead.') }}</p>
+                            @endif
+                        @endif
+
+                        <p class="mt-2 text-sm">
+                            <x-filament::link tag="button" wire:click="useUrlInput" size="sm">{{ __('Paste a URL instead') }}</x-filament::link>
                         </p>
-                    </details>
+                    @else
+                        <label class="fp-mono-label" for="audit-repo-url">{{ __('Repository URL') }}</label>
+                        <x-filament::input.wrapper class="fp-launch-url mt-2">
+                            <x-filament::input id="audit-repo-url" type="url" wire:model.live.blur="repoUrl" placeholder="https://github.com/you/repo" aria-describedby="audit-private-repo" autocomplete="off" spellcheck="false" />
+                        </x-filament::input.wrapper>
+
+                        <details id="audit-private-repo" class="fp-disclosure mt-2">
+                            <summary>{{ __('Private repository?') }}</summary>
+                            <p>
+                                {{ __('Connect your GitHub, GitLab, or Bitbucket account from the Git Connections page, then paste the URL here — private repos need a connected account before they can be analyzed.') }}
+                            </p>
+                        </details>
+
+                        @if ($pickerProviders !== [])
+                            <p class="mt-2 text-sm">
+                                <x-filament::link tag="button" wire:click="usePicker" size="sm">{{ __('Choose from a connected account') }}</x-filament::link>
+                            </p>
+                        @elseif ($canManageConnections)
+                            <p class="mt-2 text-sm">
+                                <a class="underline" href="{{ \App\Filament\Dashboard\Pages\GitConnections::getUrl() }}">{{ __('Connect an account') }}</a>
+                                {{ __('to pick from your repositories.') }}
+                            </p>
+                        @endif
+                    @endif
                 </div>
 
                 @if ($launchBranches !== null)

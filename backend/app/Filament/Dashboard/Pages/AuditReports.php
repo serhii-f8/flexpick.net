@@ -22,9 +22,12 @@ use App\Services\AuditReport\ScoreChartBuilder;
 use App\Services\AuditReport\TierQuota;
 use App\Services\GitProviders\GitProviderResolver;
 use App\Services\GitProviders\GitRepoAccessResolver;
+use App\Services\GitProviders\RepositoryPicker;
+use App\Services\GitProviders\RepositoryPickerResult;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -45,6 +48,15 @@ class AuditReports extends Page
 
     public ?string $branch = null;
 
+    /** 'picker' (choose from a connected account) or 'url' (paste one). */
+    public string $pickerMode = 'picker';
+
+    public ?string $pickerProvider = null;
+
+    public string $repoSearch = '';
+
+    public int $repoPage = 1;
+
     /** @var array<string, list<string>> */
     public array $branchesByRepo = [];
 
@@ -60,7 +72,10 @@ class AuditReports extends Page
 
         if (is_string($repo) && str_starts_with($repo, 'http')) {
             $this->repoUrl = $repo;
+            $this->pickerMode = 'url';
         }
+
+        $this->pickerProvider = $this->pickerProviders()[0] ?? null;
     }
 
     public function updatedRepoUrl(): void
@@ -136,6 +151,115 @@ class AuditReports extends Page
 
         return AuditRequest::query()->forTenant($tenant)->whereIn('repo_url', $variants)->exists()
             || AuditSchedule::query()->where('tenant_id', $tenant->id)->whereIn('repo_url', $variants)->exists();
+    }
+
+    /**
+     * The providers the repository picker can list from: the workspace's connections, and
+     * only for a member who may manage them (see RepositoryPicker). Empty means no picker.
+     *
+     * @return list<string>
+     */
+    public function pickerProviders(): array
+    {
+        return app(RepositoryPicker::class)->providersFor(Filament::getTenant(), auth()->user());
+    }
+
+    public function pickerResult(): ?RepositoryPickerResult
+    {
+        if ($this->pickerMode !== 'picker' || $this->pickerProvider === null) {
+            return null;
+        }
+
+        try {
+            return app(RepositoryPicker::class)->list(Filament::getTenant(), auth()->user(), $this->pickerProvider, $this->repoSearch, $this->repoPage);
+        } catch (AuthorizationException) {
+            // The property is client-editable; a member who lost the permission mid-session
+            // simply loses the picker.
+            return null;
+        }
+    }
+
+    public function selectProvider(string $provider): void
+    {
+        if (! in_array($provider, $this->pickerProviders(), true)) {
+            return;
+        }
+
+        $this->pickerProvider = $provider;
+        $this->repoSearch = '';
+        $this->repoPage = 1;
+    }
+
+    public function updatedRepoSearch(): void
+    {
+        $this->repoSearch = mb_substr(trim($this->repoSearch), 0, (int) config('audit.repo_picker.max_search_length'));
+        $this->repoPage = 1;
+    }
+
+    public function nextRepositoryPage(): void
+    {
+        $this->repoPage++;
+    }
+
+    public function previousRepositoryPage(): void
+    {
+        $this->repoPage = max(1, $this->repoPage - 1);
+    }
+
+    public function usePicker(): void
+    {
+        $this->pickerMode = 'picker';
+    }
+
+    public function useUrlInput(): void
+    {
+        $this->pickerMode = 'url';
+    }
+
+    public function clearRepository(): void
+    {
+        $this->repoUrl = null;
+        $this->branch = null;
+    }
+
+    /**
+     * $url arrives from the client, and so does pickerProvider/repoSearch/repoPage: none of
+     * it is evidence the account can see the repo. It is accepted only when the account's own
+     * listing (server-side, cached) contains it, so this cannot become a way to probe for
+     * repositories.
+     */
+    public function chooseRepository(string $url): void
+    {
+        if ($this->pickerProvider === null) {
+            return;
+        }
+
+        try {
+            $listed = app(RepositoryPicker::class)->isListed(
+                Filament::getTenant(),
+                auth()->user(),
+                $this->pickerProvider,
+                $this->repoSearch,
+                $this->repoPage,
+                $url,
+            );
+        } catch (AuthorizationException) {
+            return;
+        }
+
+        if (! $listed) {
+            Notification::make()
+                ->title(__('That repository is no longer in the list'))
+                ->body(__('Search again, or paste its URL instead.'))
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->repoUrl = $url;
+        $this->branch = null;
+        $this->loadBranches($url);
     }
 
     public function prevCalendarMonth(): void

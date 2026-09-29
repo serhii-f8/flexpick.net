@@ -1,7 +1,7 @@
 # Repository picker on "Run an audit" — design
 
 **Date:** 2026-09-29
-**Status:** Draft for review
+**Status:** Approved (implemented)
 **Builds on:** `2026-09-27-multi-provider-git-access-and-sizing-design.md` (which lists a
 `listRepos()` picker as "enabled by this design but not required by it").
 
@@ -49,7 +49,7 @@ New value objects under `App\Services\GitProviders\`:
 - `RepositoryPage` — `list<RepositoryEntry> $items`, `bool $hasMore`.
 - `RepositoryEntry` — `string $fullName`, `string $url` (canonical https clone-page URL, the
   shape `GitRepoAccessResolver::isCanonicalHttpsUrl()` accepts), `bool $private`,
-  `?string $defaultBranch`, `?CarbonInterface $updatedAt`.
+  `?string $defaultBranch`, `?string $updatedAt` (ISO-8601 string as the provider returns it, not a Carbon instance).
 
 Per provider (endpoints to be confirmed against current provider docs in the plan; see
 "Open items"):
@@ -58,7 +58,13 @@ Per provider (endpoints to be confirmed against current provider docs in the pla
 |---|---|---|
 | GitHub | `GET /user/repos?affiliation=owner,collaborator,organization_member&sort=pushed&per_page=20&page=N`; search filtered server-side over the fetched pages, or the repository search API when a term is given | `repo` |
 | GitLab | `GET /projects?membership=true&simple=true&order_by=last_activity_at&per_page=20&page=N&search=…` | `read_api` |
-| Bitbucket | `GET /2.0/repositories?role=member&sort=-updated_on&pagelen=20&page=N&q=…` | `repository` |
+| Bitbucket | `GET /2.0/repositories?role=member&sort=-updated_on&pagelen=20&page=N&q=…` | `repository` + `account` (see below) |
+
+Bitbucket, as implemented: `GET /2.0/workspaces?role=member`, then
+`GET /2.0/repositories/{workspace}?role=member&sort=-updated_on&pagelen=100` per workspace. The global
+and `user/permissions` Bitbucket listing endpoints are deprecated and are not used. Workspace listing
+needs the `account` scope in addition to `repository` (the OAuth consumer needs *Account: Read*);
+existing connections must reconnect to enable the picker.
 
 - Results are cached per `connection id + search + page` for 5 minutes (same idiom as the
   existing `github_branches:*` cache key).
@@ -94,7 +100,7 @@ New Livewire state and methods on the existing page:
    the picker from becoming a free "does owner/repo exist" oracle (the concern documented on
    `userMayLookUpBranchesFor()`).
 4. `repoSearch` is length-capped (100 chars) and trimmed; listing calls are rate-limited per
-   user (e.g. 30 per minute) with `RateLimiter`.
+   user (default 60 per minute; each picker action costs about two calls) with `RateLimiter`.
 5. `launchAudit()` is unchanged: it still runs `preflight()` before any charge, so a repo the
    token can no longer read is still caught there.
 
@@ -106,7 +112,7 @@ New Livewire state and methods on the existing page:
 - One or more connections:
   - Provider switcher (only providers with a stored connection).
   - Searchable dropdown of `RepositoryEntry` items (full name, lock icon for private repos),
-    20 most recently pushed first, "Load more" when `hasMore`.
+    20 per page, most recently pushed first, with Previous/Next paging (not "Load more").
   - "Paste a URL instead" link reveals the existing URL input and hides the picker (and vice
     versa).
 - After a repo is chosen the existing branch selector loads exactly as it does today.
@@ -151,15 +157,15 @@ no global-count assertions).
   - full launch from a picked repo charges/queues identically to a pasted URL.
 - **Regression:** existing `AuditReportsPageTest` cases and the `?repo=` link stay green.
 
-## Open items to settle in the plan (not blockers to the design)
+## Open items (all resolved in implementation)
 
-1. **Provider scopes.** Confirm against current docs that the scopes already requested
+1. **Provider scopes.** RESOLVED: GitHub and GitLab scopes confirmed sufficient; Bitbucket needs `account` added (see Provider layer). Confirm against current docs that the scopes already requested
    (`repo`, `read_api`, `repository`) permit the listing calls above. If one does not, add the
    minimal extra scope and a "reconnect to enable the picker" hint for existing connections
    (the picker falls back to URL mode meanwhile).
-2. **GitHub search.** Decide between filtering the user's repos client-side after fetching
+2. **GitHub search.** RESOLVED: walk up to 5 pages of 100, cache per connection, filter locally. Decide between filtering the user's repos client-side after fetching
    pages and the search API (`q=…+user:…`), based on rate limits and organisation coverage.
-3. **Rate-limit numbers** and cache TTL stay configurable in `config/audit.php`.
+3. **Rate-limit numbers.** RESOLVED: default 60/min per user. and cache TTL stay configurable in `config/audit.php`.
 
 ## Risks
 
