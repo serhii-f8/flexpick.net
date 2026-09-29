@@ -10,9 +10,9 @@
         @endphp
 
         <x-filament::section class="fp-launch">
-            {{-- Flex, not grid: the repository column takes the free space (never below 18rem), the branch column keeps 16rem, and they wrap onto separate lines when narrow. Inline so it does not depend on the compiled theme. --}}
-            <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:1.5rem">
-                <div style="flex:1 1 18rem;min-width:0">
+            {{-- Stacked: the repository select spans the card and the branch select sits below it. Inline so it does not depend on the compiled theme. --}}
+            <div>
+                <div style="min-width:0">
                     @if ($pickerProviders !== [] && $pickerMode === 'picker')
                         <span class="fp-mono-label">{{ __('Repository') }}</span>
 
@@ -41,7 +41,7 @@
                                         <span aria-hidden="true">▾</span>
                                     </x-filament::button>
 
-                                    <div x-show="open" x-cloak class="fi-dropdown-panel" style="position:absolute;z-index:30;left:0;right:0;margin-top:0.25rem;max-width:none;padding:0.5rem">
+                                    <div x-show="open" x-cloak class="fi-dropdown-panel" style="position:absolute;z-index:30;left:0;right:0;box-sizing:border-box;width:100%;min-width:0;max-width:none;margin-top:0.25rem;padding:0.5rem">
                                         <x-filament::input.wrapper>
                                             <x-filament::input type="search" x-ref="repoSearch" wire:model.live.debounce.400ms="repoSearch" placeholder="{{ __('Search your repositories') }}" maxlength="100" autocomplete="off" spellcheck="false" aria-label="{{ __('Search your repositories') }}" />
                                         </x-filament::input.wrapper>
@@ -118,7 +118,7 @@
                 </div>
 
                 @if ($launchBranches !== null)
-                    <div style="flex:0 0 16rem;max-width:100%">
+                    <div style="margin-top:1.25rem;max-width:24rem">
                         <label class="fp-mono-label" for="audit-branch">{{ __('Branch') }}</label>
                         @if ($launchBranches !== [])
                             <x-filament::input.wrapper class="mt-2">
