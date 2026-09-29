@@ -27,7 +27,19 @@ class AuditRunSizer
             return $auditRequest->run_count;
         }
 
-        return DB::transaction(function () use ($auditRequest, $totalLoc): int {
+        // Everything read from `configs` is resolved here, before the
+        // transaction opens. Lock order inside it is audit_request -> tenant
+        // -> tenant_parameter, and the invariant that keeps the metering
+        // honest is that no plain (non-locking) read runs in the transaction
+        // before the tenant row lock: under REPEATABLE READ the first plain
+        // SELECT fixes the snapshot, and a snapshot fixed before that lock
+        // would hide runs a concurrent sizing of the same workspace committed
+        // while we waited for it. The request re-read below is a locking
+        // read, which opens no snapshot. See chargeExtraRuns().
+        $runs = $this->bands->runsFor($totalLoc);
+        $ceiling = $runs === null ? $this->bands->ceiling() : null;
+
+        return DB::transaction(function () use ($auditRequest, $totalLoc, $runs, $ceiling): int {
             // Two workers can run this request's retries at once, each with
             // its own stale copy that still shows a null run_count. Re-read
             // the row under a write lock and recheck, so the settle and its
@@ -42,12 +54,10 @@ class AuditRunSizer
                 return $settled->run_count;
             }
 
-            $runs = $this->bands->runsFor($totalLoc);
-
             if ($runs === null) {
                 throw AuditAwaitingCreditException::tooLarge(__(
                     'This repository has about :loc lines of code, above the :max-line limit for self-serve audits.',
-                    ['loc' => number_format($totalLoc), 'max' => number_format($this->bands->ceiling())],
+                    ['loc' => number_format($totalLoc), 'max' => number_format((int) $ceiling)],
                 ));
             }
 

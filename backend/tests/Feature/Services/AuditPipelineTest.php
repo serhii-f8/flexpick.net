@@ -35,11 +35,13 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Mockery;
 use Tests\Feature\FeatureTest;
+use Tests\Support\CreatesAuditSubscriptions;
 use Tests\Support\FakeAiAnalyzer;
 use Tests\Support\RunsAuditPipelineWithFakes;
 
 class AuditPipelineTest extends FeatureTest
 {
+    use CreatesAuditSubscriptions;
     use RunsAuditPipelineWithFakes;
 
     protected function setUp(): void
@@ -485,6 +487,40 @@ class AuditPipelineTest extends FeatureTest
         $this->assertStringContainsString('300,000-line limit', (string) $request->failure_reason);
         $this->assertSame(11, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DIAGNOSTIC));
         Mail::assertQueued(AuditCreditNeeded::class, fn (AuditCreditNeeded $mail) => $mail->tooLarge);
+    }
+
+    public function test_a_scheduled_run_short_of_allowance_closes_without_spending_purchased_credit(): void
+    {
+        $this->useTwoBands();
+        [, $tenant] = $this->userWithAllowance(diagnostic: 1);
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DIAGNOSTIC, 5);
+
+        $request = $this->runPipelineWithFakes(tier: AuditTier::DIAGNOSTIC, totalLoc: 150000, requestAttributes: [
+            'tenant_id' => $tenant->id,
+            'funding' => AuditFunding::ALLOWANCE->value,
+            'from_schedule' => true,
+        ]);
+
+        $this->assertSame(AuditRequestStatus::AWAITING_CREDIT->value, $request->status);
+        $this->assertSame(0, $request->extra_purchased_runs);
+        $this->assertSame(5, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DIAGNOSTIC));
+        Mail::assertQueued(AuditCreditNeeded::class, fn (AuditCreditNeeded $mail) => ! $mail->tooLarge);
+    }
+
+    public function test_a_dashboard_run_short_of_allowance_spends_purchased_credit(): void
+    {
+        $this->useTwoBands();
+        [, $tenant] = $this->userWithAllowance(diagnostic: 1);
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DIAGNOSTIC, 5);
+
+        $request = $this->runPipelineWithFakes(tier: AuditTier::DIAGNOSTIC, totalLoc: 150000, requestAttributes: [
+            'tenant_id' => $tenant->id,
+            'funding' => AuditFunding::ALLOWANCE->value,
+        ]);
+
+        $this->assertSame(AuditRequestStatus::SENT->value, $request->status);
+        $this->assertSame(1, $request->extra_purchased_runs);
+        $this->assertSame(4, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DIAGNOSTIC));
     }
 
     public function test_a_retried_run_is_not_charged_again(): void

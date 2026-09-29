@@ -33,7 +33,7 @@ class AuditRequest extends Model
         'manually_paid', 'admin_context', 'pipeline_log', 'analysis_started_at', 'analysis_completed_at', 'scanner_runs',
         'ai_input_tokens', 'ai_output_tokens', 'scanner_ms', 'repo_size_kb',
         'risk_files', 'deep_review_input_tokens', 'deep_review_output_tokens', 'deep_review_ms',
-        'run_count', 'extra_metered_runs', 'extra_purchased_runs',
+        'run_count', 'extra_metered_runs', 'extra_purchased_runs', 'from_schedule',
     ];
 
     protected $casts = [
@@ -63,6 +63,7 @@ class AuditRequest extends Model
         'run_count' => 'integer',
         'extra_metered_runs' => 'integer',
         'extra_purchased_runs' => 'integer',
+        'from_schedule' => 'boolean',
     ];
 
     /**

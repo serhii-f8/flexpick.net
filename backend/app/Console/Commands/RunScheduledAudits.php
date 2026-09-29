@@ -71,6 +71,8 @@ class RunScheduledAudits extends Command
                     : AuditFunding::ALLOWANCE->value,
                 'user_id' => $schedule->user->id,
                 'tenant_id' => $schedule->tenant_id,
+                // Unattended: sizing must not spend purchased credit on it.
+                'from_schedule' => true,
             ]);
 
             // An allowance run is metered simply by existing at its tier. A

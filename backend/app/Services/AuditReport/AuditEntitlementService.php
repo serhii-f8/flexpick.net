@@ -12,6 +12,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\TenantParameter;
 use App\Services\SubscriptionService;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -206,19 +207,30 @@ class AuditEntitlementService
         return $this->activeSubscriptions[$tenant->id] ??= $this->subscriptionService->findActiveTenantSubscriptions($tenant);
     }
 
+    /** Runs this calendar month that came out of the plan. */
+    public function runsUsedThisMonth(Tenant $tenant, AuditTier $tier): int
+    {
+        return $this->runsUsedInMonth($tenant, $tier, now());
+    }
+
     /**
-     * Runs this calendar month that came out of the plan.
+     * Runs that came out of the plan in the calendar month containing
+     * $month. A request is metered in the month it was created, extras
+     * included, whenever those extras were charged.
      *
      * Keyed on `funding`, not `source`: a checkout intent awaiting payment and
      * a purchased run are both dashboard-sourced but neither spends quota.
      */
-    public function runsUsedThisMonth(Tenant $tenant, AuditTier $tier): int
+    public function runsUsedInMonth(Tenant $tenant, AuditTier $tier, CarbonInterface $month): int
     {
+        $start = $month->copy()->startOfMonth();
+
         return $this->meteredRuns(AuditRequest::query()
             ->forTenant($tenant)
             ->where('funding', AuditFunding::ALLOWANCE->value)
             ->where('tier', $tier->value)
-            ->where('created_at', '>=', now()->startOfMonth())
+            ->where('created_at', '>=', $start)
+            ->where('created_at', '<', $start->copy()->addMonth())
             ->whereNull('credit_refunded_at'));
     }
 
@@ -287,27 +299,38 @@ class AuditEntitlementService
      * always drawn first: it resets every month regardless of use, while a
      * purchased credit never expires, so spending the credit before the
      * allowance would waste it for nothing.
+     *
+     * Follows chargeExtraRuns()' lock order: the tenant row is locked before
+     * the quota is read, so a launch and a sizing of the same workspace
+     * cannot both take the last allowance slot.
      */
     public function consume(Tenant $tenant, AuditTier $tier, TierQuota $quota): AuditFunding
     {
-        if ($quota->isLifetime && $this->hasFreeRun($tenant)) {
-            return AuditFunding::FREE;
-        }
+        return DB::transaction(function () use ($tenant, $tier, $quota): AuditFunding {
+            $this->lockTenant($tenant->getKey());
 
-        if (! $quota->isLifetime && $this->runsUsedThisMonth($tenant, $tier) < $this->allowance($tenant, $tier)) {
-            return AuditFunding::ALLOWANCE;
-        }
+            if ($quota->isLifetime && $this->hasFreeRun($tenant)) {
+                return AuditFunding::FREE;
+            }
 
-        $this->spendPurchasedCredit($tenant, $tier);
+            if (! $quota->isLifetime && $this->runsUsedThisMonth($tenant, $tier) < $this->allowance($tenant, $tier)) {
+                return AuditFunding::ALLOWANCE;
+            }
 
-        return AuditFunding::PURCHASE;
+            $this->spendPurchasedCredit($tenant, $tier);
+
+            return AuditFunding::PURCHASE;
+        });
     }
 
     /**
      * Charges the runs a large repository costs beyond the first one, which
      * was already spent when the request started. Drawn from the pool that
-     * funded that first run while it lasts (free quota or this month's
-     * allowance), then from purchased credits of the same tier.
+     * funded that first run while it lasts (free quota, or the allowance of
+     * the month the request was created in), then from purchased credits of
+     * the same tier. A scheduled
+     * request ran unattended, with nobody to agree to a charge, so it only
+     * ever draws from the metered pool.
      *
      * All or nothing: returns false and changes nothing when the extras can't
      * be covered in full, so the caller can close the request and refund the
@@ -319,23 +342,35 @@ class AuditEntitlementService
             return true;
         }
 
-        $tenant = $auditRequest->tenant;
         $tier = $auditRequest->tier;
 
         // A tenantless landing request has no workspace to hold credit.
-        if ($tenant === null || $tier === null) {
+        if ($auditRequest->tenant_id === null || $tier === null) {
             return false;
         }
 
-        return DB::transaction(function () use ($auditRequest, $tenant, $tier, $extra): bool {
-            // The metered pool is derived from audit_requests rows, so two
-            // concurrent sizings of the same workspace must not measure the
-            // same headroom twice: serialise on the tenant row before any
-            // of it is read.
-            Tenant::query()->whereKey($tenant->getKey())->lockForUpdate()->first();
+        return DB::transaction(function () use ($auditRequest, $tier, $extra): bool {
+            // Lock order: audit_request (AuditRunSizer::settle()) -> tenant ->
+            // tenant_parameter; consume() follows the same order. The metered
+            // pool is derived from audit_requests rows, so two concurrent
+            // sizings of the same workspace must not measure the same
+            // headroom twice: serialise on the tenant row before any of it is
+            // read. The tenant is fetched *by* this locking read, never lazily
+            // beforehand -- a plain read ahead of the lock would fix the
+            // REPEATABLE READ snapshot early and hide what the previous lock
+            // holder committed.
+            $tenant = $this->lockTenant($auditRequest->tenant_id);
 
-            $metered = min($extra, $this->meteredHeadroom($tenant, $tier, $auditRequest->funding));
+            if ($tenant === null) {
+                return false;
+            }
+
+            $metered = min($extra, $this->meteredHeadroom($tenant, $tier, $auditRequest));
             $purchased = $extra - $metered;
+
+            if ($purchased > 0 && $auditRequest->from_schedule) {
+                return false;
+            }
 
             if ($purchased > 0) {
                 $param = TenantParameter::query()
@@ -360,14 +395,32 @@ class AuditEntitlementService
         });
     }
 
-    /** Runs still available in the metered pool the first run came from. */
-    private function meteredHeadroom(Tenant $tenant, AuditTier $tier, ?AuditFunding $funding): int
+    /**
+     * Runs still available in the metered pool the request's first run came
+     * from; for the allowance, that is the month the request was created in.
+     *
+     * These are plain COUNT/SUM reads, correct only because the caller runs
+     * them after the tenant row lock, in a transaction that made no plain
+     * read before that lock -- so their snapshot is taken after the previous
+     * holder of the lock committed.
+     */
+    private function meteredHeadroom(Tenant $tenant, AuditTier $tier, AuditRequest $auditRequest): int
     {
-        return match ($funding) {
+        return match ($auditRequest->funding) {
             AuditFunding::FREE => max(0, $this->freeRunsLimit($tenant) - $this->freeRunsUsed($tenant)),
-            AuditFunding::ALLOWANCE => max(0, $this->allowance($tenant, $tier) - $this->runsUsedThisMonth($tenant, $tier)),
+            AuditFunding::ALLOWANCE => max(0, $this->allowance($tenant, $tier)
+                - $this->runsUsedInMonth($tenant, $tier, $auditRequest->created_at ?? now())),
             default => 0,
         };
+    }
+
+    /**
+     * Serialises every read-and-write of a workspace's metered pool. Must be
+     * the transaction's first read (see AuditRunSizer::settle()).
+     */
+    private function lockTenant(int|string $tenantId): ?Tenant
+    {
+        return Tenant::query()->whereKey($tenantId)->lockForUpdate()->first();
     }
 
     /**

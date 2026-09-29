@@ -51,6 +51,7 @@ class AuditAwaitingCreditTest extends FeatureTest
         $this->assertNull($request->run_count);
         $this->assertSame(0, $request->extra_metered_runs);
         $this->assertSame(0, $request->extra_purchased_runs);
+        $this->assertFalse($request->from_schedule);
     }
 
     public function test_closing_refunds_the_first_run_once_and_emails_the_customer(): void

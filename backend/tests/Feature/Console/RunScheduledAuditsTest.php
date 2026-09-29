@@ -46,6 +46,8 @@ class RunScheduledAuditsTest extends FeatureTest
         $this->assertSame(AuditTier::DEEP_AI, $request->tier);
         $this->assertSame(AuditFunding::ALLOWANCE, $request->funding);
         $this->assertSame($tenant->id, $request->tenant_id);
+        // Marks it unattended, so sizing never spends purchased credit on it.
+        $this->assertTrue($request->from_schedule);
         Queue::assertPushed(GenerateAuditReport::class);
     }
 

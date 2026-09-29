@@ -11,6 +11,10 @@ use App\Models\Tenant;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditRunSizer;
 use App\Services\ConfigService;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Events\TransactionBeginning;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use ReflectionMethod;
 use Tests\Feature\FeatureTest;
 
@@ -124,6 +128,71 @@ class AuditRunSizerTest extends FeatureTest
         $this->assertSame(2, $request->refresh()->run_count);
         $this->assertSame(1, $request->extra_purchased_runs);
         $this->assertSame(2, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
+    public function test_the_size_bands_are_read_before_the_transaction_opens(): void
+    {
+        // Under REPEATABLE READ the first plain SELECT in a transaction fixes
+        // its snapshot. A configs read inside settle()'s transaction would
+        // fix it before the tenant lock, and the metered counts read after
+        // that lock would then miss runs a concurrent sizing just committed.
+        $tenant = $this->createTenant();
+        app(AuditEntitlementService::class)->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 1);
+        $request = $this->request($tenant, AuditFunding::PURCHASE);
+
+        $events = $this->recordConfigReadsAndTransactions(fn () => app(AuditRunSizer::class)->settle($request, 150000));
+
+        $this->assertConfigsReadOnlyBeforeTheTransaction($events);
+    }
+
+    public function test_the_ceiling_is_read_before_the_transaction_opens(): void
+    {
+        $request = $this->request($this->createTenant(), AuditFunding::PURCHASE);
+
+        $events = $this->recordConfigReadsAndTransactions(function () use ($request): void {
+            try {
+                app(AuditRunSizer::class)->settle($request, 412000);
+                $this->fail('Expected AuditAwaitingCreditException');
+            } catch (AuditAwaitingCreditException $e) {
+                $this->assertTrue($e->tooLarge);
+                $this->assertStringContainsString('300,000-line limit', $e->getMessage());
+            }
+        });
+
+        $this->assertConfigsReadOnlyBeforeTheTransaction($events);
+    }
+
+    /** @return list<string> 'configs' for each configs query, 'begin' for each transaction (or savepoint) opened */
+    private function recordConfigReadsAndTransactions(callable $callback): array
+    {
+        // ConfigService::get() reads the table directly today; flushing the
+        // cache keeps this honest should a cache layer ever sit in front.
+        cache()->flush();
+
+        $events = [];
+        DB::listen(function (QueryExecuted $query) use (&$events): void {
+            if (preg_match('/from\s+`?configs`?/i', $query->sql) === 1) {
+                $events[] = 'configs';
+            }
+        });
+        Event::listen(TransactionBeginning::class, function () use (&$events): void {
+            $events[] = 'begin';
+        });
+
+        $callback();
+
+        return $events;
+    }
+
+    /** @param  list<string>  $events */
+    private function assertConfigsReadOnlyBeforeTheTransaction(array $events): void
+    {
+        $firstBegin = array_search('begin', $events, true);
+        $lastConfigs = array_search('configs', array_reverse($events, true), true);
+
+        $this->assertNotFalse($firstBegin, 'settle() opened no transaction.');
+        $this->assertNotFalse($lastConfigs, 'settle() never read the size bands.');
+        $this->assertLessThan($firstBegin, $lastConfigs, 'configs was read inside the transaction: '.implode(', ', $events));
     }
 
     public function test_the_insufficient_message_drops_the_tier_clause_when_the_tier_is_null(): void

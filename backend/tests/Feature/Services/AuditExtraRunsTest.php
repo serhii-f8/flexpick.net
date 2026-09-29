@@ -12,7 +12,10 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Services\AuditReport\AuditEntitlementService;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Events\TransactionBeginning;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Tests\Feature\FeatureTest;
 
 class AuditExtraRunsTest extends FeatureTest
@@ -126,12 +129,13 @@ class AuditExtraRunsTest extends FeatureTest
         $this->assertSame(2, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
-    private function request(Tenant $tenant, AuditFunding $funding): AuditRequest
+    private function request(Tenant $tenant, AuditFunding $funding, array $attributes = []): AuditRequest
     {
         return AuditRequest::factory()->create([
             'tenant_id' => $tenant->id,
             'tier' => AuditTier::DEEP_AI->value,
             'funding' => $funding->value,
+            ...$attributes,
         ]);
     }
 
@@ -169,6 +173,102 @@ class AuditExtraRunsTest extends FeatureTest
         $this->assertNotNull($lockAt, 'chargeExtraRuns took no lock on the tenants row.');
         $this->assertNotNull($meterAt);
         $this->assertLessThan($meterAt, $lockAt, 'The metered audit_requests count must only be read under the tenants row lock.');
+    }
+
+    public function test_extras_are_refused_when_the_creation_month_is_exhausted_even_if_this_month_is_free(): void
+    {
+        // Created on the last day of October, the request's runs count
+        // against October. Sized on November 1st, November's untouched
+        // allowance must not pay for them.
+        $this->travelTo(Carbon::parse('2026-10-31 23:30:00'));
+        $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 2]);
+        $request = $this->request($tenant, AuditFunding::ALLOWANCE);
+        $this->request($tenant, AuditFunding::ALLOWANCE);
+
+        $this->travelTo(Carbon::parse('2026-11-01 00:30:00'));
+
+        $this->assertFalse($this->service->chargeExtraRuns($request, 1));
+        $this->assertSame(0, $request->refresh()->extra_metered_runs);
+    }
+
+    public function test_extras_are_metered_against_the_creation_month_when_this_month_is_exhausted(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-31 23:30:00'));
+        $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 2]);
+        $request = $this->request($tenant, AuditFunding::ALLOWANCE);
+
+        $this->travelTo(Carbon::parse('2026-11-01 00:30:00'));
+        $this->request($tenant, AuditFunding::ALLOWANCE);
+        $this->request($tenant, AuditFunding::ALLOWANCE);
+
+        $this->assertTrue($this->service->chargeExtraRuns($request, 1));
+
+        $this->assertSame(1, $request->refresh()->extra_metered_runs);
+        $this->assertSame(0, $request->extra_purchased_runs);
+        $this->assertSame(2, $this->service->runsUsedInMonth($tenant, AuditTier::DEEP_AI, Carbon::parse('2026-10-15')));
+        $this->assertSame(2, $this->service->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
+    }
+
+    public function test_a_scheduled_request_never_draws_extras_from_purchased_credits(): void
+    {
+        // app:run-scheduled-audits runs unattended and promises never to
+        // auto-charge: a shortfall the allowance cannot cover closes the
+        // request instead of spending a credit the customer bought.
+        $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 1]);
+        $this->service->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 5);
+        $request = $this->request($tenant, AuditFunding::ALLOWANCE, ['from_schedule' => true]);
+
+        $this->assertFalse($this->service->chargeExtraRuns($request, 1));
+
+        $this->assertSame(0, $request->refresh()->extra_metered_runs);
+        $this->assertSame(0, $request->extra_purchased_runs);
+        $this->assertSame(5, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
+    public function test_a_scheduled_request_still_draws_extras_from_the_allowance(): void
+    {
+        $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 3]);
+        $this->service->grantPurchasedCredit($tenant, AuditTier::DEEP_AI, 5);
+        $request = $this->request($tenant, AuditFunding::ALLOWANCE, ['from_schedule' => true]);
+
+        $this->assertTrue($this->service->chargeExtraRuns($request, 2));
+
+        $this->assertSame(2, $request->refresh()->extra_metered_runs);
+        $this->assertSame(5, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
+    public function test_consume_reads_the_quota_under_a_tenant_row_lock(): void
+    {
+        $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 5]);
+        $quota = $this->service->quotaFor($tenant, AuditTier::DEEP_AI);
+
+        $queries = [];
+        $began = null;
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+        Event::listen(TransactionBeginning::class, function () use (&$queries, &$began): void {
+            $began ??= count($queries);
+        });
+
+        $this->assertSame(AuditFunding::ALLOWANCE, $this->service->consume($tenant, AuditTier::DEEP_AI, $quota));
+
+        $lockAt = null;
+        $meterAt = null;
+        foreach ($queries as $i => $sql) {
+            if ($lockAt === null && str_contains($sql, 'for update') && preg_match('/from\s+`?tenants`?\b/', $sql) === 1) {
+                $lockAt = $i;
+            }
+            if ($meterAt === null && str_contains($sql, 'audit_requests') && str_contains($sql, 'count(')) {
+                $meterAt = $i;
+            }
+        }
+
+        $this->assertNotNull($began, 'consume() opened no transaction.');
+        $this->assertNotNull($lockAt, 'consume() took no lock on the tenants row.');
+        $this->assertNotNull($meterAt);
+        $this->assertLessThan($meterAt, $lockAt, 'The quota must only be read under the tenants row lock.');
+        $this->assertSame(0, $lockAt - $began, 'The tenant lock must be the first statement of the transaction.');
     }
 
     private function tenantWithAllowance(array $productMetadata): Tenant
