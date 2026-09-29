@@ -32,39 +32,49 @@
                                 </div>
                             @endif
 
-                            <x-filament::input.wrapper class="mt-2">
-                                <x-filament::input type="search" wire:model.live.debounce.400ms="repoSearch" placeholder="{{ __('Search your repositories') }}" maxlength="100" autocomplete="off" spellcheck="false" aria-label="{{ __('Search your repositories') }}" />
-                            </x-filament::input.wrapper>
-
                             @if ($picker?->state === \App\Services\GitProviders\RepositoryPickerState::Ok)
-                                @if ($picker->page->items === [])
-                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                        {{ __('No repositories found for this account.') }}
-                                        @if ($pickerProvider === 'github')
-                                            {{ __('Organization repositories appear only after the organization approves FlexPick on GitHub.') }}
-                                        @endif
-                                    </p>
-                                @else
-                                    <ul class="mt-2 divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-white/10 dark:border-white/10" role="listbox" aria-label="{{ __('Repositories') }}">
-                                        @foreach ($picker->page->items as $entry)
-                                            <li wire:key="repo-{{ $pickerProvider }}-{{ $entry->fullName }}">
-                                                <button type="button" wire:click="chooseRepository({{ \Illuminate\Support\Js::from($entry->url) }})" class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-white/5" role="option">
-                                                    <span class="truncate font-medium text-gray-950 dark:text-white">{{ $entry->fullName }}</span>
-                                                    <span class="fp-mono-label shrink-0">{{ $entry->private ? __('private') : __('public') }}</span>
-                                                </button>
-                                            </li>
-                                        @endforeach
-                                    </ul>
-                                @endif
+                                {{-- Searchable select: the trigger looks like a select, the panel holds the (server-side) search and the current page. Layout is inline so it does not depend on the compiled theme. --}}
+                                <div class="mt-2" style="position:relative" x-data="{ open: false }" x-on:keydown.escape.stop="open = false" x-on:click.outside="open = false">
+                                    <x-filament::button color="gray" type="button" x-on:click="open = ! open; if (open) { $nextTick(() => $refs.repoSearch.focus()) }" aria-haspopup="listbox" x-bind:aria-expanded="open" style="width:100%;justify-content:space-between">
+                                        <span>{{ __('Select a repository') }}</span>
+                                        <span aria-hidden="true">▾</span>
+                                    </x-filament::button>
 
-                                @if ($repoPage > 1 || $picker->page->hasMore)
-                                    <div class="mt-2 flex justify-between">
-                                        <x-filament::link tag="button" wire:click="previousRepositoryPage" size="sm" :disabled="$repoPage <= 1">{{ __('Previous') }}</x-filament::link>
-                                        @if ($picker->page->hasMore)
-                                            <x-filament::link tag="button" wire:click="nextRepositoryPage" size="sm">{{ __('Next') }}</x-filament::link>
+                                    <div x-show="open" x-cloak class="fi-dropdown-panel" style="position:absolute;z-index:30;left:0;right:0;margin-top:0.25rem;max-width:none;padding:0.5rem">
+                                        <x-filament::input.wrapper>
+                                            <x-filament::input type="search" x-ref="repoSearch" wire:model.live.debounce.400ms="repoSearch" placeholder="{{ __('Search your repositories') }}" maxlength="100" autocomplete="off" spellcheck="false" aria-label="{{ __('Search your repositories') }}" />
+                                        </x-filament::input.wrapper>
+
+                                        @if ($picker->page->items === [])
+                                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                                {{ __('No repositories found for this account.') }}
+                                                @if ($pickerProvider === 'github')
+                                                    {{ __('Organization repositories appear only after the organization approves FlexPick on GitHub.') }}
+                                                @endif
+                                            </p>
+                                        @else
+                                            <ul class="mt-2 divide-y divide-gray-200 dark:divide-white/10" style="max-height:18rem;overflow-y:auto" role="listbox" aria-label="{{ __('Repositories') }}">
+                                                @foreach ($picker->page->items as $entry)
+                                                    <li wire:key="repo-{{ $pickerProvider }}-{{ $entry->fullName }}">
+                                                        <button type="button" x-on:click="open = false" wire:click="chooseRepository({{ \Illuminate\Support\Js::from($entry->url) }})" class="hover:bg-gray-50 dark:hover:bg-white/5" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.5rem 0.75rem;text-align:left;font-size:0.875rem" role="option">
+                                                            <span class="fp-repo font-medium text-gray-950 dark:text-white" style="min-width:0">{{ $entry->fullName }}</span>
+                                                            <span class="fp-mono-label" style="flex:none">{{ $entry->private ? __('private') : __('public') }}</span>
+                                                        </button>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        @endif
+
+                                        @if ($repoPage > 1 || $picker->page->hasMore)
+                                            <div class="mt-2" style="display:flex;justify-content:space-between">
+                                                <x-filament::link tag="button" wire:click="previousRepositoryPage" size="sm" :disabled="$repoPage <= 1">{{ __('Previous') }}</x-filament::link>
+                                                @if ($picker->page->hasMore)
+                                                    <x-filament::link tag="button" wire:click="nextRepositoryPage" size="sm">{{ __('Next') }}</x-filament::link>
+                                                @endif
+                                            </div>
                                         @endif
                                     </div>
-                                @endif
+                                </div>
                             @elseif ($picker?->state === \App\Services\GitProviders\RepositoryPickerState::Reconnect)
                                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
                                     {{ __('Reconnect your :provider account to list its repositories.', ['provider' => $pickerLabels[$pickerProvider]]) }}
