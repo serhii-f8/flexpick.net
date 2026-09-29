@@ -34,14 +34,14 @@
                             @endif
 
                             @if ($picker?->state === \App\Services\GitProviders\RepositoryPickerState::Ok)
-                                {{-- Searchable select: the trigger looks like a select, the panel holds the (server-side) search and the current page. Layout is inline so it does not depend on the compiled theme. --}}
+                                {{-- Searchable select (own panel, not .fi-dropdown-panel: the theme caps that class at 14rem with !important): the trigger looks like a select, the panel holds the (server-side) search and the current page. Layout is inline so it does not depend on the compiled theme. --}}
                                 <div class="mt-2" style="position:relative" x-data="{ open: false }" x-on:keydown.escape.stop="open = false" x-on:click.outside="open = false">
                                     <x-filament::button color="gray" type="button" x-on:click="open = ! open; if (open) { $nextTick(() => $refs.repoSearch.focus()) }" aria-haspopup="listbox" x-bind:aria-expanded="open" style="width:100%;justify-content:space-between">
                                         <span>{{ __('Select a repository') }}</span>
                                         <span aria-hidden="true">▾</span>
                                     </x-filament::button>
 
-                                    <div x-show="open" x-cloak class="fi-dropdown-panel" style="position:absolute;z-index:30;left:0;right:0;box-sizing:border-box;width:100%;min-width:0;max-width:none;margin-top:0.25rem;padding:0.5rem">
+                                    <div x-show="open" x-cloak class="bg-white dark:bg-gray-900" style="position:absolute;z-index:30;left:0;right:0;box-sizing:border-box;width:100%;margin-top:0.25rem;padding:0.5rem;border:1px solid var(--fp-line-strong);border-radius:0.75rem;box-shadow:0 12px 32px rgba(0,0,0,0.35)">
                                         <x-filament::input.wrapper>
                                             <x-filament::input type="search" x-ref="repoSearch" wire:model.live.debounce.400ms="repoSearch" placeholder="{{ __('Search your repositories') }}" maxlength="100" autocomplete="off" spellcheck="false" aria-label="{{ __('Search your repositories') }}" />
                                         </x-filament::input.wrapper>
