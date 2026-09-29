@@ -4,7 +4,7 @@ namespace App\Services\AuditReport;
 
 use App\Models\AuditFindingGroup;
 use App\Models\AuditReport;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonInterface;
 
 /**
  * Compares persisted finding groups between the current report and the most
@@ -19,7 +19,7 @@ class AuditGroupDeltaService
 
     /**
      * @return array{
-     *     previous_at: Carbon,
+     *     previous_at: CarbonInterface|null,
      *     groups: array<string, array{
      *         rule_family: string, directory: string, dimension: string,
      *         status: 'new'|'fixed'|'persisting',
