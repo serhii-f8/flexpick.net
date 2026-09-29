@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport;
 
 use App\Exceptions\AuditNotAnalyzableException;
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Models\Tenant;
 use App\Services\GitProviders\GitRepoAccessResolver;
 use Illuminate\Contracts\Process\ProcessResult;
@@ -81,7 +82,11 @@ class RepositoryCloner
      * The current SHA of a remote ref, without cloning. `null` on any
      * failure (unreachable host, private repo with no git connection,
      * network error) -- callers (ScheduledAuditChangeChecker) must treat
-     * that as "unknown," never as "unchanged."
+     * that as "unknown," never as "unchanged." A transiently unavailable
+     * token refresh is not swallowed here: it throws
+     * GitAccessTemporarilyUnavailableException so the caller can skip the cycle.
+     *
+     * @throws GitAccessTemporarilyUnavailableException
      */
     public function remoteHeadSha(string $url, ?string $branch = null, ?Tenant $tenant = null): ?string
     {
@@ -126,7 +131,12 @@ class RepositoryCloner
      * same guard covers resolution failures (e.g. a DecryptException after an APP_KEY
      * rotation).
      *
+     * A GitAccessTemporarilyUnavailableException from the resolver is the one exception to
+     * that conversion: it propagates as is (see the exception's docblock).
+     *
      * @param  list<string>  $arguments  git arguments after the global options
+     *
+     * @throws GitAccessTemporarilyUnavailableException
      */
     private function runGit(string $url, ?Tenant $tenant, mixed $timeout, array $arguments, string $failurePrefix): ProcessResult
     {
@@ -140,6 +150,10 @@ class RepositoryCloner
                     ...($credential?->gitEnv() ?? []),
                 ])
                 ->run(['git', '-c', 'credential.helper=', ...$arguments]);
+        } catch (GitAccessTemporarilyUnavailableException $e) {
+            // Not a verdict on the repo: let it reach the queue (retry) or the caller
+            // (try again). Its message is fixed text, never token material.
+            throw $e;
         } catch (Throwable) {
             throw new AuditNotAnalyzableException($failurePrefix.$this->redactUrl($url));
         }

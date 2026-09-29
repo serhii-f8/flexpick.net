@@ -2,6 +2,7 @@
 
 namespace App\Services\GitProviders;
 
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Exceptions\GitTokenRefreshUnavailableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
@@ -15,6 +16,8 @@ class GitRepoAccessResolver
      * Refresh a token this close to expiry rather than hand git one that dies mid-clone.
      */
     private const EXPIRY_LEEWAY_SECONDS = 60;
+
+    private const REFRESH_LOCK_TTL_SECONDS = 60;
 
     public function __construct(private GitProviderResolver $providers) {}
 
@@ -30,6 +33,10 @@ class GitRepoAccessResolver
      * rule here would reject public repos that production accepts. The proactive
      * gate belongs only where we are about to charge: AuditReports::launchAudit().
      *
+     * The one exception is a refresh that is only transiently unavailable: that throws
+     * GitAccessTemporarilyUnavailableException, because cloning anonymously would fail a
+     * private repo and be mistaken for "no access" -- closing and refunding a healthy
+     * connection's audit.
      * The lookup itself stays tenant-scoped (connectionFor()), so another tenant's
      * connection can never be attached to this tenant's request.
      */
@@ -79,6 +86,9 @@ class GitRepoAccessResolver
      * need be) token -- or null when there is none. A connection whose refresh the
      * provider rejected is deleted, so callers see exactly what they'd see had the
      * tenant never connected: the dashboard asks them to connect again.
+     *
+     * @throws GitAccessTemporarilyUnavailableException when the token needs a refresh that
+     *                                                  is only transiently unavailable
      */
     public function connectionFor(string $repoUrl, Tenant $tenant): ?TenantGitConnection
     {
@@ -106,11 +116,14 @@ class GitRepoAccessResolver
         // workers refreshing the same connection at once would have the loser's refresh
         // rejected -- and a rejection deletes the connection. Serialize per connection,
         // and re-read inside the lock: the winner may already have refreshed it.
+        //
+        // The wait must outlast a refresh already in flight: its HTTP call can take
+        // timeout 10s + connect 5s. The lock TTL stays above wait + one refresh.
         try {
-            return Cache::lock("git_connection_refresh:{$connection->id}", 30)
-                ->block(15, fn () => $this->refreshIfStillExpired($provider, $connection));
+            return Cache::lock("git_connection_refresh:{$connection->id}", self::REFRESH_LOCK_TTL_SECONDS)
+                ->block((int) config('audit.git_refresh_lock_wait'), fn () => $this->refreshIfStillExpired($provider, $connection));
         } catch (LockTimeoutException) {
-            return null;
+            throw new GitAccessTemporarilyUnavailableException('Git token refresh is in progress elsewhere; try again shortly');
         }
     }
 
@@ -125,10 +138,10 @@ class GitRepoAccessResolver
         try {
             $refreshed = $provider->refreshToken($connection);
         } catch (GitTokenRefreshUnavailableException) {
-            // Transient (network/5xx): keep the connection for the next attempt, but
-            // don't hand out a token we know is expired. This call proceeds as if
-            // unconnected (a public repo still clones anonymously).
-            return null;
+            // Transient (network/5xx): keep the connection for the next attempt, and
+            // don't hand out a token we know is expired. Not "unconnected" either:
+            // callers must retry rather than treat a private repo as inaccessible.
+            throw new GitAccessTemporarilyUnavailableException('Git token refresh is temporarily unavailable');
         }
 
         if ($refreshed === null) {

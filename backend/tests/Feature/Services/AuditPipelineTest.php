@@ -6,6 +6,7 @@ use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Exceptions\AiAnalysisException;
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Jobs\GenerateAuditReport;
 use App\Mail\Audit\AuditCreditNeeded;
 use App\Mail\Audit\AuditRepoAccessNeeded;
@@ -15,6 +16,7 @@ use App\Models\AuditFindingGroup;
 use App\Models\AuditRequest;
 use App\Models\Config;
 use App\Models\Tenant;
+use App\Models\TenantGitConnection;
 use App\Services\AuditReport\AiAnalyzer;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditPipeline;
@@ -29,6 +31,7 @@ use App\Services\AuditReport\ScoreCalculator;
 use App\Services\AuditRequestService;
 use App\Services\ConfigService;
 use App\Services\GitProviders\GitRepoAccessResolver;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Mockery;
 use Tests\Feature\FeatureTest;
@@ -173,6 +176,85 @@ class AuditPipelineTest extends FeatureTest
 
         $this->assertNotNull($request->refresh()->credit_refunded_at);
         $this->assertSame(1, app(AuditEntitlementService::class)->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
+    }
+
+    /**
+     * A token refresh that is only transiently unavailable says nothing about the repo:
+     * the run must not be closed, refunded or emailed -- the exception reaches the job
+     * so its tries/backoff apply.
+     */
+    public function test_a_transient_git_access_failure_reaches_the_job_without_closing_or_refunding(): void
+    {
+        $this->app->instance(AiAnalyzer::class, new FakeAiAnalyzer);
+        $tenant = $this->createTenant();
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'https://github.com/acme/private',
+            'status' => AuditRequestStatus::QUEUED->value,
+            'tenant_id' => $tenant->id,
+            'tier' => AuditTier::DEEP_AI->value,
+            'funding' => AuditFunding::PURCHASE->value,
+        ]);
+        $mock = Mockery::mock(RepositoryCloner::class, [app(GitRepoAccessResolver::class)])->makePartial();
+        $mock->shouldReceive('preflight')->once()->andThrow(new GitAccessTemporarilyUnavailableException('refresh unavailable'));
+        $this->instance(RepositoryCloner::class, $mock);
+
+        try {
+            (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
+            $this->fail('Expected GitAccessTemporarilyUnavailableException');
+        } catch (GitAccessTemporarilyUnavailableException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::ANALYZING->value, $request->status);
+        $this->assertNull($request->credit_refunded_at);
+        Mail::assertNothingQueued();
+        Mail::assertNothingSent();
+    }
+
+    /**
+     * End to end through the real cloner and resolver: an expired GitLab token whose
+     * refresh hits a provider outage retries; nothing is closed.
+     */
+    public function test_a_provider_outage_during_refresh_leaves_the_request_retryable(): void
+    {
+        Http::fake(['gitlab.com/oauth/token' => Http::response(null, 503)]);
+        $tenant = $this->createTenant();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab', 'refresh_token' => 'valid-refresh', 'expires_at' => now()->subMinute(),
+        ]);
+        $request = AuditRequest::factory()->create([
+            'repo_url' => 'https://gitlab.com/acme/private',
+            'status' => AuditRequestStatus::QUEUED->value,
+            'tenant_id' => $tenant->id,
+        ]);
+
+        try {
+            (new GenerateAuditReport($request))->handle(app(AuditPipeline::class));
+            $this->fail('Expected GitAccessTemporarilyUnavailableException');
+        } catch (GitAccessTemporarilyUnavailableException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->assertNotSame(AuditRequestStatus::NOT_ANALYZABLE->value, $request->fresh()->status);
+        $this->assertNull($request->fresh()->credit_refunded_at);
+        $this->assertDatabaseHas('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'gitlab']);
+        Mail::assertNothingQueued();
+    }
+
+    /**
+     * When every attempt is transient the queue calls failed(): the request lands in
+     * the ordinary FAILED state (customer + admin told), it is not closed as
+     * not-analyzable and no credit reference is touched.
+     */
+    public function test_the_final_failed_hook_after_only_transient_attempts_marks_the_request_failed(): void
+    {
+        $request = AuditRequest::factory()->create(['status' => AuditRequestStatus::ANALYZING->value]);
+
+        (new GenerateAuditReport($request))->failed(new GitAccessTemporarilyUnavailableException('Git provider temporarily unavailable'));
+
+        $this->assertSame(AuditRequestStatus::FAILED->value, $request->fresh()->status);
+        $this->assertNull($request->fresh()->credit_refunded_at);
     }
 
     public function test_ai_failure_marks_failed_and_notifies(): void

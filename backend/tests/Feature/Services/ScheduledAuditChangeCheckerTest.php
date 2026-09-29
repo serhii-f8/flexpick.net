@@ -6,6 +6,7 @@ use App\Models\AuditSchedule;
 use App\Models\TenantGitConnection;
 use App\Services\AuditReport\ScheduledAuditChangeChecker;
 use Illuminate\Process\PendingProcess;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Tests\Feature\FeatureTest;
 
@@ -62,5 +63,24 @@ class ScheduledAuditChangeCheckerTest extends FeatureTest
         Process::assertRan(fn (PendingProcess $process) => ($process->command[3] ?? null) === 'ls-remote'
             && ! str_contains(implode(' ', (array) $process->command), 'ghp_schedule_token')
             && str_contains($process->environment['GIT_CONFIG_VALUE_0'] ?? '', base64_encode('x-access-token:ghp_schedule_token')));
+    }
+
+    public function test_a_transient_git_access_failure_skips_the_cycle_instead_of_failing_open(): void
+    {
+        Process::fake();
+        Http::fake(['gitlab.com/oauth/token' => Http::response(null, 503)]);
+        $schedule = AuditSchedule::factory()->make([
+            'repo_url' => 'https://gitlab.com/acme/app', 'last_commit_sha' => 'sha123',
+        ]);
+        TenantGitConnection::factory()->for($schedule->tenant)->create([
+            'provider' => 'gitlab', 'refresh_token' => 'valid-refresh', 'expires_at' => now()->subMinute(),
+        ]);
+
+        $result = app(ScheduledAuditChangeChecker::class)->check($schedule);
+
+        $this->assertFalse($result->shouldRun);
+        $this->assertTrue($result->unavailable);
+        $this->assertNull($result->sha);
+        Process::assertNothingRan();
     }
 }

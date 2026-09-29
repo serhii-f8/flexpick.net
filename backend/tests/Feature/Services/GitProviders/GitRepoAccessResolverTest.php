@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Services\GitProviders;
 
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Services\GitProviders\GitRepoAccessResolver;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\FeatureTest;
@@ -232,7 +234,7 @@ class GitRepoAccessResolverTest extends FeatureTest
      * every tenant on that provider over a config mistake on our side.
      */
     #[DataProvider('refreshableProviders')]
-    public function test_a_401_invalid_client_keeps_the_connection(string $provider, string $repoUrl, string $tokenEndpoint): void
+    public function test_a_401_invalid_client_keeps_the_connection_and_signals_a_transient_failure(string $provider, string $repoUrl, string $tokenEndpoint): void
     {
         $tenant = Tenant::factory()->create();
         TenantGitConnection::factory()->for($tenant)->create([
@@ -240,7 +242,13 @@ class GitRepoAccessResolverTest extends FeatureTest
         ]);
         Http::fake([$tokenEndpoint => Http::response(['error' => 'invalid_client'], 401)]);
 
-        $this->assertNull(app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant));
+        try {
+            app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant);
+            $this->fail('Expected GitAccessTemporarilyUnavailableException');
+        } catch (GitAccessTemporarilyUnavailableException) {
+            $this->addToAssertionCount(1);
+        }
+
         $this->assertDatabaseHas('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
     }
 
@@ -264,7 +272,7 @@ class GitRepoAccessResolverTest extends FeatureTest
     }
 
     #[DataProvider('refreshableProviders')]
-    public function test_a_provider_outage_during_refresh_keeps_the_connection_but_withholds_the_expired_token(string $provider, string $repoUrl, string $tokenEndpoint): void
+    public function test_a_provider_outage_during_refresh_keeps_the_connection_and_signals_a_transient_failure(string $provider, string $repoUrl, string $tokenEndpoint): void
     {
         $tenant = Tenant::factory()->create();
         TenantGitConnection::factory()->for($tenant)->create([
@@ -275,8 +283,47 @@ class GitRepoAccessResolverTest extends FeatureTest
         ]);
         Http::fake([$tokenEndpoint => Http::response(null, 503)]);
 
-        $this->assertNull(app(GitRepoAccessResolver::class)->resolveCredential($repoUrl, $tenant));
+        try {
+            app(GitRepoAccessResolver::class)->resolveCredential($repoUrl, $tenant);
+            $this->fail('Expected GitAccessTemporarilyUnavailableException');
+        } catch (GitAccessTemporarilyUnavailableException $e) {
+            $this->assertStringNotContainsString('expired-access-must-not-leak', $e->getMessage());
+        }
+
         $this->assertDatabaseHas('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => $provider]);
+    }
+
+    public function test_a_lock_wait_timeout_signals_a_transient_failure_and_keeps_the_connection(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $connection = TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab',
+            'refresh_token' => 'valid-refresh',
+            'expires_at' => now()->subMinute(),
+        ]);
+        Http::fake();
+        // Another worker holds the refresh lock; a zero-second wait stands in for the timeout.
+        $held = Cache::lock("git_connection_refresh:{$connection->id}", 30);
+        $this->assertTrue($held->get());
+        config(['audit.git_refresh_lock_wait' => 0]);
+
+        try {
+            app(GitRepoAccessResolver::class)->resolveCredential('https://gitlab.com/acme/app', $tenant);
+            $this->fail('Expected GitAccessTemporarilyUnavailableException');
+        } catch (GitAccessTemporarilyUnavailableException) {
+            $this->addToAssertionCount(1);
+        } finally {
+            $held->release();
+        }
+
+        Http::assertNothingSent();
+        $this->assertDatabaseHas('tenant_git_connections', ['id' => $connection->id]);
+    }
+
+    public function test_the_refresh_lock_wait_exceeds_the_refresh_http_worst_case(): void
+    {
+        // The providers' refresh call allows timeout 10s + connect 5s.
+        $this->assertGreaterThan(15, (int) config('audit.git_refresh_lock_wait'));
     }
 
     public function test_an_expired_github_connection_cannot_be_refreshed_and_is_dropped(): void

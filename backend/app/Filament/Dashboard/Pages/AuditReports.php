@@ -6,6 +6,7 @@ use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Exceptions\AuditNotAnalyzableException;
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Jobs\GenerateAuditReport;
 use App\Listeners\Order\HandleAuditTierOrder;
 use App\Models\AuditReport;
@@ -89,7 +90,15 @@ class AuditReports extends Page
         }
 
         $provider = app(GitProviderResolver::class)->forUrl($repoUrl);
-        $connection = $provider !== null ? app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant) : null;
+
+        try {
+            $connection = $provider !== null ? app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant) : null;
+        } catch (GitAccessTemporarilyUnavailableException) {
+            // Leave the key unset so a later attempt looks again.
+            $this->notifyGitTemporarilyUnavailable($provider->label());
+
+            return;
+        }
 
         $this->branchesByRepo[$key] = $connection !== null ? $provider->listBranches($connection, $repoUrl) : [];
     }
@@ -194,6 +203,15 @@ class AuditReports extends Page
         return $tenant !== null && app(AuditEntitlementService::class)->hasAuditAccess($tenant);
     }
 
+    private function notifyGitTemporarilyUnavailable(string $providerLabel): void
+    {
+        Notification::make()
+            ->title(__("Couldn't reach :provider", ['provider' => $providerLabel]))
+            ->body(__('We could not refresh your :provider connection just now. Try again in a minute. Nothing has been charged.', ['provider' => $providerLabel]))
+            ->warning()
+            ->send();
+    }
+
     public function launchAudit(?string $repoUrl = null, ?string $tier = null, ?string $branch = null): void
     {
         // The launch form's branch belongs to the launch form's repo, so only
@@ -240,10 +258,24 @@ class AuditReports extends Page
         // it" (connected already, or a host we have no integration for).
         try {
             app(RepositoryCloner::class)->preflight($repoUrl, tenant: $tenant);
+        } catch (GitAccessTemporarilyUnavailableException) {
+            // The connection is fine; the provider (or its token endpoint) is not
+            // answering. Nothing charged -- just ask them to try again.
+            $this->notifyGitTemporarilyUnavailable(app(GitProviderResolver::class)->forUrl($repoUrl)?->label() ?? __('your git provider'));
+
+            return;
         } catch (AuditNotAnalyzableException) {
             $provider = app(GitProviderResolver::class)->forUrl($repoUrl);
 
-            if ($provider !== null && $tenant !== null && app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant) === null) {
+            try {
+                $unconnected = $provider !== null && $tenant !== null && app(GitRepoAccessResolver::class)->connectionFor($repoUrl, $tenant) === null;
+            } catch (GitAccessTemporarilyUnavailableException) {
+                $this->notifyGitTemporarilyUnavailable($provider->label());
+
+                return;
+            }
+
+            if ($unconnected) {
                 Notification::make()
                     ->title(__('Connect your :provider account', ['provider' => $provider->label()]))
                     ->body(__('This looks like a private :provider repository. Connect your :provider account from the Git Connections page, then run the audit again. Nothing has been charged.', ['provider' => $provider->label()]))

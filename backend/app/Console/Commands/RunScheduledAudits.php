@@ -41,6 +41,15 @@ class RunScheduledAudits extends Command
 
             $check = $changeChecker->check($schedule);
 
+            if ($check->unavailable) {
+                // Not stamped and not started: last_run_at / last_commit_sha stay as
+                // they were, so the schedule is still due and is retried next run.
+                $this->warn("Skipping {$schedule->repo_url}: git provider temporarily unavailable");
+                $this->recordRun($schedule, 'skipped', 'git_unavailable');
+
+                continue;
+            }
+
             if (! $check->shouldRun) {
                 $this->info("Skipping {$schedule->repo_url}: no changes since the last audit");
                 $this->recordRun($schedule, 'skipped', 'no_changes', commitSha: $check->sha);

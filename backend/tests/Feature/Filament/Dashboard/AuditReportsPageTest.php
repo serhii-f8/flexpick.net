@@ -152,6 +152,59 @@ class AuditReportsPageTest extends FeatureTest
     }
 
     /**
+     * A provider blip during the token refresh is not "connect your account": the
+     * connection is healthy. Retry message, nothing charged.
+     */
+    public function test_launch_audit_on_a_transient_git_outage_asks_to_retry_and_charges_nothing(): void
+    {
+        $this->useRealRepositoryCloner();
+        Process::fake();
+        Http::fake(['gitlab.com/oauth/token' => Http::response(null, 503)]);
+        Queue::fake([GenerateAuditReport::class]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 5]);
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab', 'refresh_token' => 'valid-refresh', 'expires_at' => now()->subMinute(),
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('launchAudit', 'https://gitlab.com/acme/private')
+            ->assertNotified(__("Couldn't reach :provider", ['provider' => 'GitLab']))
+            ->assertNoRedirect();
+
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
+        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        Queue::assertNotPushed(GenerateAuditReport::class);
+        $this->assertDatabaseHas('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'gitlab']);
+    }
+
+    public function test_branch_lookup_on_a_transient_git_outage_notifies_and_stays_unfetched(): void
+    {
+        Http::fake(['gitlab.com/oauth/token' => Http::response(null, 503)]);
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab', 'refresh_token' => 'valid-refresh', 'expires_at' => now()->subMinute(),
+        ]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->set('repoUrl', 'https://gitlab.com/acme/private')
+            ->assertNotified(__("Couldn't reach :provider", ['provider' => 'GitLab']))
+            ->assertSet('branchesByRepo', []);
+    }
+
+    /**
      * No connection is not a blanket block: a public repo on a known host is
      * probed anonymously and launches normally.
      */

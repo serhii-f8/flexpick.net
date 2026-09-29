@@ -3,6 +3,7 @@
 namespace Tests\Feature\Services\AuditReport;
 
 use App\Exceptions\AuditNotAnalyzableException;
+use App\Exceptions\GitAccessTemporarilyUnavailableException;
 use App\Models\Tenant;
 use App\Models\TenantGitConnection;
 use App\Services\AuditReport\RepositoryCloner;
@@ -13,6 +14,7 @@ use Illuminate\Process\PendingProcess;
 use Illuminate\Process\ProcessResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Mockery;
 use Symfony\Component\Process\Exception\ProcessTimedOutException as SymfonyProcessTimedOutException;
@@ -380,6 +382,50 @@ class RepositoryClonerTest extends FeatureTest
         }
 
         $this->assertNull(app(RepositoryCloner::class)->remoteHeadSha('https://github.com/acme/private', tenant: $tenant));
+        Process::assertNothingRan();
+    }
+
+    private function tenantWithExpiredGitlabConnectionAndProviderOutage(): Tenant
+    {
+        $tenant = Tenant::factory()->create();
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab',
+            'access_token' => 'expired-gl-token',
+            'refresh_token' => 'valid-refresh',
+            'expires_at' => now()->subMinute(),
+        ]);
+        Http::fake(['gitlab.com/oauth/token' => Http::response(null, 503)]);
+        Process::fake();
+
+        return $tenant;
+    }
+
+    public function test_preflight_lets_a_transient_git_access_failure_propagate_unwrapped(): void
+    {
+        $tenant = $this->tenantWithExpiredGitlabConnectionAndProviderOutage();
+
+        $this->expectException(GitAccessTemporarilyUnavailableException::class);
+
+        try {
+            app(RepositoryCloner::class)->preflight('https://gitlab.com/acme/private', tenant: $tenant);
+        } finally {
+            Process::assertNothingRan();
+        }
+    }
+
+    public function test_clone_lets_a_transient_git_access_failure_propagate_unwrapped_and_cleans_up(): void
+    {
+        $tenant = $this->tenantWithExpiredGitlabConnectionAndProviderOutage();
+        $uuid = 'test-clone-transient-'.uniqid();
+
+        try {
+            app(RepositoryCloner::class)->clone('https://gitlab.com/acme/private', $uuid, tenant: $tenant);
+            $this->fail('Expected GitAccessTemporarilyUnavailableException');
+        } catch (GitAccessTemporarilyUnavailableException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->assertDirectoryDoesNotExist(rtrim(config('audit.workdir'), '/').'/'.$uuid);
         Process::assertNothingRan();
     }
 }

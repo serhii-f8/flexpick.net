@@ -12,6 +12,7 @@ use App\Models\TenantGitConnection;
 use App\Services\AuditReport\AuditEntitlementService;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Tests\Feature\FeatureTest;
@@ -216,6 +217,39 @@ class RunScheduledAuditsTest extends FeatureTest
 
         Queue::assertPushed(GenerateAuditReport::class);
         Process::assertRan(fn (PendingProcess $process) => ($process->command[3] ?? null) === 'ls-remote');
+    }
+
+    public function test_a_transient_git_outage_skips_the_cycle_without_running_or_stamping_the_sha(): void
+    {
+        Process::fake();
+        Http::fake(['gitlab.com/oauth/token' => Http::response(null, 503)]);
+        Queue::fake();
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+        TenantGitConnection::factory()->for($tenant)->create([
+            'provider' => 'gitlab', 'refresh_token' => 'valid-refresh', 'expires_at' => now()->subMinute(),
+        ]);
+        $schedule = AuditSchedule::create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'repo_url' => 'https://gitlab.com/acme/app',
+            'frequency' => 'weekly',
+            'tier' => AuditTier::DEEP_AI->value,
+            'last_run_at' => now()->subWeek(),
+            'last_commit_sha' => 'sha-old',
+        ]);
+
+        $this->artisan('app:run-scheduled-audits')->assertSuccessful();
+
+        Queue::assertNotPushed(GenerateAuditReport::class);
+        $schedule->refresh();
+        $this->assertSame('sha-old', $schedule->last_commit_sha);
+        $this->assertTrue($schedule->last_run_at->isBefore(now()->subDays(6)));
+        $this->assertDatabaseHas('audit_schedule_runs', [
+            'audit_schedule_id' => $schedule->id,
+            'status' => 'skipped',
+            'reason' => 'git_unavailable',
+        ]);
+        $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
     }
 
     /**

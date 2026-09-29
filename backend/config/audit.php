@@ -6,6 +6,10 @@ return [
     'clone_timeout' => 120,
     'clone_depth' => 200,
     'preflight_timeout' => 30,
+
+    // Seconds a worker waits for another worker's git token refresh (its HTTP call
+    // allows up to 15s) before giving up transiently.
+    'git_refresh_lock_wait' => 25,
     'max_repo_size_mb' => 500,
     'report_link_days' => 30,
     'workdir' => storage_path('app/audit-workdirs'),
