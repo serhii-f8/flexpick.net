@@ -15,8 +15,10 @@ class RouteVerifiedAuditRequest implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    // Worst case is a 25s refresh-lock wait + 15s token refresh + 30s ls-remote.
-    public int $timeout = 120;
+    // Worst case is a 25s refresh-lock wait + 15s token refresh + 30s ls-remote (70s). Must stay
+    // below the default `redis` connection's retry_after (90s) or a hung run is re-released to a
+    // second worker while the first still runs; this $timeout supersedes the Horizon supervisor's.
+    public int $timeout = 80;
 
     // A transient git-provider failure during preflight retries (as GenerateAuditReport does).
     public int $tries = 3;

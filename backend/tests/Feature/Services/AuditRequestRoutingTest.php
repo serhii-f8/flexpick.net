@@ -161,8 +161,13 @@ class AuditRequestRoutingTest extends FeatureTest
 
         $this->assertSame(3, $job->tries);
         $this->assertSame([60, 300], $job->backoff);
-        // 25s refresh-lock wait + 15s refresh call + 30s ls-remote.
+        // 25s refresh-lock wait + 15s refresh call + 30s ls-remote must fit inside the timeout,
+        // and the timeout inside the retry_after of the connection the job runs on in production:
+        // it is dispatched without onConnection, so the default `redis` one (the test env's own
+        // default is `sync`, which has no retry_after).
+        $this->assertNull($job->connection);
         $this->assertGreaterThan(70, $job->timeout);
+        $this->assertLessThan((int) config('queue.connections.redis.retry_after'), $job->timeout);
     }
 
     public function test_exhausting_the_routing_job_marks_the_request_failed_without_refund(): void
