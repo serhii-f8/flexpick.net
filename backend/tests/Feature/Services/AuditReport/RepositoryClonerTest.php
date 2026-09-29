@@ -495,6 +495,8 @@ class RepositoryClonerTest extends FeatureTest
         }
 
         $this->assertDirectoryDoesNotExist(rtrim(config('audit.workdir'), '/').'/'.$uuid);
+        // No branch requested: nothing to rule out, so no extra git call.
+        Process::assertDidntRun(fn (PendingProcess $process) => in_array('ls-remote', $process->command, true));
     }
 
     public function test_a_clone_failing_without_a_connection_is_not_a_reconnect(): void
@@ -509,5 +511,105 @@ class RepositoryClonerTest extends FeatureTest
             $this->assertFalse($e->accessDenied);
             $this->assertFalse($e->reconnect);
         }
+    }
+
+    /**
+     * Fakes a failed clone, and answers the branch probe (ls-remote --heads) with
+     * $probe: an exit code, or 'timeout'.
+     */
+    private function fakeCloneFailureWithBranchProbe(int|string $probe): void
+    {
+        Process::fake(function (PendingProcess $process) use ($probe) {
+            if (! in_array('ls-remote', (array) $process->command, true)) {
+                return Process::result(exitCode: 128);
+            }
+
+            if ($probe === 'timeout') {
+                $symfonyProcess = new SymfonyProcess((array) $process->command);
+
+                throw new ProcessTimedOutException(
+                    new SymfonyProcessTimedOutException($symfonyProcess, SymfonyProcessTimedOutException::TYPE_GENERAL),
+                    new ProcessResult($symfonyProcess),
+                );
+            }
+
+            return Process::result(output: $probe === 0 ? "abc123\trefs/heads/gone\n" : '', exitCode: $probe);
+        });
+    }
+
+    /**
+     * A deleted branch (e.g. a schedule's) is not a token problem: with the branch
+     * confirmed missing, the clone failure keeps the plain processing-problem path
+     * even though a connection is on file.
+     */
+    public function test_a_clone_of_a_missing_branch_with_a_connection_is_not_a_reconnect(): void
+    {
+        $this->fakeCloneFailureWithBranchProbe(2); // --exit-code: 2 = no matching ref
+        $tenant = $this->tenantWithConnectedToken('ghp_branch_probe_token');
+        $uuid = 'test-clone-missing-branch-'.uniqid();
+
+        try {
+            app(RepositoryCloner::class)->clone('https://github.com/acme/private', $uuid, tenant: $tenant, branch: 'gone');
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertFalse($e->accessDenied);
+            $this->assertFalse($e->reconnect);
+            $this->assertSame('Repository could not be cloned: https://github.com/acme/private', $e->getMessage());
+        }
+
+        $this->assertDirectoryDoesNotExist(rtrim(config('audit.workdir'), '/').'/'.$uuid);
+        // The probe is hardened exactly like every other git call: plain URL in
+        // argv, credential only in env, no system config/prompt/helper.
+        Process::assertRan(fn (PendingProcess $process) => $process->command === [
+            'git', '-c', 'credential.helper=', 'ls-remote', '--exit-code', '--heads', 'https://github.com/acme/private', 'refs/heads/gone',
+        ] && $process->environment === $this->expectedEnv('https://github.com', 'x-access-token', 'ghp_branch_probe_token'));
+    }
+
+    public function test_a_clone_of_an_existing_branch_failing_with_a_connection_asks_for_a_reconnect(): void
+    {
+        $this->fakeCloneFailureWithBranchProbe(0);
+        $tenant = $this->tenantWithConnectedToken('ghp_branch_probe_token');
+
+        try {
+            app(RepositoryCloner::class)->clone('https://github.com/acme/private', 'test-clone-branch-ok-'.uniqid(), tenant: $tenant, branch: 'gone');
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertTrue($e->accessDenied);
+            $this->assertTrue($e->reconnect);
+        }
+    }
+
+    /**
+     * The probe can't confirm the branch is missing (auth refused, or it timed
+     * out): fall back to the reconnect variant, since a connection is on file.
+     */
+    public function test_an_inconclusive_branch_probe_keeps_the_reconnect_variant(): void
+    {
+        foreach ([128, 'timeout'] as $probe) {
+            $this->fakeCloneFailureWithBranchProbe($probe);
+            $tenant = $this->tenantWithConnectedToken('ghp_branch_probe_token');
+
+            try {
+                app(RepositoryCloner::class)->clone('https://github.com/acme/private', 'test-clone-branch-probe-'.uniqid(), tenant: $tenant, branch: 'gone');
+                $this->fail('Expected AuditNotAnalyzableException');
+            } catch (AuditNotAnalyzableException $e) {
+                $this->assertTrue($e->reconnect, "probe {$probe}");
+                $this->assertStringNotContainsString('ghp_branch_probe_token', $e->getMessage());
+            }
+        }
+    }
+
+    public function test_a_clone_of_a_branch_without_a_connection_skips_the_probe(): void
+    {
+        $this->fakeCloneFailureWithBranchProbe(2);
+
+        try {
+            app(RepositoryCloner::class)->clone('https://github.com/acme/private', 'test-clone-branch-anon-'.uniqid(), tenant: Tenant::factory()->create(), branch: 'gone');
+            $this->fail('Expected AuditNotAnalyzableException');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertFalse($e->reconnect);
+        }
+
+        Process::assertDidntRun(fn (PendingProcess $process) => in_array('ls-remote', $process->command, true));
     }
 }

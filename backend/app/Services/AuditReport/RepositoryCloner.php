@@ -66,8 +66,10 @@ class RepositoryCloner
             $this->cleanup($uuid);
 
             // Preflight passed, so a refused clone with a connection on file
-            // means the token went bad in between: same fix as at preflight.
-            throw $connected
+            // means the token went bad in between: same fix as at preflight --
+            // unless the requested branch simply doesn't exist (preflight only
+            // probes HEAD), which no reconnect would fix.
+            throw $connected && ! ($branch !== null && $this->branchIsMissing($url, $tenant, $branch))
                 ? AuditNotAnalyzableException::reconnectNeeded('Repository could not be cloned with the connected account: '.$this->redactUrl($url))
                 : new AuditNotAnalyzableException('Repository could not be cloned: '.$this->redactUrl($url));
         }
@@ -82,6 +84,30 @@ class RepositoryCloner
         }
 
         return $path;
+    }
+
+    /**
+     * True only when the remote confirms it has no such branch (ls-remote --exit-code
+     * exits 2: no matching ref). Anything inconclusive -- auth refused, a timeout, a
+     * resolution failure -- is false, so the caller keeps the reconnect variant.
+     *
+     * @throws GitAccessTemporarilyUnavailableException
+     */
+    private function branchIsMissing(string $url, ?Tenant $tenant, string $branch): bool
+    {
+        try {
+            [$result] = $this->runGit(
+                $url,
+                $tenant,
+                config('audit.preflight_timeout'),
+                ['ls-remote', '--exit-code', '--heads', $url, 'refs/heads/'.$branch],
+                'Repository could not be reached: ',
+            );
+        } catch (AuditNotAnalyzableException) {
+            return false;
+        }
+
+        return $result->exitCode() === 2;
     }
 
     /**
