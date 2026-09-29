@@ -22,7 +22,9 @@ return [
         'max_search_length' => 100,
     ],
 
-    'max_repo_size_mb' => 500,
+    // Cap on the cloned working tree (the .git history is not counted). Raise it
+    // per environment with AUDIT_MAX_REPO_SIZE_MB; mind workdir disk and clone_timeout.
+    'max_repo_size_mb' => (int) env('AUDIT_MAX_REPO_SIZE_MB', 500),
     'report_link_days' => 30,
     'workdir' => storage_path('app/audit-workdirs'),
     'reports_dir' => 'audit-reports',

@@ -143,6 +143,59 @@ class RepositoryClonerTest extends FeatureTest
         app(RepositoryCloner::class)->clone('file://'.$this->branchFixtureRepo(), 'test-clone-missing-'.uniqid(), branch: 'does-not-exist');
     }
 
+    /** A repo whose working tree is tiny but whose history holds a 3 MB blob. */
+    private function repoWithBlobOnlyInHistory(): string
+    {
+        $repo = storage_path('framework/testing/history-heavy-repo-'.uniqid());
+        File::ensureDirectoryExists($repo);
+        File::put($repo.'/blob.bin', random_bytes(3 * 1024 * 1024));
+        File::put($repo.'/index.php', "<?php\n");
+        $git = 'git -c user.email=t@t -c user.name=t';
+        Process::path($repo)->run('git init -q -b main')->throw();
+        Process::path($repo)->run("$git add -A")->throw();
+        Process::path($repo)->run("$git commit -qm heavy")->throw();
+        Process::path($repo)->run('git rm -q blob.bin')->throw();
+        Process::path($repo)->run("$git commit -qm slim")->throw();
+
+        return $repo;
+    }
+
+    public function test_the_size_cap_ignores_git_history(): void
+    {
+        config(['audit.max_repo_size_mb' => 2, 'audit.clone_depth' => 200]);
+        $repo = $this->repoWithBlobOnlyInHistory();
+        $cloner = app(RepositoryCloner::class);
+        $uuid = 'test-size-history-'.uniqid();
+
+        $path = $cloner->clone('file://'.$repo, $uuid);
+
+        $this->assertFileExists($path.'/index.php');
+
+        $cloner->cleanup($uuid);
+        File::deleteDirectory($repo);
+    }
+
+    public function test_the_size_cap_rejects_a_heavy_working_tree(): void
+    {
+        config(['audit.max_repo_size_mb' => 2]);
+        $repo = storage_path('framework/testing/heavy-tree-repo-'.uniqid());
+        File::ensureDirectoryExists($repo);
+        File::put($repo.'/blob.bin', random_bytes(3 * 1024 * 1024));
+        $git = 'git -c user.email=t@t -c user.name=t';
+        Process::path($repo)->run('git init -q -b main')->throw();
+        Process::path($repo)->run("$git add -A")->throw();
+        Process::path($repo)->run("$git commit -qm heavy")->throw();
+
+        try {
+            app(RepositoryCloner::class)->clone('file://'.$repo, 'test-size-heavy-'.uniqid());
+            $this->fail('Expected the cap to reject the clone');
+        } catch (AuditNotAnalyzableException $e) {
+            $this->assertStringContainsString('Repository too large for automated analysis', $e->getMessage());
+        } finally {
+            File::deleteDirectory($repo);
+        }
+    }
+
     public function test_remote_head_sha_returns_the_resolved_sha(): void
     {
         Process::fake(['*' => Process::result(output: "abc123\tHEAD\n")]);

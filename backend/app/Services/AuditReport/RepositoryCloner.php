@@ -217,7 +217,9 @@ class RepositoryCloner
 
     private function directorySizeMb(string $path): int
     {
-        $result = Process::run(['du', '-sm', $path]);
+        // The working tree only: --depth 200 packs history into .git, which says
+        // nothing about how much code there is to analyze.
+        $result = Process::run(['du', '-sm', '--exclude=.git', $path]);
 
         return (int) strtok(trim($result->output()), "\t ");
     }
