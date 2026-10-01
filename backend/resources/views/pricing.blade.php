@@ -11,6 +11,14 @@
                 {{ __('Every plan includes full reports, PDF export and re-audit trends. Switch or cancel whenever you like.') }}
             </p>
 
+            @php($referrer = app(\App\Services\PartnerContactResolver::class)->forVisitor(auth()->user()))
+            @if ($referrer)
+                <p class="fp-pricing-lead mt-4" data-testid="invited-by">
+                    {{ __('Invited by :name', ['name' => $referrer->name]) }} &middot;
+                    <x-link href="mailto:{{ $referrer->email }}">{{ $referrer->email }}</x-link>
+                </p>
+            @endif
+
             @guest
                 <div class="mt-6 flex flex-wrap items-center justify-center gap-4">
                     <x-button-link.primary href="{{ route('register') }}" class="text-lg py-3! px-6">

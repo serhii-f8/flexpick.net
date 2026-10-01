@@ -3,6 +3,7 @@
 // Submits to the backend audit-requests endpoint (see PRODUCT_APP config).
 import { PRODUCT_APP } from 'flexpick:config';
 import pricing from '~/data/pricing.json';
+import { DEFAULT_CONTACT_EMAIL } from '~/utils/partner-contact';
 
 const diagnosticTier = pricing.tiers['audit-diagnostic'];
 ---
@@ -90,7 +91,7 @@ const diagnosticTier = pricing.tiers['audit-diagnostic'];
           </span>
         </label>
         <p class="fp-mono" data-modal-error hidden style="color: #dc6b5a; font-size: 12px; margin: 0 0 10px;">
-          Something went wrong — please try again, or email info@flexpick.net.
+          Something went wrong — please try again, or email {DEFAULT_CONTACT_EMAIL}.
         </p>
         <button type="submit" class="fp-btn fp-btn-full">Request my audit →</button>
         <p class="fp-mono fp-modal-footnote">
@@ -112,6 +113,8 @@ const diagnosticTier = pricing.tiers['audit-diagnostic'];
 </div>
 
 <script>
+  import { DEFAULT_CONTACT_EMAIL, getPartnerContact } from '~/utils/partner-contact';
+
   function initAuditModal() {
     const rootEl = document.getElementById('fp-modal-root');
     if (!rootEl || rootEl.hasAttribute('data-init')) return;
@@ -203,6 +206,9 @@ const diagnosticTier = pricing.tiers['audit-diagnostic'];
       const fd = new FormData(form);
       errorEl.hidden = true;
       submitBtn.disabled = true;
+      // The referrer, when there is one, is CC'd on our copy of the request.
+      const partner = await getPartnerContact();
+      const contactEmail = partner?.email ?? DEFAULT_CONTACT_EMAIL;
       try {
         const res = await fetch(form.dataset.endpoint || '', {
           method: 'POST',
@@ -214,6 +220,7 @@ const diagnosticTier = pricing.tiers['audit-diagnostic'];
             message: fd.get('message') || null,
             website: fd.get('website') || '',
             marketing_consent: fd.get('consent') === 'on',
+            referral_code: partner?.code ?? null,
           }),
         });
         if (!res.ok) {
@@ -222,7 +229,7 @@ const diagnosticTier = pricing.tiers['audit-diagnostic'];
               ? 'We already have a recent request from this email — check your inbox for the confirmation link.'
               : res.status === 422
                 ? 'Please double-check your name and email address.'
-                : 'Something went wrong — please try again, or email info@flexpick.net.';
+                : `Something went wrong — please try again, or email ${contactEmail}.`;
           errorEl.hidden = false;
           return;
         }
@@ -230,7 +237,7 @@ const diagnosticTier = pricing.tiers['audit-diagnostic'];
         formWrap.hidden = true;
         sentWrap.hidden = false;
       } catch {
-        errorEl.textContent = 'Something went wrong — please try again, or email info@flexpick.net.';
+        errorEl.textContent = `Something went wrong — please try again, or email ${contactEmail}.`;
         errorEl.hidden = false;
       } finally {
         submitBtn.disabled = false;

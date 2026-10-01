@@ -19,6 +19,7 @@ class StoreAuditRequestRequest extends FormRequest
             'repo_url' => ['nullable', 'url', 'max:2048'],
             'message' => ['nullable', 'string', 'max:2000'],
             'marketing_consent' => ['sometimes', 'boolean'],
+            'referral_code' => ['nullable', 'string', 'max:64'],
             'website' => ['prohibited'], // honeypot — humans never fill it
         ];
     }

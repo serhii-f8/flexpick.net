@@ -10,7 +10,8 @@ use Throwable;
 
 class AuditMailer
 {
-    public function send(Mailable $mailable, string $recipient, ?AuditRequest $auditRequest = null): AuditEmailLog
+    /** @param list<string> $cc */
+    public function send(Mailable $mailable, string $recipient, ?AuditRequest $auditRequest = null, array $cc = []): AuditEmailLog
     {
         $mailableName = class_basename($mailable);
 
@@ -55,7 +56,7 @@ class AuditMailer
         ]);
 
         try {
-            Mail::to($recipient)->send($mailable);
+            Mail::to($recipient)->cc($cc)->send($mailable);
             $log->update(['status' => AuditEmailLog::STATUS_SENT]);
         } catch (Throwable $e) {
             $log->update(['status' => AuditEmailLog::STATUS_FAILED, 'last_error' => $e->getMessage()]);

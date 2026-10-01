@@ -40,6 +40,7 @@ class AuditRequestService
         private AuditFunnelRecorder $funnel,
         private AuditMailer $auditMailer,
         private PrimaryTenantResolver $primaryTenants,
+        private PartnerContactResolver $partnerContacts,
     ) {}
 
     public function submit(array $data, array $meta = []): AuditRequest
@@ -54,6 +55,14 @@ class AuditRequestService
         }
 
         $consented = (bool) ($data['marketing_consent'] ?? false);
+
+        // Kept only when it still names an active partner: it decides who is
+        // CC'd on the operator email, so an arbitrary string must not stick.
+        $referralCode = $data['referral_code'] ?? null;
+
+        if ($this->partnerContacts->forCode($referralCode) !== null) {
+            $meta['referral_code'] = $referralCode;
+        }
 
         $auditRequest = AuditRequest::create([
             'name' => $data['name'],
@@ -470,8 +479,20 @@ class AuditRequestService
     {
         $adminEmail = config('audit.admin_email');
 
+        // The partner who referred this visitor is their contact, so they see
+        // every operator update about the request -- re-resolved each time,
+        // so a partner whose plan lapsed stops receiving them.
+        $referrerEmail = $this->partnerContacts->forCode($auditRequest->meta['referral_code'] ?? null)?->email;
+
         if ($adminEmail) {
-            $this->auditMailer->send(new NewAuditRequestAdminNotification($auditRequest), $adminEmail, $auditRequest);
+            $this->auditMailer->send(
+                new NewAuditRequestAdminNotification($auditRequest),
+                $adminEmail,
+                $auditRequest,
+                cc: $referrerEmail === null ? [] : [$referrerEmail],
+            );
+        } elseif ($referrerEmail !== null) {
+            $this->auditMailer->send(new NewAuditRequestAdminNotification($auditRequest), $referrerEmail, $auditRequest);
         }
     }
 }

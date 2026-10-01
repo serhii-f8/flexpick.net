@@ -19,8 +19,15 @@
                 </ul>
             </div>
             <div>
+                {{-- A referred visitor is the referrer's customer: their contact, not ours. --}}
+                @php($referrer = app(\App\Services\PartnerContactResolver::class)->forVisitor(auth()->user()))
                 <p class="font-mono text-[10px] tracking-[0.16em] text-cream-200/50 mb-4">{{ __('CONTACT') }}</p>
-                <a href="mailto:info@flexpick.net" class="text-cream-200/70 hover:text-cream-100 text-sm">info@flexpick.net</a>
+                @if ($referrer)
+                    <p class="text-cream-100 text-sm mb-1">{{ $referrer->name }}</p>
+                    <a href="mailto:{{ $referrer->email }}" class="text-cream-200/70 hover:text-cream-100 text-sm">{{ $referrer->email }}</a>
+                @else
+                    <a href="mailto:info@flexpick.net" class="text-cream-200/70 hover:text-cream-100 text-sm">info@flexpick.net</a>
+                @endif
             </div>
         </div>
         <hr class="my-8 border-white/5" />

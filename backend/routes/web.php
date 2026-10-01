@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\OAuthController;
 use App\Http\Controllers\AuthStatusController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\PartnerContactController;
 use App\Http\Controllers\PaymentProviders\PaddleController;
 use App\Http\Controllers\ProductCheckoutController;
 use App\Http\Controllers\SubscriptionCheckoutController;
@@ -66,6 +67,8 @@ Route::get('/dashboard', function (UserDashboardService $dashboardService) {
 })->name('dashboard')->middleware('auth');
 
 Route::get('/api/auth/status', AuthStatusController::class)->name('auth.status');
+
+Route::get('/api/partner/contact', PartnerContactController::class)->name('partner.contact');
 
 Auth::routes();
 

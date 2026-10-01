@@ -1111,7 +1111,8 @@ const hotspots = [
           >
             CONTACT
           </p>
-          <a href="mailto:info@flexpick.net" class="fp-footlink">info@flexpick.net</a>
+          <p class="fp-footlink" data-contact-name hidden style="margin: 0 0 6px;"></p>
+          <a href="mailto:info@flexpick.net" class="fp-footlink" data-contact-email>info@flexpick.net</a>
           <a
             href={`${PRODUCT_APP.url}/login`}
             class="fp-footlink"
@@ -2450,6 +2451,7 @@ const hotspots = [
 
 <script>
   import { PRODUCT_APP } from 'flexpick:config';
+  import { applyPartnerContact } from '~/utils/partner-contact';
 
   async function swapAuthLinks() {
     try {
@@ -2471,4 +2473,9 @@ const hotspots = [
 
   swapAuthLinks();
   document.addEventListener('astro:after-swap', swapAuthLinks);
+
+  // A visitor who arrived through a partner's referral link contacts that
+  // partner, not FlexPick.
+  applyPartnerContact();
+  document.addEventListener('astro:after-swap', applyPartnerContact);
 </script>
