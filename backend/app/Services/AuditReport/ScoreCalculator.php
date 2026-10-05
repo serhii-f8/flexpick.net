@@ -3,6 +3,7 @@
 namespace App\Services\AuditReport;
 
 use App\Services\AuditReport\Findings\FindingGroup;
+use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
 
 /**
@@ -20,8 +21,11 @@ class ScoreCalculator
      *
      * v2 (Phase 11): duplication now from jscpd, security_hygiene from
      * Gitleaks + Semgrep, structure from scc complexity.
+     *
+     * v3: secrets graded by class with diminishing penalties; lockfile deduction
+     * per ecosystem; generated code excluded from structure inputs.
      */
-    public const VERSION = 2;
+    public const VERSION = 3;
 
     /** Which scanner each dimension depends on. A dimension whose scanner did not run is not measured. */
     private const DIMENSION_SCANNERS = [
@@ -187,13 +191,18 @@ class ScoreCalculator
     private function dependencies(array $metrics, array $groups): int
     {
         $score = 100;
+        $uncovered = [];
 
-        foreach (($metrics['manifests'] ?? []) as $manifest) {
-            if (! ($manifest['lockfile'] ?? false)) {
-                $score -= 20;
+        foreach (($metrics['manifests'] ?? []) as $key => $manifest) {
+            $declares = (($manifest['dependencies'] ?? 0) + ($manifest['dev_dependencies'] ?? 0)) > 0;
+
+            // Pre-v3 entries carry no ecosystem; they keep deducting per manifest.
+            if (! ($manifest['lockfile'] ?? false) && ($declares || ! isset($manifest['ecosystem']))) {
+                $uncovered[$manifest['ecosystem'] ?? 'manifest:'.$key] = true;
             }
         }
 
+        $score -= 20 * count($uncovered);
         $score -= 8 * array_sum(array_map(fn (FindingGroup $g): int => $g->count, $groups));
 
         return $this->clamp($score);
@@ -203,14 +212,27 @@ class ScoreCalculator
     private function securityHygiene(array $groups): int
     {
         $score = 100;
+        $secrets = ['critical' => 0, 'high' => 0, 'low' => 0];
 
         foreach ($groups as $group) {
-            // A committed credential is categorically worse than a SAST hit,
-            // so secrets keep their own weight within the same dimension.
-            $score -= str_starts_with($group->ruleFamily, 'secrets.')
-                ? 15 * $group->count
-                : min(20, $group->count * 2);
+            if (str_starts_with($group->ruleFamily, 'secrets.')) {
+                $secrets[match ($group->severity) {
+                    Severity::CRITICAL => 'critical',
+                    Severity::HIGH => 'high',
+                    default => 'low',
+                }] += $group->count;
+
+                continue;
+            }
+
+            $score -= min(20, $group->count * 2);
         }
+
+        // One committed live key is serious on its own; fixture-shaped noise in
+        // tests and docs must not be able to read as a breach (v3).
+        $score -= $secrets['critical'] > 0 ? min(80, 35 + 10 * ($secrets['critical'] - 1)) : 0;
+        $score -= min(40, 10 * $secrets['high']);
+        $score -= min(10, $secrets['low']);
 
         return $this->clamp($score);
     }

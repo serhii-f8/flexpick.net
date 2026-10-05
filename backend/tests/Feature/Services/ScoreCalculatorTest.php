@@ -87,8 +87,8 @@ class ScoreCalculatorTest extends FeatureTest
     {
         $set = app(ScoreCalculator::class)->calculate($this->metrics(), [], $this->runs($this->allScanners()));
 
-        $this->assertSame(2, $set->scoringVersion);
-        $this->assertSame(2, ScoreCalculator::VERSION);
+        $this->assertSame(3, $set->scoringVersion);
+        $this->assertSame(3, ScoreCalculator::VERSION);
     }
 
     public function test_scores_every_dimension_when_all_scanners_ran(): void
@@ -237,5 +237,59 @@ class ScoreCalculatorTest extends FeatureTest
         $set = app(ScoreCalculator::class)->calculate($this->metrics(), [], $runs);
 
         $this->assertSame('not_run', $set->notMeasuredReasons['duplication']);
+    }
+
+    public function test_one_real_key_costs_35_and_fixture_noise_cannot_zero_the_score(): void
+    {
+        $calculator = app(ScoreCalculator::class);
+        $runs = $this->runs($this->allScanners());
+
+        $oneKey = $calculator->calculate($this->metrics(), [$this->group('secrets.credential', Severity::CRITICAL, 1)], $runs);
+        $noise = $calculator->calculate($this->metrics(), [$this->group('secrets.likely-fixture', Severity::LOW, 131)], $runs);
+        $mixed = $calculator->calculate($this->metrics(), [
+            $this->group('secrets.credential', Severity::CRITICAL, 1),
+            $this->group('secrets.possible-credential', Severity::HIGH, 3),
+            $this->group('secrets.likely-fixture', Severity::LOW, 25),
+        ], $runs);
+
+        $this->assertSame(65, $oneKey->scores['security_hygiene']);
+        $this->assertSame(90, $noise->scores['security_hygiene']);
+        $this->assertSame(25, $mixed->scores['security_hygiene']); // 100 - 35 - 30 - 10
+    }
+
+    public function test_critical_secret_penalty_caps_at_80(): void
+    {
+        $set = app(ScoreCalculator::class)->calculate(
+            $this->metrics(),
+            [$this->group('secrets.credential', Severity::CRITICAL, 50)],
+            $this->runs($this->allScanners()),
+        );
+
+        $this->assertSame(20, $set->scores['security_hygiene']);
+    }
+
+    public function test_a_monorepo_missing_its_lockfile_loses_20_once_per_ecosystem(): void
+    {
+        $metrics = $this->metrics();
+        $metrics['manifests'] = [
+            'package.json' => ['dependencies' => 2, 'dev_dependencies' => 0, 'lockfile' => false, 'ecosystem' => 'npm'],
+            'packages/a/package.json' => ['dependencies' => 3, 'dev_dependencies' => 0, 'lockfile' => false, 'ecosystem' => 'npm'],
+            'packages/b/package.json' => ['dependencies' => 0, 'dev_dependencies' => 0, 'lockfile' => false, 'ecosystem' => 'npm'],
+            'composer.json' => ['dependencies' => 1, 'dev_dependencies' => 0, 'lockfile' => true, 'ecosystem' => 'composer'],
+        ];
+
+        $set = app(ScoreCalculator::class)->calculate($metrics, [], $this->runs($this->allScanners()));
+
+        $this->assertSame(80, $set->scores['dependencies']);
+    }
+
+    public function test_legacy_manifest_entries_without_ecosystem_still_deduct_per_manifest(): void
+    {
+        $metrics = $this->metrics();
+        $metrics['manifests'] = ['package.json' => ['dependencies' => 2, 'dev_dependencies' => 0, 'lockfile' => false]];
+
+        $set = app(ScoreCalculator::class)->calculate($metrics, [], $this->runs($this->allScanners()));
+
+        $this->assertSame(80, $set->scores['dependencies']);
     }
 }
