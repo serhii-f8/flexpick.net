@@ -2,6 +2,8 @@
 
 namespace App\Services\AuditReport\Scanners;
 
+use App\Services\AuditReport\Findings\Finding;
+use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\Paths\PathClassifier;
 use App\Support\Utf8;
 use Illuminate\Support\Facades\Process;
@@ -11,8 +13,8 @@ use Symfony\Component\Finder\Finder;
  * Size, language breakdown, and per-file complexity.
  *
  * Always first: its inventory sizes the budgets for everything after
- * (F5.12.2). It produces no findings — it populates RepoContext::$inventory
- * as its output.
+ * (F5.12.2). Its only findings are committed build-output directories; its
+ * main output is RepoContext::$inventory.
  */
 class SccScanner implements Scanner
 {
@@ -61,7 +63,7 @@ class SccScanner implements Scanner
 
         $context->withInventory($this->toInventory($decoded, $context->path, $billableCode, $context->classifier));
 
-        return $this->normalize($decoded);
+        return $this->buildOutputFindings($context);
     }
 
     /**
@@ -118,6 +120,47 @@ class SccScanner implements Scanner
         }
 
         return $paths;
+    }
+
+    /**
+     * Build output (a Storybook export, a dist/ bundle) committed to version
+     * control is worth one line in the report — not one finding per minified
+     * file, and never a structure penalty per file.
+     *
+     * @return list<Finding>
+     */
+    private function buildOutputFindings(RepoContext $context): array
+    {
+        $byDirectory = [];
+
+        foreach ($context->inventory?->excluded ?? [] as $file) {
+            $directory = $context->classifier->buildOutputDirectory($file['path']);
+
+            if ($directory !== null) {
+                $byDirectory[$directory][] = $file['path'];
+            }
+        }
+
+        ksort($byDirectory);
+        $findings = [];
+
+        foreach ($byDirectory as $directory => $paths) {
+            sort($paths);
+            $count = count($paths);
+
+            $findings[] = new Finding(
+                tool: $this->name(),
+                ruleId: 'structure.committed-build-output',
+                ruleFamily: 'structure.committed-build-output',
+                severity: Severity::LOW,
+                path: $paths[0],
+                line: null,
+                message: "Build output is committed to version control: {$directory}/ ({$count} files). Generate it in the build instead.",
+                dimension: 'structure',
+            );
+        }
+
+        return $findings;
     }
 
     /** @param  array<int, array<string, mixed>>  $raw */

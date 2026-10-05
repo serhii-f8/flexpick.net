@@ -3,6 +3,7 @@
 namespace Tests\Feature\Services\Scanners;
 
 use App\Constants\AuditTier;
+use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\Paths\PathClass;
 use App\Services\AuditReport\Paths\PathClassifier;
 use App\Services\AuditReport\Scanners\RepoContext;
@@ -247,5 +248,26 @@ class SccScannerTest extends FeatureTest
         $this->expectException(ScannerSkipped::class);
 
         $this->scanWithFakedScc(fn () => Process::result('null'));
+    }
+
+    public function test_reports_each_committed_build_output_directory_once(): void
+    {
+        $full = [['Name' => 'JavaScript', 'Code' => 30, 'Files' => [
+            $this->file('_concept/prototype/storybook/storybook-static/sb-manager/runtime.js', 26078),
+            $this->file('_concept/prototype/storybook/storybook-static/sb-manager/globals-runtime.js', 76311),
+            $this->file('src/app.js', 10),
+        ]]];
+
+        Process::fake(fn () => Process::result(json_encode($full)));
+        $context = new RepoContext(path: self::ROOT, tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC));
+
+        $findings = app(SccScanner::class)->scan($context);
+
+        $this->assertCount(1, $findings);
+        $this->assertSame('structure.committed-build-output', $findings[0]->ruleFamily);
+        $this->assertSame(Severity::LOW, $findings[0]->severity);
+        $this->assertSame('structure', $findings[0]->dimension);
+        $this->assertSame('_concept/prototype/storybook/storybook-static/sb-manager/globals-runtime.js', $findings[0]->path);
+        $this->assertStringContainsString('2 files', $findings[0]->message);
     }
 }
