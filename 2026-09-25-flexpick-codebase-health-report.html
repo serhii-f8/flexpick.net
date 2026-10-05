@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codebase Health Report</title>
+    <link rel="preload" as="style" href="https://audit.flexpick.net/build/assets/app-Cs6t3LO0.css" /><link rel="stylesheet" href="https://audit.flexpick.net/build/assets/app-Cs6t3LO0.css" data-navigate-track="reload" />    <style>
+        /* The bundle's daisyUI theme is dark by default; this document is a
+           reading surface and is deliberately light. Scoped to this page.
+           daisyUI paints `:root` itself (background + color), and the
+           shared landing-page rule gives h1/h2/h3 a light-on-dark color and
+           the Syne display font — both bleed through even though nothing on
+           this page opts into them, so both are neutralized explicitly here. */
+        html, .reports-page { background: #faf8f4; color: #1c1917; }
+        .reports-page h1, .reports-page h2, .reports-page h3 { color: #1c1917; font-family: inherit; }
+    </style>
+</head>
+<body class="reports-page font-sans text-[15px] leading-relaxed">
+<div class="mx-auto max-w-[860px] px-4 py-8">
+        
+    <div class="mb-5 rounded-xl border border-stone-200 bg-white p-7">
+        <h1 class="mb-1 text-2xl font-bold">Codebase Health Report</h1>
+        <p class="text-xs text-stone-500">https://github.com/skaile-ai/platform · 2026-09-25</p>
+        <div class="flex flex-wrap items-baseline gap-4">
+            <span class="text-5xl font-bold text-primary-600">57</span>
+            <span class="text-xs text-stone-500">overall health, 0–100 (higher is healthier)</span>
+        </div>
+                    <p class="text-xs text-stone-500">This codebase scores better than 25% of repositories we&#039;ve audited.</p>
+                        <p class="mt-3.5">This is a large TypeScript monorepo (~2.2M lines, 5,822 TS files) implementing an enterprise AI execution platform. Tooling maturity is high — linter, formatter, static analysis, Docker, CI, README and env examples are all present, and the test corpus is extensive (1,919 test files). Two measured dimensions drag the score down sharply: security hygiene scored 0 because static secret scanning flagged 131 credential findings across the tree, and structure scored 0 driven by very large committed files (generated database clients, compiled Storybook artifacts, and 9-11k-line test files) plus a missing dependency lockfile. Duplication and testing scored a perfect 100, and dependency management is reasonable at 80 aside from the missing lockfile. The immediate priority is triaging the secret findings and reducing the amount of generated/build output kept under version control.</p>
+    </div>
+
+            <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+                        <h2 class="text-base font-bold mb-1">In plain terms</h2>
+<p class="text-xs text-stone-500 mb-3">A non-technical summary of what we found, what it may cause, and what you gain by fixing it.</p>
+<p>The codebase is large, actively maintained, and unusually well-equipped with automated quality tooling and a very strong test suite. However, an automated scan found a large number of password- and key-like values stored in the project files, and a lot of machine-generated and build output is being kept alongside the real source code. Cleaning up these two areas is the priority; the underlying engineering discipline is otherwise good.</p>
+        </div>
+    
+        <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+                <h2 class="text-base font-bold mb-3">Health scores</h2>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3">
+                                                            <div class="rounded-lg border border-stone-200 p-3 text-center">
+                    <div class="text-xl font-bold">100</div>
+                    <div class="text-[11px] uppercase tracking-wider text-stone-500">testing</div>
+                                    </div>
+                                            <div class="rounded-lg border border-stone-200 p-3 text-center">
+                    <div class="text-xl font-bold">0</div>
+                    <div class="text-[11px] uppercase tracking-wider text-stone-500">structure</div>
+                                    </div>
+                                            <div class="rounded-lg border border-stone-200 p-3 text-center">
+                    <div class="text-xl font-bold">100</div>
+                    <div class="text-[11px] uppercase tracking-wider text-stone-500">duplication</div>
+                                    </div>
+                                            <div class="rounded-lg border border-stone-200 p-3 text-center">
+                    <div class="text-xl font-bold">80</div>
+                    <div class="text-[11px] uppercase tracking-wider text-stone-500">dependencies</div>
+                                    </div>
+                                            <div class="rounded-lg border border-stone-200 p-3 text-center">
+                    <div class="text-xl font-bold">0</div>
+                    <div class="text-[11px] uppercase tracking-wider text-stone-500">security hygiene</div>
+                                    </div>
+                                </div>
+    </div>
+
+                    <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+                    <h2 class="text-base font-bold mb-3">What we found</h2>
+                            <div class="border-t border-stone-200 py-3.5">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">. ·
+                            101 findings
+                        </span>
+                    </div>
+                                            <div class="mt-2 text-sm text-stone-700">
+                            <div><strong>What it is:</strong> Static secret scanning flagged 101 credential-shaped values at the repository root, concentrated in CI/build definitions (Jenkinsfile and variants), a local production docker-compose file, and lock/snapshot files.</div>
+                            <div class="mt-1"><strong>What it affects:</strong> Build and deployment infrastructure and anything that reads these root-level config files; secrets here are the most likely to be real operational credentials rather than fixtures.</div>
+                            <div class="mt-1"><strong>What fixing it buys you:</strong> Rotating live values and moving them to injected secrets removes the highest-impact exposure, protects production systems, and clears the bulk of the security backlog in one pass.</div>
+                        </div>
+                                    </div>
+                            <div class="border-t border-stone-200 py-3.5">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">backend/libs ·
+                            17 findings
+                        </span>
+                    </div>
+                                            <div class="mt-2 text-sm text-stone-700">
+                            <div><strong>What it is:</strong> Seventeen credential findings inside backend library code, spanning production services (Claude token refresh, GIF search) and authentication test files.</div>
+                            <div class="mt-1"><strong>What it affects:</strong> Authentication, AI-provider administration and the agent gateway — sensitive areas where a leaked key could grant real access.</div>
+                            <div class="mt-1"><strong>What fixing it buys you:</strong> Separating genuine service secrets from test fixtures and rotating any live ones hardens the most security-critical modules and makes future scans trustworthy.</div>
+                        </div>
+                                    </div>
+                            <div class="border-t border-stone-200 py-3.5">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">backend/apps, backend/test, backend/scripts, deploy, docs, frontend, scripts, _concept, _devlog ·
+                            13 findings
+                        </span>
+                    </div>
+                                            <div class="mt-2 text-sm text-stone-700">
+                            <div><strong>What it is:</strong> The remaining credential findings are scattered across app env examples, test harnesses, a Keycloak realm export, frontend build config, and documentation/prototype files.</div>
+                            <div class="mt-1"><strong>What it affects:</strong> A broad set of supporting surfaces; many are likely example or fixture values but each must be confirmed individually.</div>
+                            <div class="mt-1"><strong>What fixing it buys you:</strong> Confirming and neutering these turns the scanner green everywhere, so real leaks are never buried under known-safe noise, and prevents accidental reuse of demo secrets in real deployments.</div>
+                        </div>
+                                    </div>
+                            <div class="border-t border-stone-200 py-3.5">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-50 text-red-800">high</span>
+                        <span class="font-semibold">structure.oversized-and-generated-files</span>
+                        <span class="text-xs text-stone-500">. ·
+                            20 findings
+                        </span>
+                    </div>
+                                            <div class="mt-2 text-sm text-stone-700">
+                            <div><strong>What it is:</strong> The largest files in the repo are compiled Storybook bundles, generated Prisma database clients (explicitly marked do-not-edit with type-checking disabled), and several hand-written test files of 9,000-11,000 lines.</div>
+                            <div class="mt-1"><strong>What it affects:</strong> Repository size, review speed, static-analysis accuracy, and the maintainability of the session and database layers where these files cluster.</div>
+                            <div class="mt-1"><strong>What fixing it buys you:</strong> Excluding build output and isolating generated code shrinks the tree and sharpens every tool; splitting the giant test files makes changes reviewable and lowers the chance of hidden regressions.</div>
+                        </div>
+                                    </div>
+                            <div class="border-t border-stone-200 py-3.5">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-50 text-amber-800">medium</span>
+                        <span class="font-semibold">dependencies.reproducibility</span>
+                        <span class="text-xs text-stone-500">. ·
+                            1 finding
+                        </span>
+                    </div>
+                                            <div class="mt-2 text-sm text-stone-700">
+                            <div><strong>What it is:</strong> The package manifest has no committed lockfile, so exact dependency versions are not pinned across environments.</div>
+                            <div class="mt-1"><strong>What it affects:</strong> CI, developer onboarding, and any environment that installs dependencies — builds can drift silently as upstream versions change.</div>
+                            <div class="mt-1"><strong>What fixing it buys you:</strong> Committing a lockfile makes builds deterministic and reproducible, eliminating a whole class of &#039;works on my machine&#039; failures.</div>
+                        </div>
+                                    </div>
+                    </div>
+    
+            <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+                        <h2 class="text-base font-bold mb-3">Full issue list</h2>
+                                                                        <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">. ·
+                            101 findings
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">backend/libs ·
+                            17 findings
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">backend/apps ·
+                            3 findings
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">backend/test ·
+                            3 findings
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">_concept/prototype ·
+                            1 finding
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">_devlog/reports ·
+                            1 finding
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">backend/scripts ·
+                            1 finding
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">deploy/keycloak ·
+                            1 finding
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">docs/multi-user-onboarding ·
+                            1 finding
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">frontend ·
+                            1 finding
+                        </span>
+                                            </div>
+                </div>
+                                                            <div class="border-t border-stone-200 py-3">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-100 text-red-900">critical</span>
+                        <span class="font-semibold">secrets.credential</span>
+                        <span class="text-xs text-stone-500">scripts/keycloak-email ·
+                            1 finding
+                        </span>
+                                            </div>
+                </div>
+                                </div>
+    
+                <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+                    <h2 class="text-base font-bold mb-3">Repository facts</h2>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3">
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">9,157</div><div class="text-[11px] uppercase tracking-wider text-stone-500">source files</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">2,219,067</div><div class="text-[11px] uppercase tracking-wider text-stone-500">lines of code</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">0%</div><div class="text-[11px] uppercase tracking-wider text-stone-500">duplicated lines</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">0%</div><div class="text-[11px] uppercase tracking-wider text-stone-500">test file ratio</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">no</div><div class="text-[11px] uppercase tracking-wider text-stone-500">CI configured</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">0</div><div class="text-[11px] uppercase tracking-wider text-stone-500">potential secrets</div></div>
+                            </div>
+                                        <p class="mt-3.5 text-xs text-stone-500">
+                    Languages:
+                    TYPESCRIPT 1,678,749 loc · MARKDOWN 273,010 loc · JAVASCRIPT 124,779 loc · JSON 70,056 loc · HTML 14,549 loc
+                </p>
+                                        <p class="mt-2 text-xs text-stone-500">
+                    Engineering setup:
+                    error monitoring ✗ ·
+                    linter ✓ ·
+                    static analysis ✓ ·
+                    .env.example ✓ ·
+                    Docker ✓
+                </p>
+                                                    <table class="mt-3 w-full border-collapse">
+                    <tr><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">Largest files</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">Lines</th></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">_concept/prototype/storybook/storybook-static/sb-manager/globals-runtime.js</td><td class="border-b border-stone-200 p-2 align-top">76,311</td></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">_concept/prototype/storybook/storybook-static/sb-manager/runtime.js</td><td class="border-b border-stone-200 p-2 align-top">26,078</td></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">backend/libs/database/src/prisma/models/User.ts</td><td class="border-b border-stone-200 p-2 align-top">23,972</td></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">backend/libs/database/src/prisma/models/Session.ts</td><td class="border-b border-stone-200 p-2 align-top">14,884</td></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">backend/CHANGELOG.md</td><td class="border-b border-stone-200 p-2 align-top">13,331</td></tr>
+                                    </table>
+                                        <p class="mt-3 text-xs text-stone-500">
+                    Last commit: 2026-09-25
+                </p>
+                                                    <table class="mt-3 w-full border-collapse">
+                    <tr><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">Change hotspots (last 200 commits)</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">Changes</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">Lines</th></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">backend/libs/session/src/session-lifecycle.service.test.ts</td><td class="border-b border-stone-200 p-2 align-top">16</td><td class="border-b border-stone-200 p-2 align-top">11,030</td></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">backend/libs/session/src/session-lifecycle.service.ts</td><td class="border-b border-stone-200 p-2 align-top">20</td><td class="border-b border-stone-200 p-2 align-top">7,538</td></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">backend/CHANGELOG.md</td><td class="border-b border-stone-200 p-2 align-top">8</td><td class="border-b border-stone-200 p-2 align-top">13,331</td></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">frontend/CHANGELOG.md</td><td class="border-b border-stone-200 p-2 align-top">8</td><td class="border-b border-stone-200 p-2 align-top">7,926</td></tr>
+                                            <tr><td class="border-b border-stone-200 p-2 align-top">backend/libs/database/src/prisma/internal/prismaNamespace.ts</td><td class="border-b border-stone-200 p-2 align-top">6</td><td class="border-b border-stone-200 p-2 align-top">8,584</td></tr>
+                                    </table>
+                                        <p class="mt-3 text-xs text-stone-500">
+                    5 contributor(s) in the last 200 commits — top contributor authored 61% of them.
+                </p>
+                    </div>
+    
+        <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+                <h2 class="text-base font-bold mb-3">Risks, ranked by impact</h2>
+                    <div class="border-t border-stone-200 py-3.5">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-50 text-red-800">high</span>
+                    <span class="font-semibold">Widespread credential findings across the repository</span>
+                </div>
+                                    <div class="mt-2 text-sm text-stone-700">
+                        <div><strong>Evidence:</strong> gitleaks reported 131 critical findings: 101 at the repo root (Jenkinsfile:270, docker-compose.prod-local.yml:40, postxl-lock.json), 17 under backend/libs (claude-code-token-refresh.service.ts:286, gif-search.service.ts:12, ai-provider-admin.service.test.ts), plus hits in deploy/keycloak/skaile-platform-realm.json:2640, frontend/vite.config.ts:87 and scripts.</div>
+                        <div class="mt-1"><strong>Recommendation:</strong> Triage every finding: rotate any live credential immediately, move real secrets to a secret manager or CI-injected env vars, and replace test/example values with obviously-fake tokens. Add a gitleaks gate to CI and a pre-commit hook so new secrets cannot land.</div>
+                    </div>
+                            </div>
+                    <div class="border-t border-stone-200 py-3.5">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-50 text-amber-800">medium</span>
+                    <span class="font-semibold">Oversized and generated files committed to version control</span>
+                </div>
+                                    <div class="mt-2 text-sm text-stone-700">
+                        <div><strong>Evidence:</strong> largest_files include compiled Storybook artifacts (globals-runtime.js 76,311 LOC; runtime.js 26,078), generated Prisma model files (User.ts 23,972; Session.ts 14,884; prismaNamespace.ts 8,584 — all marked &#039;/* generated by Prisma. Do not edit */&#039; with @ts-nocheck), and test files of 9-11k LOC (session-lifecycle.service.test.ts 11,030). Structure scored 0.</div>
+                        <div class="mt-1"><strong>Recommendation:</strong> Exclude build output (_concept/prototype/storybook/storybook-static, coverage dashboards) from the repo via .gitignore and regenerate on demand; keep generated Prisma clients out of source or in a clearly isolated generated directory; split the largest hand-written test and service files into cohesive units.</div>
+                    </div>
+                            </div>
+                    <div class="border-t border-stone-200 py-3.5">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-50 text-amber-800">medium</span>
+                    <span class="font-semibold">No dependency lockfile present</span>
+                </div>
+                                    <div class="mt-2 text-sm text-stone-700">
+                        <div><strong>Evidence:</strong> manifests.package.json reports lockfile: false with 2 dependencies and 31 dev dependencies.</div>
+                        <div class="mt-1"><strong>Recommendation:</strong> Commit a lockfile (package-lock.json / pnpm-lock.yaml / bun.lockb) so builds are reproducible and dependency versions are pinned across CI and developer machines.</div>
+                    </div>
+                            </div>
+                    <div class="border-t border-stone-200 py-3.5">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-50 text-amber-800">medium</span>
+                    <span class="font-semibold">No runtime error monitoring configured</span>
+                </div>
+                                    <div class="mt-2 text-sm text-stone-700">
+                        <div><strong>Evidence:</strong> tooling.error_monitoring is false despite the platform being dockerized with CI and running long-lived session/agent services.</div>
+                        <div class="mt-1"><strong>Recommendation:</strong> Wire an error-monitoring/observability service into the backend and frontend so production failures in session lifecycle, credential mediation and preview management are captured with context rather than only logged.</div>
+                    </div>
+                            </div>
+                    <div class="border-t border-stone-200 py-3.5">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-lime-50 text-lime-800">low</span>
+                    <span class="font-semibold">Concentrated contributor knowledge</span>
+                </div>
+                                    <div class="mt-2 text-sm text-stone-700">
+                        <div><strong>Evidence:</strong> git shows 5 contributors with the top contributor responsible for 61% of the analyzed commits.</div>
+                        <div class="mt-1"><strong>Recommendation:</strong> Encourage broader review coverage and documentation of the highest-churn areas (session-lifecycle, workspace routes) to reduce bus-factor risk.</div>
+                    </div>
+                            </div>
+            </div>
+
+            <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+                        <h2 class="mb-3 text-base font-bold">Deep file review</h2>
+
+                        <p class="text-xs text-stone-500">
+                Reviewed 36 of 40 selected files, in risk order.
+            </p>
+        
+                                    <div class="mt-5 border-t border-stone-200 pt-4">
+                    <p class="break-all font-mono text-sm font-semibold">backend/libs/session/src/broker/swarm-container-manager.ts</p>
+
+                                            <div class="mt-3 border-l-2 border-stone-200 pl-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-red-50 text-red-800">
+                                    high
+                                </span>
+                                <span class="font-semibold">Swarm mode silently runs agent containers without the egress firewall</span>
+                                                            </div>
+
+                                                            <div class="mt-2 space-y-1 text-sm text-stone-700">
+                                    <div>In createContainer(): fleet binds fail closed (&#039;MOUNT_UNSUPPORTED_IN_MODE&#039; throw when extraBinds/protectedBinds present), but the egress firewall fails OPEN — `if (config.firewall &amp;&amp; config.firewall.kind !== &#039;open&#039;) { this.deps.warn?.(`swarm mode ignores the egress firewall for session ${config.sessionId} (not yet supported)`) }` merely logs and proceeds. The container then runs unconfined even when the lifecycle planned a `network: off`/restricted plan.</div>
+                                    <div><strong>Fix:</strong> Refuse to start (as with mounts) when a non-open firewall plan is requested but cannot be enforced in swarm mode, or implement the swarm egress firewall before allowing such sessions. Agents carry minted credentials, so an unconfined runtime is an exfiltration path.</div>
+                                    <div class="text-xs text-stone-500">Effort: M</div>
+
+                                                                            <div class="text-xs text-stone-500">
+                                            Also involves: backend/libs/session/src/session-lifecycle.service.ts, docs/session-lifecycle.md
+                                        </div>
+                                                                    </div>
+                                                    </div>
+                                    </div>
+                            <div class="mt-5 border-t border-stone-200 pt-4">
+                    <p class="break-all font-mono text-sm font-semibold">backend/libs/credential/src/provider-connection.service.ts</p>
+
+                                            <div class="mt-3 border-l-2 border-stone-200 pl-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-50 text-amber-800">
+                                    medium
+                                </span>
+                                <span class="font-semibold">Unknown providerType in beginConnect silently falls through to the GitHub adapter</span>
+                                                            </div>
+
+                                                            <div class="mt-2 space-y-1 text-sm text-stone-700">
+                                    <div>`const provider = this.remoteProviders.get(input.providerType) ?? this.requireProvider(&#039;GitHub&#039;)` with the comment &quot;an unknown providerType has always taken the GitHub arm. Do not tighten to a throw.&quot; A caller-supplied providerType that is not registered begins a GitHub App/OAuth flow instead of being rejected, using GitHub&#039;s client credentials for an unrelated request.</div>
+                                    <div><strong>Fix:</strong> Reject unrecognized providerType values with an explicit error rather than defaulting to GitHub; if legacy compatibility is required, gate the fallthrough to a known legacy value only.</div>
+                                    <div class="text-xs text-stone-500">Effort: S</div>
+
+                                                                            <div class="text-xs text-stone-500">
+                                            Also involves: backend/libs/credential/src/provider-connection.service.test.ts
+                                        </div>
+                                                                    </div>
+                                                    </div>
+                                    </div>
+                            <div class="mt-5 border-t border-stone-200 pt-4">
+                    <p class="break-all font-mono text-sm font-semibold">backend/libs/session/src/skaile-config.service.ts</p>
+
+                                            <div class="mt-3 border-l-2 border-stone-200 pl-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-50 text-amber-800">
+                                    medium
+                                </span>
+                                <span class="font-semibold">Connector flag compare-and-swap excludes providerLinkId, allowing an unnoticed repoint under concurrency</span>
+                                                            </div>
+
+                                                            <div class="mt-2 space-y-1 text-sm text-stone-700">
+                                    <div>`connectorFlagCasProjection` destructures out `providerLinkId` and `label` before building the CAS projection (&#039;Provider-link reconciliation may race this CAS legitimately&#039;). `hasSameConnectorFlagCasProjection` therefore treats two connector entries as equal even if their providerLinkId differs, so a flag-update CAS can succeed against a connector whose providerLinkId (which determines which credential/provider link is minted) changed underneath the reader.</div>
+                                    <div><strong>Fix:</strong> Confirm the owner-mint gate re-validates providerLinkId authority at persist time for every flag write, or include providerLinkId in a stricter guard for security-relevant transitions so a concurrent repoint cannot slip past the CAS.</div>
+                                    <div class="text-xs text-stone-500">Effort: M</div>
+
+                                                                            <div class="text-xs text-stone-500">
+                                            Also involves: backend/libs/session/src/credential-mediator.service.ts, backend/libs/session/src/skaile-config.service.test.ts
+                                        </div>
+                                                                    </div>
+                                                    </div>
+                                    </div>
+                            <div class="mt-5 border-t border-stone-200 pt-4">
+                    <p class="break-all font-mono text-sm font-semibold">backend/libs/session/src/session-creation.service.ts</p>
+
+                                            <div class="mt-3 border-l-2 border-stone-200 pl-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-lime-50 text-lime-800">
+                                    low
+                                </span>
+                                <span class="font-semibold">Session slug uniqueness retry does not converge across API replicas</span>
+                                                            </div>
+
+                                                            <div class="mt-2 space-y-1 text-sm text-stone-700">
+                                    <div>`isSessionSlugUniqueViolation` + MAX_SLUG_CREATE_ATTEMPTS retry loop relies on a process-local repository cache: &#039;the retry only converges when the winning create happened in this process. Under multiple API replicas the loser exhausts its attempts and surfaces the raw constraint error.&#039; The raw Prisma P2002 then reaches the caller under multi-replica deployments.</div>
+                                    <div><strong>Fix:</strong> Map the exhausted-retry constraint error to a stable transport-neutral SessionCreationError code, or derive a fresh slug on each retry that does not depend on the local cache, so multi-replica deployments return a clean result.</div>
+                                    <div class="text-xs text-stone-500">Effort: M</div>
+
+                                                                            <div class="text-xs text-stone-500">
+                                            Also involves: backend/libs/session/src/session-creation.service.test.ts
+                                        </div>
+                                                                    </div>
+                                                    </div>
+                                    </div>
+                            <div class="mt-5 border-t border-stone-200 pt-4">
+                    <p class="break-all font-mono text-sm font-semibold">frontend/src/hooks/use-session-messages.tsx</p>
+
+                                            <div class="mt-3 border-l-2 border-stone-200 pl-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-lime-50 text-lime-800">
+                                    low
+                                </span>
+                                <span class="font-semibold">Typing-indicator visibility filtering performed client-side</span>
+                                                            </div>
+
+                                                            <div class="mt-2 space-y-1 text-sm text-stone-700">
+                                    <div>TypingEntry carries `pendingVisibility` with `mode` and `recipientUserIds`, described as &#039;the F-23 coarse-stripped visibility mode so the viewer can self-filter the typing dot.&#039; If recipientUserIds is delivered to clients for self-filtering, a client can observe who is typing regardless of visibility since enforcement is in the browser.</div>
+                                    <div><strong>Fix:</strong> Ensure the backend strips recipient identity and suppresses typing events the viewer is not authorized to see before fan-out, rather than relying on the client to self-filter; the client filter should be defense-in-depth only.</div>
+                                    <div class="text-xs text-stone-500">Effort: M</div>
+
+                                                                            <div class="text-xs text-stone-500">
+                                            Also involves: backend/libs/session/src/session-message.service.test.ts
+                                        </div>
+                                                                    </div>
+                                                    </div>
+                                    </div>
+                            <div class="mt-5 border-t border-stone-200 pt-4">
+                    <p class="break-all font-mono text-sm font-semibold">backend/libs/credential/src/provider-connection.service.test.ts</p>
+
+                                            <div class="mt-3 border-l-2 border-stone-200 pl-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase bg-sky-50 text-sky-800">
+                                    info
+                                </span>
+                                <span class="font-semibold">Hardcoded credential-like fixtures across provider connect tests</span>
+                                                            </div>
+
+                                                            <div class="mt-2 space-y-1 text-sm text-stone-700">
+                                    <div>Test fixtures embed credential-looking literals such as `resolveSecret: () =&gt; Promise.resolve(&#039;the-client-secret&#039;)`, GITHUB_APP.clientId &#039;gh-client-id&#039;, SHAREPOINT_APP.clientSecretKey names, and exchangeCode returning access_token &#039;sp-access-token&#039;/refresh_token &#039;sp-refresh-token&#039;. These are the likely source of many of the scanner&#039;s secrets.credential hits under backend/libs.</div>
+                                    <div><strong>Fix:</strong> Confirm these are synthetic-only; if the secrets scanner is noisy on them, add them to an allowlist or clearly namespace fixtures (e.g. TEST_ONLY_ prefix) so real credential leaks are not buried in false positives.</div>
+                                    <div class="text-xs text-stone-500">Effort: S</div>
+
+                                                                            <div class="text-xs text-stone-500">
+                                            Also involves: backend/libs/session/src/credential-mediator.service.test.ts, backend/libs/session/src/session-lifecycle.service.test.ts
+                                        </div>
+                                                                    </div>
+                                                    </div>
+                                    </div>
+                                </div>
+    
+    
+            <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
+                    <h2 class="text-base font-bold mb-3">What to fix first</h2>
+            <table class="w-full border-collapse">
+                <tr><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">#</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">Step</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">Why</th><th class="border-b border-stone-200 p-2 text-left text-[11px] uppercase tracking-wider text-stone-500">Effort</th></tr>
+                                    <tr><td class="border-b border-stone-200 p-2 align-top">1</td><td class="border-b border-stone-200 p-2 align-top">Run a full secret triage: classify each of the 131 findings as live-secret vs test-fixture, rotate every live credential, and move real values into a secret manager.</td><td class="border-b border-stone-200 p-2 align-top">Critical-severity credential exposure is the single largest risk and directly explains the security_hygiene score of 0; live keys in history or config can be exploited immediately.</td><td class="border-b border-stone-200 p-2 align-top">M</td></tr>
+                                    <tr><td class="border-b border-stone-200 p-2 align-top">2</td><td class="border-b border-stone-200 p-2 align-top">Add a gitleaks scan and a pre-commit secret check to CI so the build fails on any new credential.</td><td class="border-b border-stone-200 p-2 align-top">Prevents regression after the triage and turns a one-time cleanup into a durable guardrail.</td><td class="border-b border-stone-200 p-2 align-top">S</td></tr>
+                                    <tr><td class="border-b border-stone-200 p-2 align-top">3</td><td class="border-b border-stone-200 p-2 align-top">Commit a dependency lockfile and enforce its presence in CI.</td><td class="border-b border-stone-200 p-2 align-top">Guarantees reproducible builds and closes the one clear gap in the otherwise-healthy dependency score.</td><td class="border-b border-stone-200 p-2 align-top">S</td></tr>
+                                    <tr><td class="border-b border-stone-200 p-2 align-top">4</td><td class="border-b border-stone-200 p-2 align-top">Stop tracking generated and compiled artifacts (Storybook static output, coverage dashboards, generated Prisma clients) by adding them to .gitignore and regenerating in the build pipeline.</td><td class="border-b border-stone-200 p-2 align-top">These files dominate the largest-file list and drive the structure score of 0; removing them shrinks the repo, speeds reviews, and removes noise from scans.</td><td class="border-b border-stone-200 p-2 align-top">M</td></tr>
+                                    <tr><td class="border-b border-stone-200 p-2 align-top">5</td><td class="border-b border-stone-200 p-2 align-top">Introduce runtime error monitoring in backend and frontend services.</td><td class="border-b border-stone-200 p-2 align-top">Long-running agent/session infrastructure needs production failure visibility beyond logs to catch outages early.</td><td class="border-b border-stone-200 p-2 align-top">M</td></tr>
+                                    <tr><td class="border-b border-stone-200 p-2 align-top">6</td><td class="border-b border-stone-200 p-2 align-top">Incrementally split the largest hand-written service and test files into smaller cohesive modules.</td><td class="border-b border-stone-200 p-2 align-top">7-11k-line files are hard to review and maintain; decomposition improves structure and lowers change risk over time.</td><td class="border-b border-stone-200 p-2 align-top">L</td></tr>
+                            </table>
+                            <p class="mt-4"><a href="https://audit.flexpick.net/reports/01a0d9e0-b065-739a-8fed-a31875156169/download">Download PDF</a></p>
+                    </div>
+    
+    <p class="text-xs text-stone-500 text-center">
+        Scores and findings are derived from automated static analysis at generation time. Reply to your report email to discuss any finding with an engineer.
+    </p>
+</div>
+</body>
+</html>

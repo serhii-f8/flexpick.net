@@ -1,0 +1,266 @@
+<title>Skaile Platform Audit Response</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root{
+  --paper:#f7f8f7; --sheet:#ffffff; --ink:#1a1f22; --ink-2:#4a5358; --ink-3:#7a8489;
+  --rule:#dfe3e2; --rule-2:#eceeed; --accent:#1d5c63; --accent-soft:#e3eff0;
+  --fp:#2f6b4f; --fp-bg:#e5f1ea;
+  --conf:#9b2c1f; --conf-bg:#f8e6e2;
+  --part:#8a5a0b; --part-bg:#f7eed9;
+  --design:#39527a; --design-bg:#e6ecf5;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#111517; --sheet:#171c1f; --ink:#e4e8e8; --ink-2:#aab3b6; --ink-3:#7f898d;
+    --rule:#2a3236; --rule-2:#20272a; --accent:#7cc3c8; --accent-soft:#16302f;
+    --fp:#86cfa6; --fp-bg:#15291f; --conf:#f09a8b; --conf-bg:#34191480;
+    --part:#e3bb6c; --part-bg:#2e2410; --design:#9fb6de; --design-bg:#1a2233;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#111517; --sheet:#171c1f; --ink:#e4e8e8; --ink-2:#aab3b6; --ink-3:#7f898d;
+  --rule:#2a3236; --rule-2:#20272a; --accent:#7cc3c8; --accent-soft:#16302f;
+  --fp:#86cfa6; --fp-bg:#15291f; --conf:#f09a8b; --conf-bg:#34191480;
+  --part:#e3bb6c; --part-bg:#2e2410; --design:#9fb6de; --design-bg:#1a2233;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:32px 64px}
+.wrap{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+h1,h2,h3{font-family:var(--cond);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:2rem;font-weight:600;letter-spacing:-.01em}
+h2{font-size:1.35rem;font-weight:600;padding-bottom:8px;border-bottom:2px solid var(--ink)}
+h3{font-size:1.05rem;font-weight:600}
+p{margin:0;max-width:68ch}
+code,.mono{font-family:var(--mono);font-size:.86em}
+code{background:var(--rule-2);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+a{color:var(--accent)}
+.eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+header{display:flex;flex-direction:column;gap:14px}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 24px;border-top:1px solid var(--rule);padding-top:14px}
+.meta div{display:flex;flex-direction:column;gap:2px}
+.meta dt{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.meta dd{margin:0;font-size:.92rem;overflow-wrap:anywhere}
+section{display:flex;flex-direction:column;gap:16px}
+.lede{font-size:1.06rem;color:var(--ink)}
+.stack{display:flex;flex-direction:column;gap:12px}
+.chip{display:inline-block;font-family:var(--mono);font-size:.7rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.v-fp{color:var(--fp);background:var(--fp-bg)}
+.v-conf{color:var(--conf);background:var(--conf-bg)}
+.v-part{color:var(--part);background:var(--part-bg)}
+.v-design{color:var(--design);background:var(--design-bg)}
+.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.tally div{background:var(--sheet);padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.tally b{font-family:var(--cond);font-size:1.6rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.tally span{font-size:.85rem;color:var(--ink-2)}
+.tablebox{overflow-x:auto;border:1px solid var(--rule);background:var(--sheet)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:.9rem}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--rule-2)}
+th{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--paper)}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.finding{background:var(--sheet);border:1px solid var(--rule);border-left:4px solid var(--rule);padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.finding.conf{border-left-color:var(--conf)}
+.finding.part{border-left-color:var(--part)}
+.finding.fp{border-left-color:var(--fp)}
+.finding.design{border-left-color:var(--design)}
+.finding .head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;justify-content:space-between}
+.finding .where{font-family:var(--mono);font-size:.78rem;color:var(--ink-3);overflow-wrap:anywhere}
+.finding dl{margin:0;display:grid;grid-template-columns:110px 1fr;gap:6px 14px}
+.finding dt{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);padding-top:2px}
+.finding dd{margin:0}
+@media (max-width:560px){.finding dl{grid-template-columns:1fr}.finding dt{padding-top:6px}}
+ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px;max-width:72ch}
+ol.actions{margin:0;padding:0;list-style:none;counter-reset:a;display:flex;flex-direction:column;gap:0;border:1px solid var(--rule);background:var(--sheet)}
+ol.actions li{counter-increment:a;display:grid;grid-template-columns:2.2em 1fr;gap:4px 10px;padding:12px 16px;border-bottom:1px solid var(--rule-2)}
+ol.actions li:last-child{border-bottom:0}
+ol.actions li::before{content:counter(a);font-family:var(--cond);font-weight:600;color:var(--accent);font-size:1.1rem}
+ol.actions small{grid-column:2;color:var(--ink-2);font-size:.86rem}
+.note{background:var(--accent-soft);padding:14px 18px;font-size:.92rem;max-width:none}
+footer{font-size:.85rem;color:var(--ink-3);border-top:1px solid var(--rule);padding-top:14px}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">Response to Codebase Health Report</span>
+  <h1>Skaile Platform: verification of audit findings</h1>
+  <p class="lede">We checked each finding in the report against the source tree and, for secrets, against a full-history secret scan. Most of the critical and medium findings do not hold. One code finding is confirmed, in a component that is not yet deployed to production, and one low-severity key needs action.</p>
+  <dl class="meta">
+    <div><dt>Repository</dt><dd class="mono">github.com/skaile-ai/platform</dd></div>
+    <div><dt>Report</dt><dd class="mono">01a0d9e0-b065-739a-8fed-a31875156169</dd></div>
+    <div><dt>Report date</dt><dd>2026-09-25</dd></div>
+    <div><dt>Verified by</dt><dd>Skaile engineering, 2026-09-25</dd></div>
+  </dl>
+</header>
+
+<section>
+  <h2>Summary</h2>
+  <div class="tally">
+    <div><b>0 of 131</b><span>secret findings are production credentials</span></div>
+    <div><b>1</b><span>live low-privilege API key (rate-limited test tier)</span></div>
+    <div><b>1 of 6</b><span>deep-review code findings confirmed as a defect</span></div>
+    <div><b>3</b><span>repository facts in the report that are incorrect</span></div>
+  </div>
+  <div class="tablebox">
+    <table>
+      <thead><tr><th>Report finding</th><th>Severity in report</th><th>Our verdict</th><th>In short</th></tr></thead>
+      <tbody>
+        <tr><td>Credential findings (131)</td><td>Critical</td><td><span class="chip v-fp">False positive</span></td><td>Checksums, test fixtures, hashes, public client IDs, local-only values. One test-tier API key handled separately below.</td></tr>
+        <tr><td>Oversized and generated files</td><td>High</td><td><span class="chip v-part">Partly valid</span></td><td>Storybook build output accepted. The Prisma client is committed by design. Large test files acknowledged.</td></tr>
+        <tr><td>No dependency lockfile</td><td>Medium</td><td><span class="chip v-fp">False positive</span></td><td><code>bun.lock</code> is committed at the root and in each package.</td></tr>
+        <tr><td>No runtime error monitoring</td><td>Medium</td><td><span class="chip v-part">Partly valid</span></td><td>Centralised log aggregation exists. No exception-tracking service.</td></tr>
+        <tr><td>Concentrated contributor knowledge</td><td>Low</td><td><span class="chip v-design">Acknowledged</span></td><td>Accurate observation about team size.</td></tr>
+        <tr><td>Swarm mode ignores egress firewall</td><td>High</td><td><span class="chip v-conf">Confirmed</span></td><td>Real fail-open. Swarm runs only in staging today.</td></tr>
+        <tr><td>Unknown providerType falls through to GitHub</td><td>Medium</td><td><span class="chip v-fp">False positive</span></td><td>Input is a closed enum and every value has a registered adapter.</td></tr>
+        <tr><td>Connector-flag CAS excludes providerLinkId</td><td>Medium</td><td><span class="chip v-design">By design</span></td><td>A repoint can only target a link the session owner is already allowed to use.</td></tr>
+        <tr><td>Slug retry does not converge across replicas</td><td>Low</td><td><span class="chip v-part">Latent</span></td><td>Accurate, documented in code. Production runs a single API process.</td></tr>
+        <tr><td>Typing-indicator visibility filtered client-side</td><td>Low</td><td><span class="chip v-fp">Already mitigated</span></td><td>The server strips the recipient list before broadcast.</td></tr>
+        <tr><td>Credential-like test fixtures</td><td>Info</td><td><span class="chip v-design">Agreed</span></td><td>Synthetic values. Scanner allowlist to follow.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Secrets: the 131 credential findings</h2>
+  <p>We re-ran gitleaks 8.30.1 with its default ruleset (the repository has no <code>.gitleaks.toml</code>) over the full history of 5,574 commits and over a clean export of <code>HEAD</code>. That produced 418 raw hits across history and 131 at <code>HEAD</code>, matching the report's count. We classified every hit. None is a production credential.</p>
+  <div class="tablebox">
+    <table>
+      <thead><tr><th>Category</th><th class="num">Hits (history)</th><th>What they are</th></tr></thead>
+      <tbody>
+        <tr><td><code>postxl-lock.json</code></td><td class="num">376</td><td>File checksums in the code generator's lockfile, matched by the generic-api-key rule. The "discord" and "bitbucket" hits are the file names <code>discord.svg</code> and <code>bitbucket-pipelines.yml</code>.</td></tr>
+        <tr><td>Test fixtures</td><td class="num">~25</td><td>Obvious fakes: <code>0123…</code> and <code>fedcba…</code> hex keys, <code>sk-acme-1234567890</code>, the public jwt.io sample JWT and RSA key, a <code>ghp_</code> example in a URL-redaction test, truncated PEM stubs.</td></tr>
+        <tr><td>Hashes and identifiers</td><td class="num">rest</td><td>SHA-256 digests, git commit SHAs, a Keycloak client UUID, library names such as <code>d3-sankey</code>, and strings inside a minified Storybook bundle.</td></tr>
+        <tr><td>Public by design</td><td class="num">few</td><td>OAuth client IDs in the Jenkinsfiles. OAuth client IDs are public identifiers, not secrets.</td></tr>
+        <tr><td>Non-production values</td><td class="num">few</td><td>An encryption key in <code>docker-compose.prod-local.yml</code> that is commented as a local-only throwaway, <code>.env.example</code> placeholders, a truncated sample token in an email-template preview, and <code>$GIT_TOKEN</code> in a Jenkinsfile, which is environment-variable interpolation rather than a value.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="finding part">
+    <div class="head"><h3>One live key: GIF search fallback</h3><span class="chip v-part">Valid, low</span></div>
+    <span class="where">backend/libs/capabilities/src/gif-search.service.ts:12</span>
+    <dl>
+      <dt>Finding</dt><dd>A testing-tier key for the third-party GIF search API is hardcoded as a fallback when the deployment does not configure its own key.</dd>
+      <dt>Impact</dt><dd>The key is limited to 100 requests per minute and grants access to public GIF search only. Anyone can use it and exhaust its quota, which would throttle GIF search. It grants no access to Skaile data or systems.</dd>
+      <dt>Action</dt><dd>Remove the fallback so GIF search requires a configured key, and revoke the testing key with the provider.</dd>
+    </dl>
+  </div>
+</section>
+
+<section>
+  <h2>Deep file review</h2>
+
+  <div class="finding conf">
+    <div class="head"><h3>Swarm mode runs agents without the egress firewall</h3><span class="chip v-conf">Confirmed</span></div>
+    <span class="where">backend/libs/session/src/broker/swarm-container-manager.ts:66</span>
+    <dl>
+      <dt>Assessment</dt><dd>Correct. When a session's firewall plan is anything other than open, the swarm driver logs a warning and starts the container unrestricted. The session lifecycle already refuses to start a session whose plan cannot be resolved, and this driver already refuses to start when required mounts are missing, so this is an inconsistency with our own fail-closed intent.</dd>
+      <dt>Exposure</dt><dd>The swarm driver is used only by the agents-executor service, which is deployed to staging. Production agents run on the Docker driver, which enforces the firewall.</dd>
+      <dt>Action</dt><dd>Make the swarm driver refuse to start when it cannot enforce a non-open plan. This is a release blocker for swarm mode in production.</dd>
+    </dl>
+  </div>
+
+  <div class="finding fp">
+    <div class="head"><h3>Unknown providerType falls through to the GitHub adapter</h3><span class="chip v-fp">False positive</span></div>
+    <span class="where">backend/libs/credential/src/provider-connection.service.ts:234</span>
+    <dl>
+      <dt>Assessment</dt><dd>The fallthrough exists in the service, but it cannot be reached. The only caller is the <code>provider-connections</code> tRPC route, which validates <code>providerType</code> against a closed enum of six values. All six have adapters, and the registry registers them unconditionally. A caller cannot submit an unregistered type.</dd>
+      <dt>Action</dt><dd>None required. We may replace the fallthrough with an explicit error as a hardening change.</dd>
+    </dl>
+  </div>
+
+  <div class="finding design">
+    <div class="head"><h3>Connector-flag compare-and-swap excludes providerLinkId</h3><span class="chip v-design">By design</span></div>
+    <span class="where">backend/libs/session/src/skaile-config.service.ts:201</span>
+    <dl>
+      <dt>Assessment</dt><dd>The exclusion is intentional and documented at the site, so that background provider-link reconciliation does not fail user flag edits. The flags involved (<code>exposeAccessToken</code>, <code>watch</code>) require at least User role on the session to change. A link can only be bound to a connector if the session owner is authorised to use it, and a database guard enforces that on every bind. A concurrent repoint therefore cannot expose a credential to anyone who is not already entitled to it.</dd>
+      <dt>Action</dt><dd>None.</dd>
+    </dl>
+  </div>
+
+  <div class="finding part">
+    <div class="head"><h3>Session slug retry does not converge across API replicas</h3><span class="chip v-part">Latent</span></div>
+    <span class="where">backend/libs/session/src/session-creation.service.ts:160</span>
+    <dl>
+      <dt>Assessment</dt><dd>Accurate, and already documented in the code. Production runs a single API process, so the retry always converges today.</dd>
+      <dt>Action</dt><dd>Revisit before the API is scaled horizontally.</dd>
+    </dl>
+  </div>
+
+  <div class="finding fp">
+    <div class="head"><h3>Typing-indicator visibility filtered in the browser</h3><span class="chip v-fp">Already mitigated</span></div>
+    <span class="where">backend/libs/router-trpc/src/routes/workspace.route.ts:2263</span>
+    <dl>
+      <dt>Assessment</dt><dd>The server removes <code>recipientUserIds</code> before broadcasting typing state, so clients never receive the recipient list. The most another participant can learn is that someone is typing a private message. Verifying this surfaced a small functional bug: intended recipients also do not see the indicator for private messages, because the client filter relies on the list that the server removes. We will fix that, and update a stale code comment that still describes the older behaviour.</dd>
+      <dt>Action</dt><dd>UX fix only. No security change needed.</dd>
+    </dl>
+  </div>
+
+  <div class="finding design">
+    <div class="head"><h3>Credential-like test fixtures</h3><span class="chip v-design">Agreed</span></div>
+    <span class="where">backend/libs/credential/src/provider-connection.service.test.ts and others</span>
+    <dl>
+      <dt>Assessment</dt><dd>Agreed. These are synthetic values and account for part of the scanner noise.</dd>
+      <dt>Action</dt><dd>Covered by the scanner configuration below.</dd>
+    </dl>
+  </div>
+</section>
+
+<section>
+  <h2>Structure, dependencies and monitoring</h2>
+  <div class="stack">
+    <div class="finding part">
+      <div class="head"><h3>Oversized and generated files</h3><span class="chip v-part">Partly valid</span></div>
+      <dl>
+        <dt>Storybook</dt><dd>Accepted. <code>_concept/prototype/storybook/storybook-static/</code> (94 files) is build output and will be removed from version control.</dd>
+        <dt>Prisma client</dt><dd>Committed by design. The backend imports the generated client from <code>backend/libs/database/src/prisma/</code> as source. We will exclude it from static analysis rather than move it.</dd>
+        <dt>Large tests</dt><dd>Acknowledged. The three largest test files (9,100 to 11,000 lines) are maintainability debt that we will split over time. It is not a correctness risk.</dd>
+      </dl>
+    </div>
+    <div class="finding fp">
+      <div class="head"><h3>No dependency lockfile</h3><span class="chip v-fp">False positive</span></div>
+      <dl>
+        <dt>Assessment</dt><dd>The project uses Bun, and <code>bun.lock</code> is committed at the repository root and in <code>frontend/</code> and other packages. Bun's current lockfile is a text file named <code>bun.lock</code>, not the older binary <code>bun.lockb</code>. The scanner probably only recognises the older name.</dd>
+      </dl>
+    </div>
+    <div class="finding part">
+      <div class="head"><h3>No runtime error monitoring</h3><span class="chip v-part">Partly valid</span></div>
+      <dl>
+        <dt>Assessment</dt><dd>Production logs are collected centrally and are queryable. There is no dedicated exception-tracking or alerting service. We treat this as a product decision rather than a defect.</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Corrections to the repository facts</h2>
+  <ul>
+    <li><b>CI configured: "no".</b> The repository has 17 GitHub Actions workflows under <code>.github/workflows/</code>, and the report's own summary says CI is present.</li>
+    <li><b>Potential secrets: "0".</b> This contradicts the 131 credential findings reported elsewhere in the same document.</li>
+    <li><b>Test file ratio: "0%".</b> This contradicts the 1,919 test files the summary cites and the testing score of 100.</li>
+  </ul>
+  <p class="note">The security hygiene score of 0 comes entirely from the unfiltered secret scan. With lockfile checksums and test fixtures excluded, we would expect it to change substantially on a re-run. We would welcome a re-scan once the scanner configuration below is in place.</p>
+</section>
+
+<section>
+  <h2>Remediation we are taking</h2>
+  <ol class="actions">
+    <li>Make swarm mode refuse to start agents whose firewall plan it cannot enforce.<small>Confirmed finding. Blocks production rollout of swarm mode.</small></li>
+    <li>Remove the hardcoded GIF-search fallback key and revoke it with the provider.<small>The only live key found.</small></li>
+    <li>Add a <code>.gitleaks.toml</code> that allowlists <code>postxl-lock.json</code>, test files, <code>*.example</code> and Storybook output, and run gitleaks in CI.<small>Removes the noise so that a real leak would stand out.</small></li>
+    <li>Remove the committed Storybook build output.<small>Structure finding.</small></li>
+    <li>Fix the private-message typing indicator and its stale comment.<small>Functional bug found during verification.</small></li>
+  </ol>
+</section>
+
+<footer>Verification method: each finding was checked against the repository at the report date. Code findings were traced to their callers and deployment configuration. Secret findings were verified with an independent gitleaks run over the full history. The actual value of the one live key is deliberately omitted from this document.</footer>
+
+</div>
