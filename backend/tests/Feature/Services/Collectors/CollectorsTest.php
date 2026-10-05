@@ -105,6 +105,8 @@ class CollectorsTest extends FeatureTest
         $this->assertSame(1, $manifests['composer.json']['dependencies']);
         $this->assertSame(2, $manifests['composer.json']['dev_dependencies']);
         $this->assertTrue($manifests['composer.json']['lockfile']);
+        $this->assertSame('composer.lock', $manifests['composer.json']['lockfile_kind']);
+        $this->assertSame('composer', $manifests['composer.json']['ecosystem']);
         $this->assertFalse($manifests['composer.json']['parse_error']);
     }
 
@@ -195,5 +197,41 @@ class CollectorsTest extends FeatureTest
 
         $this->assertSame(1, $tooling['test_files']);
         $this->assertSame(50.0, $tooling['test_ratio_pct']);
+    }
+
+    private function monorepo(): RepoContext
+    {
+        $root = $this->repo;
+        file_put_contents($root.'/package.json', json_encode(['workspaces' => ['packages/*'], 'devDependencies' => ['typescript' => '^5']]));
+        file_put_contents($root.'/bun.lock', '{}');
+        @mkdir($root.'/packages/api', 0755, true);
+        file_put_contents($root.'/packages/api/package.json', json_encode(['dependencies' => ['@sentry/bun' => '^8', '@biomejs/biome' => '^1']]));
+        file_put_contents($root.'/Jenkinsfile.e2e', 'pipeline {}');
+        @mkdir($root.'/.github/workflows', 0755, true);
+        file_put_contents($root.'/.github/workflows/ci.yml', 'on: push');
+        file_put_contents($root.'/Dockerfile.agent-thin', 'FROM alpine');
+
+        return new RepoContext(path: $root, tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC));
+    }
+
+    public function test_workspace_manifests_are_covered_by_the_root_bun_lock(): void
+    {
+        $manifests = app(ManifestCollector::class)->collect($this->monorepo());
+
+        $this->assertTrue($manifests['package.json']['lockfile']);
+        $this->assertSame('bun.lock', $manifests['package.json']['lockfile_kind']);
+        $this->assertTrue($manifests['packages/api/package.json']['lockfile']);
+        $this->assertSame('npm', $manifests['packages/api/package.json']['ecosystem']);
+    }
+
+    public function test_tooling_reads_every_workspace_and_every_ci_system(): void
+    {
+        $tooling = app(ToolingCollector::class)->collect($this->monorepo());
+
+        $this->assertTrue($tooling['error_monitoring']);
+        $this->assertTrue($tooling['linter']);
+        $this->assertTrue($tooling['dockerized']);
+        $this->assertTrue($tooling['has_ci']);
+        $this->assertSame(['github_actions', 'jenkins'], $tooling['ci_systems']);
     }
 }

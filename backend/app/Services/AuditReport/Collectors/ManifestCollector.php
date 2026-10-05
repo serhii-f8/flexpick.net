@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Log;
 
 class ManifestCollector implements Collector
 {
+    public function __construct(private WorkspaceDiscovery $workspaces) {}
+
     public function name(): string
     {
         return 'manifests';
@@ -18,28 +20,36 @@ class ManifestCollector implements Collector
         $repoPath = $context->path;
         $manifests = [];
 
-        foreach (['composer.json' => 'composer.lock', 'package.json' => 'package-lock.json'] as $manifest => $lock) {
-            if (! file_exists($repoPath.'/'.$manifest)) {
-                continue;
+        foreach ($this->workspaces->roots($repoPath, $context->classifier) as $dir) {
+            foreach (['composer.json' => 'composer', 'package.json' => 'npm'] as $manifest => $ecosystem) {
+                $relative = ltrim($dir.'/'.$manifest, '/');
+
+                if (! is_file($repoPath.'/'.$relative)) {
+                    continue;
+                }
+
+                $raw = Utf8::scrub((string) file_get_contents($repoPath.'/'.$relative));
+                $data = json_decode($raw, true);
+                $parseError = ! is_array($data);
+
+                if ($parseError) {
+                    Log::warning("ManifestCollector: failed to parse {$relative}", [
+                        'json_error' => json_last_error_msg(),
+                    ]);
+                    $data = [];
+                }
+
+                $lock = $this->workspaces->lockfileFor($repoPath, $dir, $ecosystem);
+
+                $manifests[$relative] = [
+                    'dependencies' => count($data['require'] ?? $data['dependencies'] ?? []),
+                    'dev_dependencies' => count($data['require-dev'] ?? $data['devDependencies'] ?? []),
+                    'lockfile' => $lock !== null,
+                    'lockfile_kind' => $lock !== null ? basename($lock) : null,
+                    'ecosystem' => $ecosystem,
+                    'parse_error' => $parseError,
+                ];
             }
-
-            $raw = Utf8::scrub((string) file_get_contents($repoPath.'/'.$manifest));
-            $data = json_decode($raw, true);
-            $parseError = ! is_array($data);
-
-            if ($parseError) {
-                Log::warning("ManifestCollector: failed to parse {$manifest}", [
-                    'json_error' => json_last_error_msg(),
-                ]);
-                $data = [];
-            }
-
-            $manifests[$manifest] = [
-                'dependencies' => count($data['require'] ?? $data['dependencies'] ?? []),
-                'dev_dependencies' => count($data['require-dev'] ?? $data['devDependencies'] ?? []),
-                'lockfile' => file_exists($repoPath.'/'.$lock),
-                'parse_error' => $parseError,
-            ];
         }
 
         return $manifests;
