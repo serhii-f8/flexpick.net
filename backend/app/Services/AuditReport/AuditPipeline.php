@@ -16,12 +16,9 @@ use App\Services\AuditReport\DeepReview\RiskFileSelector;
 use App\Services\AuditReport\Findings\DedupedFinding;
 use App\Services\AuditReport\Findings\FindingDeduplicator;
 use App\Services\AuditReport\Findings\FindingGroup;
-use App\Services\AuditReport\Findings\FindingGrouper;
-use App\Services\AuditReport\Paths\PathClassifier;
 use App\Services\AuditReport\Scanners\RepoContext;
-use App\Services\AuditReport\Scanners\ScannerRunner;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
-use App\Services\AuditReport\Scanners\SccScanner;
+use App\Services\AuditReport\Scanners\SccInventory;
 use App\Services\AuditReport\Tiers\TierProfile;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use App\Services\AuditRequestService;
@@ -32,21 +29,17 @@ class AuditPipeline
 {
     public function __construct(
         private RepositoryCloner $cloner,
-        private MetricsCollector $metricsCollector,
         private AiAnalyzer $analyzer,
         private AuditReportService $reportService,
         private AuditRequestService $requestService,
-        private ScoreCalculator $scoreCalculator,
         private TierProfileResolver $tierProfileResolver,
-        private ScannerRunner $scannerRunner,
         private FindingDeduplicator $deduplicator,
-        private FindingGrouper $grouper,
-        private SccScanner $sccScanner,
         private RiskFileSelector $riskFileSelector,
         private DeepReviewer $deepReviewer,
         private DeepFindingSanitizer $sanitizer,
         private AiCallRecorder $aiCalls,
         private AuditRunSizer $runSizer,
+        private AuditMeasurer $measurer,
     ) {}
 
     private function elapsedMs(float $startedAt): int
@@ -88,63 +81,29 @@ class AuditPipeline
             $profile = $this->tierProfileResolver->for($auditRequest->tier);
             $context = new RepoContext($path, $profile);
 
-            // Scanners first — scc's inventory sizes the budgets for everything
-            // after it, including excerpt selection (spec §3.2). scc runs alone
-            // and the request is sized off its count before any other scanner
-            // is paid for: an oversized or uncovered request closes here
-            // (spec §2).
-            $sccSuite = $this->scannerRunner->run(['scc'], $context);
+            $measurement = $this->measurer->measure($context, $profile->scanners, function (SccInventory $inventory, bool $fellBack) use ($auditRequest): void {
+                if ($fellBack) {
+                    $auditRequest->appendPipelineLog('inventory', 'scc unavailable; used a walked file inventory');
+                }
 
-            // scc failing must not leave later stages without a basis (spec §10).
-            $inventory = $context->inventory;
-            $fellBack = $inventory === null;
-            if ($inventory === null) {
-                $context->withClassifier(PathClassifier::forRepository($path));
-                $inventory = $this->sccScanner->fallbackInventory($path, $context->classifier);
-                $context->withInventory($inventory);
-                $auditRequest->appendPipelineLog('inventory', 'scc unavailable; used a walked file inventory');
-            }
+                // Billed on scc's code count only. A walked inventory (or an scc
+                // whose sizing run failed) carries none, and the sizer never
+                // charges extras off it.
+                $size = $inventory->billableCode === null
+                    ? AuditSize::unavailable($fellBack ? 'scc unavailable, failed or timed out' : 'scc code count unavailable')
+                    : AuditSize::measured($inventory->billableCode);
 
-            // Billed on scc's code count only. A walked inventory (or an scc
-            // whose sizing run failed) carries none, and the sizer never
-            // charges extras off it.
-            $size = $inventory->billableCode === null
-                ? AuditSize::unavailable($fellBack ? 'scc unavailable, failed or timed out' : 'scc code count unavailable')
-                : AuditSize::measured($inventory->billableCode);
-
-            $runs = $this->runSizer->settle($auditRequest, $size);
-            $auditRequest->appendPipelineLog('sized', $size->isMeasured()
-                ? sprintf('%s lines of code; %d run(s)', number_format((int) $size->codeLoc), $runs)
-                : sprintf('%d run(s); size not measured', $runs));
-
-            $suite = $sccSuite->merge($this->scannerRunner->run(
-                array_values(array_filter($profile->scanners, fn (string $name): bool => $name !== 'scc')),
-                $context,
-            ));
+                $runs = $this->runSizer->settle($auditRequest, $size);
+                $auditRequest->appendPipelineLog('sized', $size->isMeasured()
+                    ? sprintf('%s lines of code; %d run(s)', number_format((int) $size->codeLoc), $runs)
+                    : sprintf('%d run(s); size not measured', $runs));
+            });
+            $suite = $measurement->suite;
+            $groups = $measurement->groups;
+            $metrics = $measurement->metrics;
+            $scoreSet = $measurement->scores;
+            $collected = ['excerpts' => $measurement->excerpts];
             $this->logScannerOutcomes($auditRequest, $suite);
-
-            $groups = $this->grouper->group($this->deduplicator->dedupe($suite->findings));
-
-            // Q17: excerpt collection (every tier) and risk-file selection
-            // both read this. Derived from findings, not from the scanner.
-            $context->withSecretPaths($this->secretPaths($suite));
-
-            $collected = $this->metricsCollector->collect($context);
-            $metrics = $collected['metrics'];
-            // Recorded by JscpdScanner on the per-run context (Task 12).
-            $metrics['duplication_pct'] = (float) $context->measurement('duplication_pct', 0.0);
-
-            if ($suite->ranSuccessfully('osv')) {
-                $metrics['dependency_audit'] = [
-                    'packages_scanned' => (int) $context->measurement('packages_scanned', 0),
-                    'vulnerable_count' => (int) $context->measurement('vulnerable_count', 0),
-                ];
-            }
-
-            $scoreSet = $this->scoreCalculator->calculate($metrics, $groups, $suite);
-            $metrics['computed_scores'] = $scoreSet->toPayloadScores();
-            $metrics['not_measured'] = $scoreSet->notMeasured;
-            $metrics['not_measured_reasons'] = $scoreSet->notMeasuredReasons;
 
             $auditRequest->update([
                 'metrics' => $metrics,
@@ -263,25 +222,6 @@ class AuditPipeline
         foreach ($groups as $group) {
             AuditFindingGroup::create(AuditFindingGroup::fromValueObject($request, $group));
         }
-    }
-
-    // No duplicationPercentage() helper: JscpdScanner records the figure on
-    // RepoContext during its own scan, and ScoreCalculator marks the
-    // duplication dimension not-measured when jscpd did not run — so a
-    // missing measurement can never be mistaken for a duplication-free repo.
-
-    /** @return list<string> */
-    private function secretPaths(ScannerSuiteResult $suite): array
-    {
-        $paths = [];
-
-        foreach ($suite->findings as $finding) {
-            if ($finding->tool === 'gitleaks') {
-                $paths[] = $finding->path;
-            }
-        }
-
-        return array_values(array_unique($paths));
     }
 
     /**
