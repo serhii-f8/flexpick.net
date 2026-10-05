@@ -5,6 +5,8 @@ namespace App\Services\AuditReport\Scanners;
 use App\Services\AuditReport\Findings\Finding;
 use App\Services\AuditReport\Findings\Normalizers\SarifNormalizer;
 use App\Services\AuditReport\Findings\Severity;
+use App\Services\AuditReport\Paths\PathClass;
+use App\Services\AuditReport\Paths\PathClassifier;
 use App\Support\Utf8;
 use Illuminate\Support\Facades\Process;
 use JsonException;
@@ -12,6 +14,24 @@ use RuntimeException;
 
 class GitleaksScanner implements Scanner
 {
+    /**
+     * Default-ruleset ids that identify one provider's credential format. A
+     * match on one of these is a credential whatever file it sits in; everything
+     * else (generic-api-key, jwt, *-client-id) is a shape, not proof.
+     */
+    private const PROVIDER_RULE_PREFIXES = [
+        'aws-', 'github-', 'gitlab-', 'stripe-', 'slack-', 'anthropic-', 'openai-', 'gcp-', 'private-key',
+        'sendgrid-', 'twilio-', 'shopify-', 'npm-access-token', 'pypi-', 'digitalocean-', 'heroku-', 'hashicorp-',
+        'doppler-', 'square-', 'mailgun-', 'azure-', 'databricks-', 'linear-', 'postman-', 'sentry-', 'huggingface-',
+        'age-secret-key', 'flyio-', 'vault-',
+    ];
+
+    private const FAMILIES = [
+        'critical' => 'secrets.credential',
+        'high' => 'secrets.possible-credential',
+        'low' => 'secrets.likely-fixture',
+    ];
+
     public function __construct(private SarifNormalizer $normalizer) {}
 
     public function name(): string
@@ -53,24 +73,56 @@ class GitleaksScanner implements Scanner
                 throw new RuntimeException('gitleaks produced no report');
             }
 
-            return $this->normalize($this->decode($report), $context->path);
+            return $this->normalize($this->decode($report), $context->path, $context->classifier);
         } finally {
             @unlink($report);
         }
     }
 
     /** @return list<Finding> */
-    public function normalize(array $sarif, string $repoPath): array
+    public function normalize(array $sarif, string $repoPath, ?PathClassifier $classifier = null): array
     {
-        return $this->normalizer->normalize(
+        $classifier ??= new PathClassifier;
+
+        $raw = $this->normalizer->normalize(
             $sarif,
             $this->name(),
             $repoPath,
-            // Gitleaks emits no severity; every leak is critical (spec §5.6).
             fn (): Severity => Severity::CRITICAL,
-            fn (): string => 'secrets.credential',
+            fn (): string => self::FAMILIES['critical'],
             fn (): string => 'security_hygiene',
         );
+
+        return array_map(function (Finding $finding) use ($classifier): Finding {
+            // Repository attributes are ignored here: a repo must not be able to
+            // mark its own leaked key "generated" and lower its severity.
+            $severity = $this->severityFor($finding->ruleId, $classifier->classify($finding->path, ignoreRepoAttributes: true));
+
+            return new Finding(
+                tool: $finding->tool,
+                ruleId: $finding->ruleId,
+                ruleFamily: self::FAMILIES[$severity->value],
+                severity: $severity,
+                path: $finding->path,
+                line: $finding->line,
+                message: $finding->message,
+                dimension: $finding->dimension,
+            );
+        }, $raw);
+    }
+
+    public function severityFor(string $ruleId, PathClass $class): Severity
+    {
+        $provider = ! str_ends_with($ruleId, '-client-id') && array_any(
+            self::PROVIDER_RULE_PREFIXES,
+            fn (string $prefix): bool => str_starts_with($ruleId, $prefix),
+        );
+
+        return match ($class) {
+            PathClass::Source => $provider ? Severity::CRITICAL : Severity::HIGH,
+            PathClass::Generated, PathClass::Vendored, PathClass::Lockfile => $provider ? Severity::CRITICAL : Severity::LOW,
+            PathClass::Test, PathClass::Docs, PathClass::Example => $provider ? Severity::HIGH : Severity::LOW,
+        };
     }
 
     private function decode(string $path): array

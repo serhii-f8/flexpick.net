@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Process;
 use Laravel\Horizon\Contracts\MasterSupervisorRepository;
 use Throwable;
 
@@ -179,6 +180,24 @@ class SmokeCommand extends Command
             }
         }
 
-        return true;
+        return $this->gitleaksSupportsAllowlists($profile->scanners);
+    }
+
+    /** The scanner config uses `[[allowlists]]`, which older gitleaks releases ignore. */
+    private function gitleaksSupportsAllowlists(array $scanners): bool
+    {
+        if (! in_array('gitleaks', $scanners, true)) {
+            return true;
+        }
+
+        $result = Process::timeout(10)->run([(string) config('audit.scanners.gitleaks.bin'), 'version']);
+
+        if (preg_match('/\d+\.\d+\.\d+/', $result->output(), $m) === 1 && version_compare($m[0], '8.25.0', '>=')) {
+            return true;
+        }
+
+        $this->line('  gitleaks >= 8.25 required for the allowlist config');
+
+        return false;
     }
 }

@@ -2,3 +2,30 @@ title = "FlexPick Gitleaks config"
 
 [extend]
 useDefault = true
+
+# Hits in these files are checksums, minified identifiers or vendored code,
+# never a credential the customer committed. 376 of 418 hits on one
+# customer repository were a code generator's lockfile checksums.
+[[allowlists]]
+description = "Lockfiles, minified files, build output and dependencies"
+paths = [
+  '''(^|/)(composer\.lock|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|Gemfile\.lock|poetry\.lock|go\.sum)$''',
+  '''(^|/)[^/]*[-.]lock\.(json|ya?ml)$''',
+  '''\.min\.(js|css)$''',
+  '''\.map$''',
+  '''(^|/)(storybook-static|node_modules|vendor|dist|coverage|__generated__)/''',
+]
+
+# Values published as examples everywhere. Allowlisting by value is limited
+# to strings that are public by construction — never a customer's value.
+[[allowlists]]
+description = "Well-known public sample values"
+regexTarget = "match"
+regexes = [
+  # The jwt.io sample token payload ({"sub":"1234567890","name":"John Doe","iat":1516239022}).
+  '''eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ''',
+  # Sequential hex placeholder keys.
+  '''(?i)(0123456789abcdef){2,}''',
+  '''(?i)(fedcba9876543210){2,}''',
+]
+stopwords = ["example", "placeholder", "changeme", "dummy", "your_", "xxxxxxxx", "redacted"]

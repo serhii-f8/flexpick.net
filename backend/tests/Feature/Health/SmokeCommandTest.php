@@ -41,6 +41,22 @@ class SmokeCommandTest extends FeatureTest
         $this->artisan('app:smoke')->assertFailed();
     }
 
+    public function test_fails_when_gitleaks_is_too_old_for_the_allowlist_config(): void
+    {
+        $stub = sys_get_temp_dir().'/gitleaks-old-'.bin2hex(random_bytes(4));
+        file_put_contents($stub, "#!/bin/sh\necho 8.20.0\n");
+        chmod($stub, 0755);
+        config()->set('audit.scanners.gitleaks.bin', $stub);
+
+        try {
+            $this->artisan('app:smoke')
+                ->expectsOutputToContain('gitleaks >= 8.25 required for the allowlist config')
+                ->assertFailed();
+        } finally {
+            @unlink($stub);
+        }
+    }
+
     public function test_fails_when_migrations_are_pending(): void
     {
         $repository = Mockery::mock(MigrationRepositoryInterface::class);
