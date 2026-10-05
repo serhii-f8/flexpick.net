@@ -75,6 +75,9 @@
             @endforeach
         </tr>
     </table>
+    @foreach ($notMeasured as $dimension)
+        <p class="muted">{{ str_replace('_', ' ', $dimension) }}: {{ \App\Services\AuditReport\NotMeasuredReason::describe($report->auditRequest->metrics['not_measured_reasons'][$dimension] ?? 'not_run') }}</p>
+    @endforeach
 
     @php($groups = $payload['groups'] ?? [])
     @if ($groups !== [])
@@ -120,12 +123,16 @@
         <h2>{{ __('Repository facts') }}</h2>
         <table>
             <tr><th>{{ __('Fact') }}</th><th>{{ __('Value') }}</th></tr>
-            <tr><td>{{ __('Source files') }}</td><td>{{ number_format($metrics['files_total'] ?? 0) }}</td></tr>
-            <tr><td>{{ __('Lines of code') }}</td><td>{{ number_format($metrics['loc_total'] ?? 0) }}</td></tr>
-            <tr><td>{{ __('Duplicated lines') }}</td><td>{{ $metrics['duplication_pct'] ?? 0 }}%</td></tr>
-            <tr><td>{{ __('Test file ratio') }}</td><td>{{ $metrics['test_ratio_pct'] ?? 0 }}%</td></tr>
-            <tr><td>{{ __('CI configured') }}</td><td>{{ ($metrics['has_ci'] ?? false) ? __('yes') : __('no') }}</td></tr>
-            <tr><td>{{ __('Potential secrets') }}</td><td>{{ array_sum(array_column($metrics['secret_findings'] ?? [], 'count')) }}</td></tr>
+            @php($facts = \App\Services\AuditReport\RepositoryFacts::from($metrics, $report->auditRequest->findingGroups))
+            <tr><td>{{ __('Source files') }}</td><td>{{ number_format($facts['files_total']) }}</td></tr>
+            <tr><td>{{ __('Lines of code') }}</td><td>{{ number_format($facts['loc_total']) }}</td></tr>
+            <tr><td>{{ __('Duplicated lines') }}</td><td>{{ $facts['duplication_pct'] === null ? '—' : $facts['duplication_pct'].'%' }}</td></tr>
+            <tr><td>{{ __('Test file ratio') }}</td><td>{{ $facts['test_ratio_pct'] }}%</td></tr>
+            <tr><td>{{ __('CI configured') }}</td><td>{{ $facts['has_ci'] ? __('yes') : __('no') }}@if ($facts['ci_systems'] !== []) ({{ implode(', ', array_map(fn ($s) => str_replace('_', ' ', $s), $facts['ci_systems'])) }})@endif</td></tr>
+            <tr><td>{{ __('Potential secrets') }}</td><td>{{ $facts['secrets_likely'] }}@if ($facts['secrets_fixtures'] > 0) (+{{ $facts['secrets_fixtures'] }} {{ __('likely fixtures') }})@endif</td></tr>
+            @if ($facts['vulnerable_dependencies'] !== null)
+                <tr><td>{{ __('Vulnerable dependencies') }}</td><td>{{ $facts['vulnerable_dependencies'] }}</td></tr>
+            @endif
         </table>
     @endif
 

@@ -55,6 +55,10 @@ class DeepReviewPromptComposer
                 $group->count,
                 $group->severity->value,
             );
+
+            if ($group->ruleFamily === 'secrets.likely-fixture') {
+                $rendered .= "  note: credential-shaped values in tests, docs or examples; likely test fixtures. Do not describe these as leaked credentials.\n";
+            }
         }
 
         return $rendered;

@@ -9,6 +9,7 @@ use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\Tenant;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\AuditReport\NotMeasuredReason;
 use App\Services\AuditReport\ScoreCalculator;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -75,6 +76,26 @@ class AuditReportControllerTest extends FeatureTest
         $response->assertStatus(200);
         $response->assertSee('Fixture summary.');
         $response->assertSee('reports-page', false);
+    }
+
+    public function test_web_report_facts_read_tooling_metrics(): void
+    {
+        $report = AuditReport::factory()->create();
+        $report->auditRequest->update(['metrics' => [
+            'files_total' => 10,
+            'loc_total' => 1000,
+            'duplication_pct' => 1.5,
+            'tooling' => ['has_ci' => true, 'ci_systems' => ['jenkins'], 'test_ratio_pct' => 21.0, 'error_monitoring' => false, 'linter' => true, 'static_analysis' => true, 'env_example' => true, 'dockerized' => true],
+            'not_measured' => ['dependencies'],
+            'not_measured_reasons' => ['dependencies' => 'lockfile_unreadable'],
+        ]]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+
+        $response->assertStatus(200);
+        $response->assertSeeInOrder(['21', '%', 'test file ratio']);
+        $response->assertSeeInOrder(['yes', 'CI configured']);
+        $response->assertSee(NotMeasuredReason::describe('lockfile_unreadable'));
     }
 
     public function test_signed_url_is_blocked_while_held_for_expert_review(): void

@@ -134,6 +134,13 @@ class AuditPipeline
             // Recorded by JscpdScanner on the per-run context (Task 12).
             $metrics['duplication_pct'] = (float) $context->measurement('duplication_pct', 0.0);
 
+            if ($suite->ranSuccessfully('osv')) {
+                $metrics['dependency_audit'] = [
+                    'packages_scanned' => (int) $context->measurement('packages_scanned', 0),
+                    'vulnerable_count' => (int) $context->measurement('vulnerable_count', 0),
+                ];
+            }
+
             $scoreSet = $this->scoreCalculator->calculate($metrics, $groups, $suite);
             $metrics['computed_scores'] = $scoreSet->toPayloadScores();
             $metrics['not_measured'] = $scoreSet->notMeasured;

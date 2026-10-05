@@ -35,6 +35,15 @@ class PromptComposerTest extends FeatureTest
         $this->assertStringContainsString('Produce the codebase health report.', $prompt);
     }
 
+    public function test_fixture_secret_groups_carry_a_do_not_call_these_leaks_note(): void
+    {
+        $group = new FindingGroup('secrets.likely-fixture', 'tests', Severity::LOW, 25, 25, [], ['gitleaks'], 'security_hygiene');
+
+        $prompt = app(PromptComposer::class)->compose([], [$group], []);
+
+        $this->assertStringContainsString('likely test fixtures', $prompt);
+    }
+
     public function test_setting_overrides_template(): void
     {
         app(ConfigService::class)->set(

@@ -133,6 +133,10 @@ TEMPLATE;
                 implode('+', $group->tools),
                 $locations !== '' ? $locations : 'none recorded',
             );
+
+            if ($group->ruleFamily === 'secrets.likely-fixture') {
+                $rendered .= "  note: credential-shaped values in tests, docs or examples; likely test fixtures. Do not describe these as leaked credentials.\n";
+            }
         }
 
         return $rendered;

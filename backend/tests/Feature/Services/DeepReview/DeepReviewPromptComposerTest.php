@@ -44,6 +44,17 @@ class DeepReviewPromptComposerTest extends FeatureTest
         );
     }
 
+    public function test_fixture_secret_groups_carry_a_do_not_call_these_leaks_note(): void
+    {
+        $prompt = app(DeepReviewPromptComposer::class)->compose(
+            [],
+            [new FindingGroup('secrets.likely-fixture', 'tests', Severity::LOW, 25, 25, [], ['gitleaks'], 'security_hygiene')],
+            $this->selection([$this->file('app/a.php', '<?php')]),
+        );
+
+        $this->assertStringContainsString('likely test fixtures', $prompt);
+    }
+
     public function test_composes_metrics_files_and_groups(): void
     {
         $selection = $this->selection([

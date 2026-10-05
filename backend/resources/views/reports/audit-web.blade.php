@@ -75,9 +75,11 @@
                 </div>
             @endforeach
             @foreach ($notMeasured as $dimension)
+                @php($reason = \App\Services\AuditReport\NotMeasuredReason::describe($report->auditRequest->metrics['not_measured_reasons'][$dimension] ?? 'not_run'))
                 <div class="rounded-lg border border-stone-200 p-3 text-center">
-                    <div class="text-[13px] text-stone-500" title="{{ __('This analysis did not run the scanner this score depends on.') }}">{{ __('Not measured') }}</div>
+                    <div class="text-[13px] text-stone-500" title="{{ $reason }}">{{ __('Not measured') }}</div>
                     <div class="text-[11px] uppercase tracking-wider text-stone-500">{{ str_replace('_', ' ', $dimension) }}</div>
+                    <div class="mt-1 text-[11px] text-stone-500">{{ $reason }}</div>
                 </div>
             @endforeach
         </div>
@@ -178,15 +180,28 @@
         <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
             @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
         <h2 class="text-base font-bold mb-3">{{ __('Repository facts') }}</h2>
+            @php($facts = \App\Services\AuditReport\RepositoryFacts::from($metrics, $report->auditRequest->findingGroups))
             <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3">
-                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ number_format($metrics['files_total'] ?? 0) }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('source files') }}</div></div>
-                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ number_format($metrics['loc_total'] ?? 0) }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('lines of code') }}</div></div>
-                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ $metrics['duplication_pct'] ?? 0 }}%</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('duplicated lines') }}</div></div>
-                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ $metrics['test_ratio_pct'] ?? 0 }}%</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('test file ratio') }}</div></div>
-                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ ($metrics['has_ci'] ?? false) ? __('yes') : __('no') }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('CI configured') }}</div></div>
-                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ array_sum(array_column($metrics['secret_findings'] ?? [], 'count')) }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('potential secrets') }}</div></div>
-                @if (isset($metrics['dependency_audit']) && ! isset($metrics['dependency_audit']['error']))
-                    <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ $metrics['dependency_audit']['vulnerable_count'] }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('vulnerable dependencies') }}</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ number_format($facts['files_total']) }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('source files') }}</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ number_format($facts['loc_total']) }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('lines of code') }}</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ $facts['duplication_pct'] === null ? '—' : $facts['duplication_pct'].'%' }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('duplicated lines') }}</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ $facts['test_ratio_pct'] }}%</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('test file ratio') }}</div></div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center">
+                    <div class="text-xl font-bold">{{ $facts['has_ci'] ? __('yes') : __('no') }}</div>
+                    <div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('CI configured') }}</div>
+                    @if ($facts['ci_systems'] !== [])
+                        <div class="text-[11px] text-stone-500">{{ implode(', ', array_map(fn ($s) => str_replace('_', ' ', $s), $facts['ci_systems'])) }}</div>
+                    @endif
+                </div>
+                <div class="rounded-lg border border-stone-200 p-3 text-center">
+                    <div class="text-xl font-bold">{{ $facts['secrets_likely'] }}</div>
+                    <div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('potential secrets') }}</div>
+                    @if ($facts['secrets_fixtures'] > 0)
+                        <div class="text-[11px] text-stone-500">+{{ $facts['secrets_fixtures'] }} {{ __('likely fixtures') }}</div>
+                    @endif
+                </div>
+                @if ($facts['vulnerable_dependencies'] !== null)
+                    <div class="rounded-lg border border-stone-200 p-3 text-center"><div class="text-xl font-bold">{{ $facts['vulnerable_dependencies'] }}</div><div class="text-[11px] uppercase tracking-wider text-stone-500">{{ __('vulnerable dependencies') }}</div></div>
                 @endif
             </div>
             @php($langs = collect($metrics['languages'] ?? [])->sortByDesc('loc')->take(5))
@@ -195,6 +210,9 @@
                     {{ __('Languages') }}:
                     {{ $langs->map(fn ($stats, $ext) => strtoupper($ext).' '.number_format($stats['loc']).' loc')->implode(' · ') }}
                 </p>
+            @endif
+            @if ($facts['excluded_files'] > 0)
+                <p class="mt-2 text-xs text-stone-500">{{ __(':n generated, vendored, lockfile and documentation files are excluded from size and structure metrics.', ['n' => number_format($facts['excluded_files'])]) }}</p>
             @endif
             @isset($metrics['tooling'])
                 <p class="mt-2 text-xs text-stone-500">
