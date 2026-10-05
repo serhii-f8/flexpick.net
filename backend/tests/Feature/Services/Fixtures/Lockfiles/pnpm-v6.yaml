@@ -1,0 +1,8 @@
+lockfileVersion: '6.0'
+packages:
+  /@babel/core@7.24.0:
+    resolution: {integrity: sha512-x}
+  /react-dom@18.2.0(react@18.2.0):
+    resolution: {integrity: sha512-y}
+  /local@link:../local:
+    resolution: {directory: ../local}

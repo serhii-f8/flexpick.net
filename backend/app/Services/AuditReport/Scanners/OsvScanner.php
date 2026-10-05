@@ -10,8 +10,8 @@ use App\Services\AuditReport\Findings\Severity;
  * Adapts the existing DependencyAuditor to the Scanner interface so dependency
  * vulnerabilities flow into the same findings model as everything else.
  *
- * The auditor itself is retained unchanged, including its degrade-to-zero
- * behaviour on an unreachable OSV endpoint (F5.12.2). Its querybatch response
+ * An unreachable OSV endpoint, or declared dependencies with no readable
+ * lockfile, is a ScannerSkipped — never a clean result. Its querybatch response
  * carries advisory ids only — no CVSS score, summary, or manifest field — so
  * normalize() derives the manifest from the package ecosystem and always
  * reports Medium severity until a future task adds a per-advisory detail
@@ -39,11 +39,21 @@ class OsvScanner implements Scanner
 
     public function scan(RepoContext $context): array
     {
-        $audit = $this->auditor->audit($context->path);
+        $audit = $this->auditor->audit($context->path, $context->classifier);
 
         // Scanners stay stateless — anything the pipeline needs later goes on
         // the per-run context (Task 8), never on the instance.
         $context->record('packages_scanned', (int) ($audit['packages_scanned'] ?? 0));
+        $context->record('vulnerable_count', (int) ($audit['vulnerable_count'] ?? 0));
+
+        // Zero findings from a check that did not happen is not a clean bill.
+        if (isset($audit['error'])) {
+            throw new ScannerSkipped('osv_unreachable');
+        }
+
+        if (($audit['packages_scanned'] ?? 0) === 0 && ($audit['has_declared_dependencies'] ?? false)) {
+            throw new ScannerSkipped(($audit['unscannable_lockfiles'] ?? []) !== [] ? 'lockfile_unreadable' : 'no_lockfile');
+        }
 
         return $this->normalize($audit);
     }
@@ -60,7 +70,7 @@ class OsvScanner implements Scanner
         foreach ($audit['vulnerabilities'] ?? [] as $vulnerable) {
             $package = (string) ($vulnerable['package'] ?? 'unknown');
             $version = (string) ($vulnerable['version'] ?? '0.0.0');
-            $manifest = $this->manifestFor((string) ($vulnerable['ecosystem'] ?? ''));
+            $manifest = (string) ($vulnerable['lockfile'] ?? $this->manifestFor((string) ($vulnerable['ecosystem'] ?? '')));
 
             foreach ($vulnerable['vulns'] ?? [] as $id) {
                 $id = (string) $id;

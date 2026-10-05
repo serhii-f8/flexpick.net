@@ -2,8 +2,13 @@
 
 namespace Tests\Feature\Services\Scanners;
 
+use App\Constants\AuditTier;
+use App\Services\AuditReport\DependencyAuditor;
 use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\Scanners\OsvScanner;
+use App\Services\AuditReport\Scanners\RepoContext;
+use App\Services\AuditReport\Scanners\ScannerSkipped;
+use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Tests\Feature\FeatureTest;
 
 class OsvScannerTest extends FeatureTest
@@ -78,10 +83,53 @@ class OsvScannerTest extends FeatureTest
         }
     }
 
-    public function test_an_errored_audit_yields_no_findings(): void
+    public function test_an_errored_audit_yields_no_findings_from_normalize(): void
     {
-        // Existing degrade-to-zero behaviour is retained as-is (F5.12.2).
         $this->assertSame([], app(OsvScanner::class)->normalize(['error' => 'osv_unreachable']));
+    }
+
+    private function scanWith(array $audit): array
+    {
+        $auditor = \Mockery::mock(DependencyAuditor::class);
+        $auditor->shouldReceive('audit')->andReturn($audit);
+        $context = new RepoContext(
+            path: sys_get_temp_dir(),
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
+        );
+
+        return (new OsvScanner($auditor))->scan($context);
+    }
+
+    public function test_an_unreachable_osv_is_a_skip(): void
+    {
+        $this->expectExceptionObject(new ScannerSkipped('osv_unreachable'));
+        $this->scanWith(['packages_scanned' => 10, 'error' => 'osv_unreachable']);
+    }
+
+    public function test_declared_dependencies_with_no_lockfile_is_a_skip(): void
+    {
+        $this->expectExceptionObject(new ScannerSkipped('no_lockfile'));
+        $this->scanWith(['packages_scanned' => 0, 'has_declared_dependencies' => true, 'unscannable_lockfiles' => []]);
+    }
+
+    public function test_only_an_unreadable_lockfile_is_a_skip_naming_it(): void
+    {
+        $this->expectExceptionObject(new ScannerSkipped('lockfile_unreadable'));
+        $this->scanWith(['packages_scanned' => 0, 'has_declared_dependencies' => true, 'unscannable_lockfiles' => ['bun.lockb']]);
+    }
+
+    public function test_a_repository_without_dependencies_is_measured_clean(): void
+    {
+        $this->assertSame([], $this->scanWith(['packages_scanned' => 0, 'has_declared_dependencies' => false]));
+    }
+
+    public function test_finding_path_is_the_lockfile_that_pinned_the_package(): void
+    {
+        $findings = app(OsvScanner::class)->normalize(['vulnerabilities' => [[
+            'package' => 'lodash', 'version' => '4.17.0', 'ecosystem' => 'npm', 'vulns' => ['GHSA-1'], 'lockfile' => 'frontend/bun.lock',
+        ]]]);
+
+        $this->assertSame('frontend/bun.lock', $findings[0]->path);
     }
 
     public function test_is_always_available_because_it_needs_no_binary(): void

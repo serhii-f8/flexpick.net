@@ -1,0 +1,15 @@
+__metadata:
+  version: 8
+  cacheKey: 10
+
+"@babel/core@npm:^7.0.0":
+  version: 7.24.0
+  resolution: "@babel/core@npm:7.24.0"
+
+"my-app@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "my-app@workspace:."
+
+"lodash@npm:^4.17.0":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"

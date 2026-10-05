@@ -1,0 +1,8 @@
+lockfileVersion: '9.0'
+packages:
+  '@babel/core@7.24.0':
+    resolution: {integrity: sha512-x}
+  lodash@4.17.21:
+    resolution: {integrity: sha512-z}
+snapshots:
+  lodash@4.17.21: {}
