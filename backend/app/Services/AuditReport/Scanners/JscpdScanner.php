@@ -43,10 +43,14 @@ class JscpdScanner implements Scanner
             ]));
             file_put_contents($runConfig, json_encode($base, JSON_THROW_ON_ERROR));
 
+            // Run from the clone root on a relative path: the ignore globs
+            // (`**/storage/**`, ...) match against the scanned path, and a clone
+            // under storage/app/audit-workdirs would otherwise be ignored whole.
             Process::timeout((int) config('audit.scanners.jscpd.timeout'))
+                ->path($context->path)
                 ->run([
                     (string) config('audit.scanners.jscpd.bin'),
-                    $context->path,
+                    '.',
                     '--reporters', 'json',
                     '--output', $outputDir,
                     '--silent',

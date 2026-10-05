@@ -158,4 +158,30 @@ class JscpdScannerTest extends FeatureTest
         $this->assertSame([], app(JscpdScanner::class)->scan($context));
         $this->assertSame(0.0, $context->measurement('duplication_pct', -1.0));
     }
+
+    public function test_the_real_binary_measures_a_clone_that_lives_under_a_storage_directory(): void
+    {
+        if (! app(JscpdScanner::class)->isAvailable()) {
+            $this->markTestSkipped('jscpd is not installed here.');
+        }
+
+        // Production clones live under storage/app/audit-workdirs/<uuid>; the
+        // `**/storage/**` ignore must apply to the repository's own storage
+        // directory, not to the path the clone happens to sit at.
+        $root = sys_get_temp_dir().'/storage/jscpd-'.bin2hex(random_bytes(4));
+        mkdir($root, 0755, true);
+        $block = implode("\n", array_map(fn (int $i): string => "\$value{$i} = {$i};", range(1, 30)));
+        file_put_contents($root.'/a.php', "<?php\n{$block}\n");
+        file_put_contents($root.'/b.php', "<?php\n{$block}\n");
+
+        try {
+            $context = new RepoContext(path: $root, tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC));
+            app(JscpdScanner::class)->scan($context);
+
+            $this->assertGreaterThan(0.0, $context->measurement('duplication_pct', 0.0));
+        } finally {
+            exec('rm -rf '.escapeshellarg($root));
+            @rmdir(dirname($root));
+        }
+    }
 }
