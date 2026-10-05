@@ -2,8 +2,21 @@
   "minLines": 10,
   "minTokens": 70,
   "ignore": [
-    "**/vendor/**", "**/node_modules/**", "**/dist/**", "**/build/**",
-    "**/.git/**", "**/storage/**", "**/coverage/**", "**/*.min.js"
+    "**/vendor/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/out/**",
+    "**/.next/**",
+    "**/.git/**",
+    "**/storage/**",
+    "**/coverage/**",
+    "**/storybook-static/**",
+    "**/__generated__/**",
+    "**/*.min.js",
+    "**/*.min.css",
+    "**/*.bundle.js",
+    "**/*.map"
   ],
   "absolute": false,
   "gitignore": false

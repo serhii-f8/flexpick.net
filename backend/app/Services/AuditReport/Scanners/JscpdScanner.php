@@ -4,6 +4,7 @@ namespace App\Services\AuditReport\Scanners;
 
 use App\Services\AuditReport\Findings\Finding;
 use App\Services\AuditReport\Findings\Severity;
+use App\Services\AuditReport\Paths\PathClassifier;
 use App\Support\Utf8;
 use Illuminate\Support\Facades\Process;
 
@@ -34,6 +35,14 @@ class JscpdScanner implements Scanner
         mkdir($outputDir, 0755, true);
 
         try {
+            $runConfig = $outputDir.'/jscpd.json';
+            $base = json_decode((string) file_get_contents((string) config('audit.scanners.jscpd.config')), true, flags: JSON_THROW_ON_ERROR);
+            $base['ignore'] = array_values(array_unique([
+                ...($base['ignore'] ?? []),
+                ...($context->inventory !== null ? $this->ignoreGlobs($context->inventory, $context->classifier) : []),
+            ]));
+            file_put_contents($runConfig, json_encode($base, JSON_THROW_ON_ERROR));
+
             Process::timeout((int) config('audit.scanners.jscpd.timeout'))
                 ->run([
                     (string) config('audit.scanners.jscpd.bin'),
@@ -42,14 +51,23 @@ class JscpdScanner implements Scanner
                     '--output', $outputDir,
                     '--silent',
                     // Repo-supplied .jscpd.json must not steer the scan (spec §5.4).
-                    '--config', (string) config('audit.scanners.jscpd.config'),
+                    '--config', $runConfig,
                     '--max-size', (string) config('audit.scanners.jscpd.max_file_size'),
                 ]);
 
             $report = $outputDir.'/jscpd-report.json';
 
             if (! file_exists($report)) {
-                return [];
+                // jscpd writes no report when nothing reaches its minimum block
+                // size, so a repository that small is legitimately duplication-free.
+                if ($this->tooSmallToHoldAClone($context)) {
+                    $context->record('duplication_pct', 0.0);
+
+                    return [];
+                }
+
+                // Otherwise it is a crashed or killed jscpd, not a clean repository.
+                throw new ScannerSkipped('no_report');
             }
 
             $decoded = json_decode(Utf8::scrub((string) file_get_contents($report)), true, flags: JSON_THROW_ON_ERROR);
@@ -59,7 +77,7 @@ class JscpdScanner implements Scanner
             // instance outlives the run inside a Horizon worker.
             $context->record('duplication_pct', $this->duplicationPercentage($decoded));
 
-            return $this->normalize($decoded, $context->path);
+            return $this->normalize($decoded, $context->path, $context->classifier);
         } finally {
             $this->deleteDirectory($outputDir);
         }
@@ -72,7 +90,7 @@ class JscpdScanner implements Scanner
      *
      * @return list<Finding>
      */
-    public function normalize(array $raw, string $repoPath): array
+    public function normalize(array $raw, string $repoPath, ?PathClassifier $classifier = null): array
     {
         $findings = [];
 
@@ -94,6 +112,10 @@ class JscpdScanner implements Scanner
                     continue;
                 }
 
+                if ($classifier !== null && ! $classifier->classify($path)->isAnalyzed()) {
+                    continue;
+                }
+
                 $findings[] = new Finding(
                     tool: $this->name(),
                     ruleId: 'jscpd.clone',
@@ -108,6 +130,52 @@ class JscpdScanner implements Scanner
         }
 
         return $findings;
+    }
+
+    private const MAX_IGNORE_GLOBS = 500;
+
+    /** Known only from scc's inventory; without one the absence of a report stays a failure. */
+    private function tooSmallToHoldAClone(RepoContext $context): bool
+    {
+        if ($context->inventory === null) {
+            return false;
+        }
+
+        $minLines = (int) (json_decode((string) file_get_contents((string) config('audit.scanners.jscpd.config')), true)['minLines'] ?? 10);
+
+        foreach ($context->inventory->files as $file) {
+            if ($file['loc'] >= $minLines) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * jscpd globs for everything scc's inventory excluded as generated,
+     * vendored or a lockfile. Build-output directories collapse to `dir/**` so a
+     * 94-file Storybook export is one glob, not 94.
+     *
+     * @return list<string>
+     */
+    public function ignoreGlobs(SccInventory $inventory, PathClassifier $classifier): array
+    {
+        $globs = [];
+
+        foreach ($inventory->excluded as $file) {
+            if (! in_array($file['reason'], ['generated', 'vendored', 'lockfile'], true)) {
+                continue;
+            }
+
+            $directory = $classifier->buildOutputDirectory($file['path']);
+            $globs[$directory !== null ? $directory.'/**' : $file['path']] = true;
+        }
+
+        $globs = array_keys($globs);
+        sort($globs);
+
+        return array_slice($globs, 0, self::MAX_IGNORE_GLOBS);
     }
 
     /** The repository-wide duplication percentage, for the duplication score. */

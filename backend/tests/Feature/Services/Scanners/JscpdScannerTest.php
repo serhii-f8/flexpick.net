@@ -2,8 +2,14 @@
 
 namespace Tests\Feature\Services\Scanners;
 
+use App\Constants\AuditTier;
 use App\Services\AuditReport\Findings\Severity;
+use App\Services\AuditReport\Paths\PathClassifier;
 use App\Services\AuditReport\Scanners\JscpdScanner;
+use App\Services\AuditReport\Scanners\RepoContext;
+use App\Services\AuditReport\Scanners\ScannerSkipped;
+use App\Services\AuditReport\Scanners\SccInventory;
+use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Tests\Feature\FeatureTest;
 
 class JscpdScannerTest extends FeatureTest
@@ -89,5 +95,67 @@ class JscpdScannerTest extends FeatureTest
         config()->set('audit.scanners.jscpd.bin', '/nonexistent/jscpd');
 
         $this->assertFalse(app(JscpdScanner::class)->isAvailable());
+    }
+
+    public function test_a_missing_report_is_a_skip_not_zero_duplication(): void
+    {
+        config(['audit.scanners.jscpd.bin' => '/bin/true']);
+        $context = new RepoContext(path: sys_get_temp_dir(), tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC));
+
+        $this->expectException(ScannerSkipped::class);
+
+        app(JscpdScanner::class)->scan($context);
+    }
+
+    public function test_occurrences_in_generated_files_are_dropped(): void
+    {
+        $raw = ['duplicates' => [[
+            'lines' => 40,
+            'firstFile' => ['name' => 'src/a.ts', 'start' => 1],
+            'secondFile' => ['name' => 'src/__generated__/b.ts', 'start' => 1],
+        ]]];
+
+        $findings = app(JscpdScanner::class)->normalize($raw, self::ROOT, new PathClassifier);
+
+        $this->assertSame(['src/a.ts'], array_map(fn ($f) => $f->path, $findings));
+    }
+
+    public function test_ignore_globs_collapse_excluded_directories(): void
+    {
+        $inventory = new SccInventory(
+            files: [],
+            languages: [],
+            totalLoc: 0,
+            totalComplexity: 0,
+            excluded: [
+                ['path' => 'proto/storybook-static/a.js', 'loc' => 1, 'reason' => 'generated'],
+                ['path' => 'proto/storybook-static/b.js', 'loc' => 1, 'reason' => 'generated'],
+                ['path' => 'libs/db/prisma/User.ts', 'loc' => 1, 'reason' => 'generated'],
+                ['path' => 'README.md', 'loc' => 1, 'reason' => 'docs'],
+            ],
+        );
+
+        $globs = app(JscpdScanner::class)->ignoreGlobs($inventory, new PathClassifier);
+
+        $this->assertSame(['libs/db/prisma/User.ts', 'proto/storybook-static/**'], $globs);
+    }
+
+    public function test_no_report_for_a_repository_too_small_to_hold_a_clone_is_measured_clean(): void
+    {
+        // jscpd writes no report when nothing reaches its minimum block size.
+        config(['audit.scanners.jscpd.bin' => '/bin/true']);
+        $context = new RepoContext(
+            path: sys_get_temp_dir(),
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
+            inventory: new SccInventory(
+                files: [['path' => 'index.php', 'loc' => 3, 'complexity' => 0, 'class' => 'source']],
+                languages: [],
+                totalLoc: 3,
+                totalComplexity: 0,
+            ),
+        );
+
+        $this->assertSame([], app(JscpdScanner::class)->scan($context));
+        $this->assertSame(0.0, $context->measurement('duplication_pct', -1.0));
     }
 }
