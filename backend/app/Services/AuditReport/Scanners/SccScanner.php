@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport\Scanners;
 
+use App\Services\AuditReport\Paths\PathClassifier;
 use App\Support\Utf8;
 use Illuminate\Support\Facades\Process;
 use Symfony\Component\Finder\Finder;
@@ -15,6 +16,10 @@ use Symfony\Component\Finder\Finder;
  */
 class SccScanner implements Scanner
 {
+    public const NON_CODE_LANGUAGES = [
+        'Markdown', 'JSON', 'JSONL', 'YAML', 'Plain Text', 'License', 'ReStructuredText', 'AsciiDoc', 'CSV', 'SVG',
+    ];
+
     private const EXCLUDED_DIRS = ['vendor', 'node_modules', 'dist', 'build', '.git', 'storage', '.next', 'coverage'];
 
     public function name(): string
@@ -45,30 +50,37 @@ class SccScanner implements Scanner
 
         $decoded = json_decode(Utf8::scrub($result->output()), true, flags: JSON_THROW_ON_ERROR);
 
-        $context->withInventory($this->toInventory(
-            is_array($decoded) ? $decoded : [],
-            $context->path,
-            $this->billableCode($context->path),
-        ));
+        if (! is_array($decoded)) {
+            throw new ScannerSkipped('empty_output');
+        }
+
+        [$billableCode, $keptPaths] = $this->filteredPass($context->path);
+
+        $generated = $keptPaths === null ? [] : array_values(array_diff($this->paths($decoded, $context->path), $keptPaths));
+        $context->withClassifier(PathClassifier::forRepository($context->path, $generated));
+
+        $context->withInventory($this->toInventory($decoded, $context->path, $billableCode, $context->classifier));
 
         return $this->normalize($decoded);
     }
 
     /**
-     * What the audit is billed on: scc's code lines summed across languages,
-     * generated and minified files left out. A separate run from the
-     * inventory's, because those flags would also drop files from the
-     * inventory that the report's size metrics and the excerpt and scanner
-     * budgets read. Null when the run fails: the sizer then bills nothing
-     * extra rather than guess.
+     * The --no-gen --no-min-gen pass: what the audit is billed on, and — diffed
+     * against the full pass — which files scc detected as generated or minified.
+     * A separate run, because those flags would silently drop files the report
+     * should list as excluded. [null, null] when it fails: billing then charges
+     * nothing extra and classification falls back to path rules.
+     *
+     * @return array{0: ?int, 1: ?list<string>}
      */
-    private function billableCode(string $path): ?int
+    private function filteredPass(string $path): array
     {
         try {
             $result = Process::timeout((int) config('audit.scanners.scc.timeout'))
                 ->run([
                     (string) config('audit.scanners.scc.bin'),
                     '--format', 'json',
+                    '--by-file',
                     '--no-gen',
                     '--no-min-gen',
                     '--exclude-dir', implode(',', self::EXCLUDED_DIRS),
@@ -76,15 +88,36 @@ class SccScanner implements Scanner
                 ]);
 
             if (! $result->successful()) {
-                return null;
+                return [null, null];
             }
 
             $decoded = json_decode(Utf8::scrub($result->output()), true, flags: JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
-            return null;
+            return [null, null];
         }
 
-        return is_array($decoded) ? $this->sumCode($decoded) : null;
+        return is_array($decoded) ? [$this->sumCode($decoded), $this->paths($decoded, $path)] : [null, null];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $raw
+     * @return list<string>
+     */
+    private function paths(array $raw, string $repoPath): array
+    {
+        $paths = [];
+
+        foreach ($raw as $language) {
+            foreach ($language['Files'] ?? [] as $file) {
+                $path = RepoRelativePath::from($repoPath, (string) ($file['Location'] ?? ''));
+
+                if ($path !== '') {
+                    $paths[] = $path;
+                }
+            }
+        }
+
+        return $paths;
     }
 
     /** @param  array<int, array<string, mixed>>  $raw */
@@ -106,9 +139,11 @@ class SccScanner implements Scanner
      *
      * @param  array<int, array<string, mixed>>  $raw
      */
-    public function toInventory(array $raw, string $repoPath, ?int $billableCode = null): SccInventory
+    public function toInventory(array $raw, string $repoPath, ?int $billableCode = null, ?PathClassifier $classifier = null): SccInventory
     {
+        $classifier ??= new PathClassifier;
         $files = [];
+        $excluded = [];
         $languages = [];
         $totalComplexity = 0;
 
@@ -123,14 +158,22 @@ class SccScanner implements Scanner
                 }
 
                 $loc = (int) ($file['Lines'] ?? 0);
+                $class = $classifier->classify($path);
+
+                if (! $class->isAnalyzed()) {
+                    $excluded[] = ['path' => $path, 'loc' => $loc, 'reason' => $class->value];
+
+                    continue;
+                }
+
+                if (in_array($name, self::NON_CODE_LANGUAGES, true)) {
+                    $excluded[] = ['path' => $path, 'loc' => $loc, 'reason' => 'non_code'];
+
+                    continue;
+                }
+
                 $complexity = (int) ($file['Complexity'] ?? 0);
-
-                $files[] = [
-                    'path' => $path,
-                    'loc' => $loc,
-                    'complexity' => $complexity,
-                ];
-
+                $files[] = ['path' => $path, 'loc' => $loc, 'complexity' => $complexity, 'class' => $class->value];
                 $languages[$name]['files'] = ($languages[$name]['files'] ?? 0) + 1;
                 $languages[$name]['loc'] = ($languages[$name]['loc'] ?? 0) + $loc;
                 $totalComplexity += $complexity;
@@ -140,6 +183,7 @@ class SccScanner implements Scanner
         // Total order — descending loc, then path — so repeat runs select the
         // same excerpts and cite the same files (spec §6.3).
         usort($files, fn (array $a, array $b): int => [$b['loc'], $a['path']] <=> [$a['loc'], $b['path']]);
+        usort($excluded, fn (array $a, array $b): int => [$b['loc'], $a['path']] <=> [$a['loc'], $b['path']]);
         ksort($languages);
 
         return new SccInventory(
@@ -148,6 +192,7 @@ class SccScanner implements Scanner
             totalLoc: array_sum(array_column($files, 'loc')),
             totalComplexity: $totalComplexity,
             billableCode: $billableCode,
+            excluded: $excluded,
         );
     }
 
@@ -156,9 +201,11 @@ class SccScanner implements Scanner
      * plain walk, so it is zero — and the dimensions that depend on it are
      * marked not-measured rather than scored (spec §7.2, §10).
      */
-    public function fallbackInventory(string $repoPath): SccInventory
+    public function fallbackInventory(string $repoPath, ?PathClassifier $classifier = null): SccInventory
     {
+        $classifier ??= new PathClassifier;
         $files = [];
+        $excluded = [];
         $languages = [];
 
         $finder = (new Finder)->files()->in($repoPath)->exclude(self::EXCLUDED_DIRS)->size('< 2M');
@@ -167,7 +214,15 @@ class SccScanner implements Scanner
             $loc = substr_count($file->getContents(), "\n") + 1;
             $extension = strtolower($file->getExtension()) ?: 'unknown';
 
-            $files[] = ['path' => $file->getRelativePathname(), 'loc' => $loc, 'complexity' => 0];
+            $class = $classifier->classify($file->getRelativePathname());
+
+            if (! $class->isAnalyzed() || in_array($extension, ['md', 'json', 'yaml', 'yml', 'txt', 'csv', 'svg'], true)) {
+                $excluded[] = ['path' => $file->getRelativePathname(), 'loc' => $loc, 'reason' => $class->isAnalyzed() ? 'non_code' : $class->value];
+
+                continue;
+            }
+
+            $files[] = ['path' => $file->getRelativePathname(), 'loc' => $loc, 'complexity' => 0, 'class' => $class->value];
             $languages[$extension]['files'] = ($languages[$extension]['files'] ?? 0) + 1;
             $languages[$extension]['loc'] = ($languages[$extension]['loc'] ?? 0) + $loc;
         }
@@ -180,6 +235,7 @@ class SccScanner implements Scanner
             languages: $languages,
             totalLoc: array_sum(array_column($files, 'loc')),
             totalComplexity: 0,
+            excluded: $excluded,
         );
     }
 }

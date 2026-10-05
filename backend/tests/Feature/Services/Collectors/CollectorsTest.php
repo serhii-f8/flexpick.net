@@ -174,4 +174,26 @@ class CollectorsTest extends FeatureTest
         // stable.php changed only once — below the >=2 threshold.
         $this->assertArrayNotHasKey('stable.php', array_column($hotspots, 'changes', 'path'));
     }
+
+    public function test_tooling_counts_test_files_by_classification(): void
+    {
+        $context = new RepoContext(
+            path: $this->repo,
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
+            inventory: new SccInventory(
+                files: [
+                    ['path' => 'src/a.ts', 'loc' => 10, 'complexity' => 1, 'class' => 'source'],
+                    ['path' => 'src/checks.ts', 'loc' => 10, 'complexity' => 1, 'class' => 'test'],
+                ],
+                languages: [],
+                totalLoc: 20,
+                totalComplexity: 2,
+            ),
+        );
+
+        $tooling = app(ToolingCollector::class)->collect($context);
+
+        $this->assertSame(1, $tooling['test_files']);
+        $this->assertSame(50.0, $tooling['test_ratio_pct']);
+    }
 }

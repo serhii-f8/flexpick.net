@@ -40,6 +40,9 @@ class MetricsCollector
             array_slice($inventory?->files ?? [], 0, 20),
         );
 
+        $metrics['excluded_summary'] = array_count_values(array_column($inventory?->excluded ?? [], 'reason'));
+        ksort($metrics['excluded_summary']);
+
         // Every collector above reads bytes we did not write -- git branch
         // names and author strings, file names out of `git log --name-only`,
         // manifest contents, scanner inventories. $metrics is persisted

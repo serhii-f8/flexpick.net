@@ -3,7 +3,10 @@
 namespace Tests\Feature\Services\Scanners;
 
 use App\Constants\AuditTier;
+use App\Services\AuditReport\Paths\PathClass;
+use App\Services\AuditReport\Paths\PathClassifier;
 use App\Services\AuditReport\Scanners\RepoContext;
+use App\Services\AuditReport\Scanners\ScannerSkipped;
 use App\Services\AuditReport\Scanners\SccInventory;
 use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
@@ -132,7 +135,7 @@ class SccScannerTest extends FeatureTest
 
     private function sccOutput(array $command): string
     {
-        $fixture = in_array('--by-file', $command, true) ? 'scc.json' : 'scc-sizing.json';
+        $fixture = in_array('--no-gen', $command, true) ? 'scc-sizing.json' : 'scc.json';
 
         return (string) file_get_contents(base_path('tests/Feature/Services/Fixtures/Scanners/'.$fixture));
     }
@@ -146,8 +149,7 @@ class SccScannerTest extends FeatureTest
 
         $this->assertSame(61500, $context->inventory->billableCode);
         Process::assertRan(fn ($process) => in_array('--no-gen', (array) $process->command, true)
-            && in_array('--no-min-gen', (array) $process->command, true)
-            && ! in_array('--by-file', (array) $process->command, true));
+            && in_array('--no-min-gen', (array) $process->command, true));
     }
 
     public function test_the_inventory_run_keeps_generated_files_so_other_metrics_do_not_change_meaning(): void
@@ -165,9 +167,9 @@ class SccScannerTest extends FeatureTest
 
     public function test_a_failed_sizing_run_leaves_billable_code_unknown(): void
     {
-        $context = $this->scanWithFakedScc(fn (array $command) => in_array('--by-file', $command, true)
-            ? Process::result($this->sccOutput($command))
-            : Process::result('', 'boom', 1));
+        $context = $this->scanWithFakedScc(fn (array $command) => in_array('--no-gen', $command, true)
+            ? Process::result('', 'boom', 1)
+            : Process::result($this->sccOutput($command)));
 
         $this->assertNotNull($context->inventory);
         $this->assertNull($context->inventory->billableCode);
@@ -178,5 +180,72 @@ class SccScannerTest extends FeatureTest
         $inventory = app(SccScanner::class)->fallbackInventory(base_path('app/Services/AuditReport'));
 
         $this->assertNull($inventory->billableCode);
+    }
+
+    private function file(string $location, int $lines = 10): array
+    {
+        return ['Location' => self::ROOT.'/'.$location, 'Lines' => $lines, 'Code' => $lines, 'Complexity' => 1];
+    }
+
+    public function test_generated_vendored_docs_and_non_code_files_are_excluded_from_the_inventory(): void
+    {
+        $raw = [
+            ['Name' => 'TypeScript', 'Files' => [
+                $this->file('src/app.ts', 100),
+                $this->file('src/app.test.ts', 50),
+                $this->file('backend/libs/database/src/prisma/models/User.ts', 23972),
+                $this->file('_concept/prototype/storybook/storybook-static/sb-manager/runtime.js', 26078),
+            ]],
+            ['Name' => 'Markdown', 'Files' => [$this->file('CHANGELOG.md', 13331)]],
+            ['Name' => 'JSON', 'Files' => [$this->file('postxl-lock.json', 9000), $this->file('src/data.json', 400)]],
+        ];
+        $classifier = new PathClassifier(['backend/libs/database/src/prisma/models/User.ts']);
+
+        $inventory = app(SccScanner::class)->toInventory($raw, self::ROOT, null, $classifier);
+
+        $this->assertSame(['src/app.ts', 'src/app.test.ts'], array_column($inventory->files, 'path'));
+        $this->assertSame(150, $inventory->totalLoc);
+        $this->assertSame(['TypeScript'], array_keys($inventory->languages));
+        $this->assertEqualsCanonicalizing(
+            ['generated' => 2, 'docs' => 1, 'lockfile' => 1, 'non_code' => 1],
+            array_count_values(array_column($inventory->excluded, 'reason')),
+        );
+        $this->assertContains('CHANGELOG.md', $inventory->allPaths());
+    }
+
+    public function test_scan_builds_the_classifier_from_files_the_filtered_pass_dropped(): void
+    {
+        $full = [['Name' => 'TypeScript', 'Code' => 30, 'Files' => [
+            $this->file('src/real.ts', 10),
+            $this->file('src/gen.ts', 20),
+        ]]];
+        $filtered = [['Name' => 'TypeScript', 'Code' => 10, 'Files' => [$this->file('src/real.ts', 10)]]];
+
+        $context = $this->scanWithFakedScc(fn (array $command) => Process::result(
+            json_encode(in_array('--no-gen', $command, true) ? $filtered : $full),
+        ));
+
+        $this->assertSame(PathClass::Generated, $context->classifier->classify('src/gen.ts'));
+        $this->assertSame(['src/real.ts'], array_column($context->inventory->files, 'path'));
+        $this->assertSame(10, $context->inventory->billableCode);
+    }
+
+    public function test_a_failed_billing_pass_still_builds_a_classified_inventory(): void
+    {
+        $full = [['Name' => 'TypeScript', 'Code' => 10, 'Files' => [$this->file('src/real.ts', 10), $this->file('dist/app.js', 5)]]];
+
+        $context = $this->scanWithFakedScc(fn (array $command) => in_array('--no-gen', $command, true)
+            ? Process::result('', 'boom', 1)
+            : Process::result(json_encode($full)));
+
+        $this->assertNull($context->inventory->billableCode);
+        $this->assertSame(['src/real.ts'], array_column($context->inventory->files, 'path'));
+    }
+
+    public function test_empty_scc_output_is_a_skip_not_an_empty_repository(): void
+    {
+        $this->expectException(ScannerSkipped::class);
+
+        $this->scanWithFakedScc(fn () => Process::result('null'));
     }
 }

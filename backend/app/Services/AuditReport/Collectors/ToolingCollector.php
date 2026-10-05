@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport\Collectors;
 
+use App\Services\AuditReport\Paths\PathClass;
 use App\Services\AuditReport\Scanners\RepoContext;
 use App\Support\Utf8;
 
@@ -34,11 +35,7 @@ class ToolingCollector implements Collector
         $has = fn (array $names): bool => array_intersect($names, $deps) !== [];
 
         $files = $context->inventory?->files ?? [];
-        $testFiles = count(array_filter(
-            $files,
-            fn (array $f): bool => preg_match('#(^|/)(tests?|spec|__tests__)/#i', $f['path']) === 1
-                || preg_match('/(Test|\.test|\.spec)\.[a-z]+$/i', $f['path']) === 1,
-        ));
+        $testFiles = count(array_filter($files, fn (array $f): bool => ($f['class'] ?? null) === PathClass::Test->value));
 
         return [
             'error_monitoring' => $has(['sentry/sentry', 'sentry/sentry-laravel', '@sentry/browser', '@sentry/node', '@sentry/react', '@sentry/nextjs', '@sentry/vue', 'bugsnag/bugsnag', 'bugsnag/bugsnag-laravel', '@bugsnag/js', 'rollbar/rollbar', 'rollbar', 'honeybadger-io/honeybadger-php', '@honeybadger-io/js']),

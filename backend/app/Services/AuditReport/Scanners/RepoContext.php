@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport\Scanners;
 
+use App\Services\AuditReport\Paths\PathClassifier;
 use App\Services\AuditReport\Tiers\TierProfile;
 
 /**
@@ -48,11 +49,17 @@ final class RepoContext
         public readonly string $path,
         public readonly TierProfile $tier,
         public ?SccInventory $inventory = null,
+        public PathClassifier $classifier = new PathClassifier,
     ) {}
 
     public function withInventory(SccInventory $inventory): void
     {
         $this->inventory = $inventory;
+    }
+
+    public function withClassifier(PathClassifier $classifier): void
+    {
+        $this->classifier = $classifier;
     }
 
     /** @param list<string> $paths */

@@ -17,6 +17,7 @@ use App\Services\AuditReport\Findings\DedupedFinding;
 use App\Services\AuditReport\Findings\FindingDeduplicator;
 use App\Services\AuditReport\Findings\FindingGroup;
 use App\Services\AuditReport\Findings\FindingGrouper;
+use App\Services\AuditReport\Paths\PathClassifier;
 use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\ScannerRunner;
 use App\Services\AuditReport\Scanners\ScannerSuiteResult;
@@ -98,7 +99,8 @@ class AuditPipeline
             $inventory = $context->inventory;
             $fellBack = $inventory === null;
             if ($inventory === null) {
-                $inventory = $this->sccScanner->fallbackInventory($path);
+                $context->withClassifier(PathClassifier::forRepository($path));
+                $inventory = $this->sccScanner->fallbackInventory($path, $context->classifier);
                 $context->withInventory($inventory);
                 $auditRequest->appendPipelineLog('inventory', 'scc unavailable; used a walked file inventory');
             }
@@ -367,7 +369,7 @@ class AuditPipeline
             $sanitized = $this->sanitizer->sanitize(
                 $review->findings,
                 $selection->paths(),
-                array_column($context->inventory?->files ?? [], 'path'),
+                $context->inventory?->allPaths() ?? [],
             );
 
             if ($sanitized['dropped'] > 0 || $sanitized['strippedRelated'] > 0) {
