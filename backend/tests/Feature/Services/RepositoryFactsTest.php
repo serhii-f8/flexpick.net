@@ -60,7 +60,7 @@ class RepositoryFactsTest extends FeatureTest
 
     public function test_every_reason_code_has_customer_copy(): void
     {
-        foreach (['no_report', 'empty_output', 'osv_unreachable', 'no_lockfile', 'lockfile_unreadable', 'timeout', 'unavailable', 'nonzero_exit', 'parse_failure', 'not_run', 'something_new'] as $code) {
+        foreach (['no_report', 'empty_output', 'osv_unreachable', 'no_lockfile', 'lockfile_unreadable', 'unsupported_ecosystem', 'timeout', 'unavailable', 'nonzero_exit', 'parse_failure', 'not_run', 'something_new'] as $code) {
             $this->assertNotSame('', NotMeasuredReason::describe($code));
             $this->assertStringNotContainsString('_', NotMeasuredReason::describe($code));
         }

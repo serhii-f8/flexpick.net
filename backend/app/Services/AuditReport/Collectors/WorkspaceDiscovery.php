@@ -68,7 +68,13 @@ class WorkspaceDiscovery
         $add('');
 
         foreach ($this->declaredGlobs($realRepo) as $glob) {
-            foreach ($this->expand($realRepo, $glob) as $dir) {
+            try {
+                $expanded = $this->expand($realRepo, $glob);
+            } catch (Throwable) {
+                continue;
+            }
+
+            foreach ($expanded as $dir) {
                 $add($dir);
             }
         }
@@ -110,7 +116,7 @@ class WorkspaceDiscovery
         }
     }
 
-    /** @return list<string> */
+    /** Repository-supplied, so anything that is not a plain path glob is dropped. @return list<string> */
     private function declaredGlobs(string $repoPath): array
     {
         $globs = [];
@@ -119,7 +125,7 @@ class WorkspaceDiscovery
         $workspaces = is_array($workspaces) && array_is_list($workspaces) ? $workspaces : ($workspaces['packages'] ?? []);
 
         foreach ((array) $workspaces as $glob) {
-            $globs[] = (string) $glob;
+            $globs[] = $glob;
         }
 
         if (is_file($repoPath.'/pnpm-workspace.yaml')) {
@@ -127,7 +133,7 @@ class WorkspaceDiscovery
                 $pnpm = Yaml::parse(Utf8::scrub((string) file_get_contents($repoPath.'/pnpm-workspace.yaml')));
 
                 foreach ((array) ($pnpm['packages'] ?? []) as $glob) {
-                    $globs[] = (string) $glob;
+                    $globs[] = $glob;
                 }
             } catch (Throwable) {
                 // An unparsable workspace file falls back to the shallow scan.
@@ -136,13 +142,13 @@ class WorkspaceDiscovery
 
         foreach ((array) ($this->json($repoPath.'/composer.json')['repositories'] ?? []) as $repository) {
             if (is_array($repository) && ($repository['type'] ?? null) === 'path' && isset($repository['url'])) {
-                $globs[] = (string) $repository['url'];
+                $globs[] = $repository['url'];
             }
         }
 
         return array_values(array_filter(
             $globs,
-            fn (string $glob): bool => $glob !== '' && ! str_starts_with($glob, '!') && ! str_contains($glob, '..') && ! str_starts_with($glob, '/'),
+            fn (mixed $glob): bool => is_string($glob) && preg_match('~^[A-Za-z0-9_.@*/-]+$~', $glob) === 1 && ! str_starts_with($glob, '!') && ! str_contains($glob, '..') && ! str_starts_with($glob, '/'),
         ));
     }
 

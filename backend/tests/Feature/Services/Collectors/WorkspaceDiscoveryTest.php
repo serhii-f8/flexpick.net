@@ -112,4 +112,13 @@ class WorkspaceDiscoveryTest extends FeatureTest
 
         $this->assertCount(50, $this->roots());
     }
+
+    public function test_malformed_workspace_declarations_are_ignored_not_fatal(): void
+    {
+        $this->write('package.json', json_encode(['workspaces' => [['x'], "pk\u{0}gs/*", 7, 'ok/*']]));
+        $this->write('ok/a/package.json');
+        $this->write('pnpm-workspace.yaml', "packages:\n  - [nested]\n  - 'ok/*'\n");
+
+        $this->assertSame(['', 'ok/a'], $this->roots());
+    }
 }

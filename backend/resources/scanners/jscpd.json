@@ -16,7 +16,16 @@
     "**/*.min.js",
     "**/*.min.css",
     "**/*.bundle.js",
-    "**/*.map"
+    "**/*.map",
+    "**/*.md",
+    "**/*.mdx",
+    "**/*.rst",
+    "**/*.json",
+    "**/*.yaml",
+    "**/*.yml",
+    "**/*.txt",
+    "**/*.csv",
+    "**/*.svg"
   ],
   "absolute": false,
   "gitignore": false

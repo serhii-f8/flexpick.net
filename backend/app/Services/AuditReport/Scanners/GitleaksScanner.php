@@ -15,15 +15,13 @@ use RuntimeException;
 class GitleaksScanner implements Scanner
 {
     /**
-     * Default-ruleset ids that identify one provider's credential format. A
-     * match on one of these is a credential whatever file it sits in; everything
-     * else (generic-api-key, jwt, *-client-id) is a shape, not proof.
+     * Default-ruleset ids that match a shape, not one provider's credential
+     * format (and client ids, which are public). Every other rule id names a
+     * provider and counts as a credential whatever file it sits in.
      */
-    private const PROVIDER_RULE_PREFIXES = [
-        'aws-', 'github-', 'gitlab-', 'stripe-', 'slack-', 'anthropic-', 'openai-', 'gcp-', 'private-key',
-        'sendgrid-', 'twilio-', 'shopify-', 'npm-access-token', 'pypi-', 'digitalocean-', 'heroku-', 'hashicorp-',
-        'doppler-', 'square-', 'mailgun-', 'azure-', 'databricks-', 'linear-', 'postman-', 'sentry-', 'huggingface-',
-        'age-secret-key', 'flyio-', 'vault-',
+    private const GENERIC_RULES = [
+        'generic-api-key', 'jwt', 'jwt-base64', 'curl-auth-header', 'curl-auth-user',
+        'kubernetes-secret-yaml', 'sidekiq-sensitive-url',
     ];
 
     private const FAMILIES = [
@@ -113,10 +111,7 @@ class GitleaksScanner implements Scanner
 
     public function severityFor(string $ruleId, PathClass $class): Severity
     {
-        $provider = ! str_ends_with($ruleId, '-client-id') && array_any(
-            self::PROVIDER_RULE_PREFIXES,
-            fn (string $prefix): bool => str_starts_with($ruleId, $prefix),
-        );
+        $provider = ! in_array($ruleId, self::GENERIC_RULES, true) && ! str_ends_with($ruleId, '-client-id');
 
         return match ($class) {
             PathClass::Source => $provider ? Severity::CRITICAL : Severity::HIGH,

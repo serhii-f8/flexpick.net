@@ -59,6 +59,9 @@ class GitleaksScannerTest extends FeatureTest
             'jwt in docs' => ['jwt', PathClass::Docs, Severity::LOW],
             'generic in example' => ['generic-api-key', PathClass::Example, Severity::LOW],
             'client id is not provider-secret' => ['discord-client-id', PathClass::Source, Severity::HIGH],
+            'unlisted provider in source' => ['cloudflare-api-key', PathClass::Source, Severity::CRITICAL],
+            'unlisted provider in test' => ['telegram-bot-api-token', PathClass::Test, Severity::HIGH],
+            'curl header is generic' => ['curl-auth-header', PathClass::Source, Severity::HIGH],
             'private key in source' => ['private-key', PathClass::Source, Severity::CRITICAL],
         ];
     }

@@ -51,6 +51,12 @@ class OsvScanner implements Scanner
             throw new ScannerSkipped('osv_unreachable');
         }
 
+        // A Go, Python, Rust or Ruby repository has nothing this auditor can read,
+        // which is not the same as nothing to check.
+        if (($audit['packages_scanned'] ?? 0) === 0 && ! ($audit['has_declared_dependencies'] ?? false) && $this->hasUnsupportedManifests($context)) {
+            throw new ScannerSkipped('unsupported_ecosystem');
+        }
+
         if (($audit['packages_scanned'] ?? 0) === 0 && ($audit['has_declared_dependencies'] ?? false)) {
             throw new ScannerSkipped(($audit['unscannable_lockfiles'] ?? []) !== [] ? 'lockfile_unreadable' : 'no_lockfile');
         }
@@ -98,5 +104,23 @@ class OsvScanner implements Scanner
             'npm' => 'package-lock.json',
             default => 'composer.lock',
         };
+    }
+
+    private const UNSUPPORTED_MANIFESTS = [
+        'go.mod', 'go.sum', 'Cargo.toml', 'Cargo.lock', 'pyproject.toml', 'poetry.lock', 'Pipfile', 'Pipfile.lock',
+        'Gemfile', 'Gemfile.lock', 'pom.xml', 'build.gradle', 'build.gradle.kts', 'mix.exs',
+    ];
+
+    private function hasUnsupportedManifests(RepoContext $context): bool
+    {
+        foreach ($context->inventory?->allPaths() ?? [] as $path) {
+            $name = basename($path);
+
+            if (in_array($name, self::UNSUPPORTED_MANIFESTS, true) || preg_match('/^requirements.*\.txt$/', $name) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

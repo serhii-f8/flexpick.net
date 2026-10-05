@@ -184,4 +184,30 @@ class JscpdScannerTest extends FeatureTest
             @rmdir(dirname($root));
         }
     }
+
+    public function test_duplicated_documentation_and_data_files_do_not_count_as_code_duplication(): void
+    {
+        if (! app(JscpdScanner::class)->isAvailable()) {
+            $this->markTestSkipped('jscpd is not installed here.');
+        }
+
+        $root = sys_get_temp_dir().'/jscpd-docs-'.bin2hex(random_bytes(4));
+        mkdir($root, 0755, true);
+        $block = implode("\n", array_map(fn (int $i): string => "line number {$i} of a templated page", range(1, 40)));
+        $json = json_encode(array_map(fn (int $i): array => ['key'.$i => $i], range(1, 40)), JSON_PRETTY_PRINT);
+        file_put_contents($root.'/a.md', $block);
+        file_put_contents($root.'/b.md', $block);
+        file_put_contents($root.'/a.json', $json);
+        file_put_contents($root.'/b.json', $json);
+        file_put_contents($root.'/real.php', "<?php\n".implode("\n", array_map(fn (int $i): string => "function f{$i}() { return {$i}; }", range(1, 40)))."\n");
+
+        try {
+            $context = new RepoContext(path: $root, tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC));
+            app(JscpdScanner::class)->scan($context);
+
+            $this->assertSame(0.0, $context->measurement('duplication_pct', -1.0));
+        } finally {
+            exec('rm -rf '.escapeshellarg($root));
+        }
+    }
 }

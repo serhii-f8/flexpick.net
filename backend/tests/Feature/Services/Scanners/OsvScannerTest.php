@@ -8,6 +8,7 @@ use App\Services\AuditReport\Findings\Severity;
 use App\Services\AuditReport\Scanners\OsvScanner;
 use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\ScannerSkipped;
+use App\Services\AuditReport\Scanners\SccInventory;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use Tests\Feature\FeatureTest;
 
@@ -135,5 +136,25 @@ class OsvScannerTest extends FeatureTest
     public function test_is_always_available_because_it_needs_no_binary(): void
     {
         $this->assertTrue(app(OsvScanner::class)->isAvailable());
+    }
+
+    public function test_a_repository_in_an_unsupported_ecosystem_is_not_measured_clean(): void
+    {
+        $auditor = \Mockery::mock(DependencyAuditor::class);
+        $auditor->shouldReceive('audit')->andReturn(['packages_scanned' => 0, 'has_declared_dependencies' => false]);
+        $context = new RepoContext(
+            path: sys_get_temp_dir(),
+            tier: app(TierProfileResolver::class)->for(AuditTier::DIAGNOSTIC),
+            inventory: new SccInventory(
+                files: [],
+                languages: [],
+                totalLoc: 0,
+                totalComplexity: 0,
+                excluded: [['path' => 'svc/poetry.lock', 'loc' => 10, 'reason' => 'lockfile']],
+            ),
+        );
+
+        $this->expectExceptionObject(new ScannerSkipped('unsupported_ecosystem'));
+        (new OsvScanner($auditor))->scan($context);
     }
 }
