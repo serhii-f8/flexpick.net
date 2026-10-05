@@ -9,6 +9,7 @@ use App\Services\AuditReport\Scanners\RepoContext;
 use App\Services\AuditReport\Scanners\Scanner;
 use App\Services\AuditReport\Scanners\ScannerOutcome;
 use App\Services\AuditReport\Scanners\ScannerRunner;
+use App\Services\AuditReport\Scanners\ScannerSkipped;
 use App\Services\AuditReport\Tiers\TierProfileResolver;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
@@ -197,5 +198,17 @@ class ScannerRunnerTest extends FeatureTest
         $this->assertFalse($result->ranSuccessfully('beta'));
         // A scanner that was never asked to run also did not succeed.
         $this->assertFalse($result->ranSuccessfully('semgrep'));
+    }
+
+    public function test_a_skipped_scanner_records_its_classified_reason(): void
+    {
+        $runner = $this->runnerWith(
+            $this->fakeScanner('fake', fn () => throw new ScannerSkipped('no_report')),
+        );
+
+        $run = $runner->run(['fake'], $this->context())->runFor('fake');
+
+        $this->assertSame(ScannerOutcome::FAILED, $run->outcome);
+        $this->assertSame('no_report', $run->reason);
     }
 }

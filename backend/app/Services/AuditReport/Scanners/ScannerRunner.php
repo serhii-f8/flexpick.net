@@ -62,6 +62,15 @@ class ScannerRunner
                     outcome: ScannerOutcome::TIMEOUT,
                     reason: 'timeout',
                 );
+            } catch (ScannerSkipped $e) {
+                $runs[] = new ScannerRun(
+                    name: $name,
+                    version: $scanner->version(),
+                    wallMs: $this->elapsedMs($startedAt),
+                    findingCount: 0,
+                    outcome: ScannerOutcome::FAILED,
+                    reason: $e->reason,
+                );
             } catch (Throwable $e) {
                 $runs[] = new ScannerRun(
                     name: $name,

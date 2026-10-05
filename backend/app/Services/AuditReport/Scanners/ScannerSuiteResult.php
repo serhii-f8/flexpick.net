@@ -31,6 +31,17 @@ final readonly class ScannerSuiteResult
         return false;
     }
 
+    public function runFor(string $name): ?ScannerRun
+    {
+        foreach ($this->runs as $run) {
+            if ($run->name === $name) {
+                return $run;
+            }
+        }
+
+        return null;
+    }
+
     /** @return list<array<string, mixed>> */
     public function runsAsArray(): array
     {

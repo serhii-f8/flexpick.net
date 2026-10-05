@@ -15,11 +15,13 @@ final readonly class ScoreSet
     /**
      * @param  array<string, int>  $scores  measured dimensions plus `overall`
      * @param  list<string>  $notMeasured  dimension names, sorted
+     * @param  array<string, string>  $notMeasuredReasons  dimension → reason code
      */
     public function __construct(
         public array $scores,
         public array $notMeasured,
         public int $scoringVersion,
+        public array $notMeasuredReasons = [],
     ) {}
 
     /** @return array<string, int> */

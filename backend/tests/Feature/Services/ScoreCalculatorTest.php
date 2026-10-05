@@ -214,4 +214,28 @@ class ScoreCalculatorTest extends FeatureTest
         $this->assertArrayNotHasKey('duplication', $set->toPayloadScores());
         $this->assertArrayHasKey('overall', $set->toPayloadScores());
     }
+
+    public function test_not_measured_dimensions_carry_the_failing_scanners_reason(): void
+    {
+        $runs = new ScannerSuiteResult([], [
+            new ScannerRun('scc', '1.0', 10, 0, ScannerOutcome::OK),
+            new ScannerRun('gitleaks', '1.0', 10, 0, ScannerOutcome::OK),
+            new ScannerRun('semgrep', '1.0', 10, 0, ScannerOutcome::OK),
+            new ScannerRun('jscpd', '1.0', 10, 0, ScannerOutcome::FAILED, 'no_report'),
+            new ScannerRun('osv', '1.0', 10, 0, ScannerOutcome::TIMEOUT, 'timeout'),
+        ]);
+
+        $set = app(ScoreCalculator::class)->calculate($this->metrics(), [], $runs);
+
+        $this->assertSame(['dependencies' => 'timeout', 'duplication' => 'no_report'], $set->notMeasuredReasons);
+    }
+
+    public function test_a_scanner_absent_from_the_run_is_reported_as_not_run(): void
+    {
+        $runs = new ScannerSuiteResult([], [new ScannerRun('scc', '1.0', 10, 0, ScannerOutcome::OK)]);
+
+        $set = app(ScoreCalculator::class)->calculate($this->metrics(), [], $runs);
+
+        $this->assertSame('not_run', $set->notMeasuredReasons['duplication']);
+    }
 }

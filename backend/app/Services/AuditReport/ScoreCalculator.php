@@ -47,10 +47,12 @@ class ScoreCalculator
     {
         $scores = [];
         $notMeasured = [];
+        $reasons = [];
 
         foreach (self::DIMENSION_SCANNERS as $dimension => $required) {
             if (! $this->allRan($required, $runs)) {
                 $notMeasured[] = $dimension;
+                $reasons[$dimension] = $this->reasonFor($required, $runs);
 
                 continue;
             }
@@ -65,10 +67,29 @@ class ScoreCalculator
         }
 
         sort($notMeasured);
+        ksort($reasons);
 
         $scores['overall'] = $this->overall($scores);
 
-        return new ScoreSet($scores, $notMeasured, self::VERSION);
+        return new ScoreSet($scores, $notMeasured, self::VERSION, $reasons);
+    }
+
+    /** @param list<string> $required */
+    private function reasonFor(array $required, ScannerSuiteResult $runs): string
+    {
+        foreach ($required as $scanner) {
+            $run = $runs->runFor($scanner);
+
+            if ($run === null) {
+                return 'not_run';
+            }
+
+            if (! $runs->ranSuccessfully($scanner)) {
+                return $run->reason ?? $run->outcome->value;
+            }
+        }
+
+        return 'not_run';
     }
 
     /** @param list<string> $required */

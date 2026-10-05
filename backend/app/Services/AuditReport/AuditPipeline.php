@@ -135,6 +135,7 @@ class AuditPipeline
             $scoreSet = $this->scoreCalculator->calculate($metrics, $groups, $suite);
             $metrics['computed_scores'] = $scoreSet->toPayloadScores();
             $metrics['not_measured'] = $scoreSet->notMeasured;
+            $metrics['not_measured_reasons'] = $scoreSet->notMeasuredReasons;
 
             $auditRequest->update([
                 'metrics' => $metrics,
