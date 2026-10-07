@@ -12,6 +12,8 @@ use App\Services\AuditReport\AuditDeltaService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\AuditGroupDeltaService;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\PartnerContactResolver;
+use App\Services\PartnerPricingResolver;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 
@@ -37,6 +39,9 @@ class AuditReportController extends Controller
             'report' => $auditReport,
             'unlocked' => $auditReport->unlocked_at !== null,
             'isSample' => false,
+            // A reader a partner referred buys at the partner's price (checkout
+            // applies it), so the catalog's must not be quoted to them.
+            'quoteCatalogPrices' => ! $this->isReferred($auditReport),
             'percentile' => $benchmark->percentileFor((int) data_get($auditReport->payload, 'scores.overall', 0), $auditReport->scoring_version),
             'unlockUrl' => URL::temporarySignedRoute(
                 'reports.unlock',
@@ -127,5 +132,16 @@ class AuditReportController extends Controller
         app(AuditFunnelRecorder::class)->record(AuditFunnelRecorder::STAGE_UNLOCK_STARTED, $auditReport->auditRequest);
 
         return redirect()->route('buy.product', ['productSlug' => config('audit.unlock_product_slug')]);
+    }
+
+    private function isReferred(AuditReport $auditReport): bool
+    {
+        if (app(PartnerPricingResolver::class)->resolvePartnerTenant(auth()->user()) !== null) {
+            return true;
+        }
+
+        $code = $auditReport->auditRequest?->meta['referral_code'] ?? null;
+
+        return app(PartnerContactResolver::class)->forCode(is_string($code) ? $code : null) !== null;
     }
 }

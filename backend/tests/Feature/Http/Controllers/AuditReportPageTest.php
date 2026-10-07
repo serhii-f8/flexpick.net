@@ -8,6 +8,7 @@ use App\Models\AuditReport;
 use App\Models\User;
 use App\Services\AuditReport\AuditReportService;
 use App\Services\AuditReport\ReportPayload;
+use App\Services\ReferralService;
 use Illuminate\Support\Facades\URL;
 use Tests\Feature\FeatureTest;
 
@@ -31,6 +32,29 @@ class AuditReportPageTest extends FeatureTest
             ->assertDontSee('0 test files')               // evidence hidden
             ->assertSee(__('Unlock full report'))
             ->assertSee('/unlock');
+    }
+
+    public function test_a_locked_report_quotes_catalog_prices_to_an_unreferred_reader(): void
+    {
+        $report = AuditReport::factory()->locked()->create();
+
+        $this->get(app(AuditReportService::class)->signedUrl($report))
+            ->assertOk()
+            ->assertSee(__('Unlock for $5'))
+            ->assertSee('/mo');
+    }
+
+    public function test_a_locked_report_quotes_no_base_price_to_a_referred_reader(): void
+    {
+        $partner = $this->createActivePartnerTenant();
+        $code = app(ReferralService::class)->getOrCreateReferralCode($this->createUser($partner))->code;
+        $report = AuditReport::factory()->locked()->create();
+        $report->auditRequest->update(['meta' => ['referral_code' => $code]]);
+
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report))->assertOk();
+
+        $response->assertSee(__('Unlock full report'))->assertSee('/unlock');
+        $this->assertDoesNotMatchRegularExpression('/\\$\s?\d/', strip_tags($response->getContent()));
     }
 
     public function test_unlocked_report_shows_everything_and_pdf_link(): void

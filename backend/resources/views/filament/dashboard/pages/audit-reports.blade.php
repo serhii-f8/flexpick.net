@@ -340,7 +340,7 @@
                                     >
                                         @foreach ($quotas as $quota)
                                             @if (! $quota->isLifetime)
-                                                <option value="{{ $quota->tier->value }}" @selected($scheduleTier === $quota->tier->value)>{{ $quota->tier->labelWithPrice() }}</option>
+                                                <option value="{{ $quota->tier->value }}" @selected($scheduleTier === $quota->tier->value)>{{ $quota->purchasable() ? __(':label — $:price', ['label' => $quota->label, 'price' => number_format($quota->priceCents / 100)]) : $quota->label }}</option>
                                             @endif
                                         @endforeach
                                     </x-filament::input.select>

@@ -480,9 +480,14 @@ class AuditEntitlementService
         );
     }
 
+    /**
+     * The price quoted to whoever is looking -- a referred customer sees their
+     * partner's price, as on /pricing. Resolved lazily: the partner pricing
+     * resolver reaches SubscriptionService, which this service is built from.
+     */
     private function tierPriceCents(AuditTier $tier): ?int
     {
-        return $tier->priceCents();
+        return app(AuditTierPricing::class)->priceCentsFor($tier, auth()->user());
     }
 
     public function hasAuditAccess(Tenant $tenant): bool

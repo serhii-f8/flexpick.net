@@ -12,6 +12,7 @@ use App\Mapper\AuditRequestStatusMapper;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\AuditReport\AuditTierPricing;
 use App\Services\GitProviders\GitProviderResolver;
 use App\Support\RepoName;
 use App\Support\ScoreBand;
@@ -105,7 +106,7 @@ class AuditRequestResource extends Resource
                     ->label(__('Audit type'))
                     ->badge()
                     ->color(fn (AuditTier $state): string => $state->badgeColor())
-                    ->formatStateUsing(fn (AuditTier $state): string => $state->labelWithPrice()),
+                    ->formatStateUsing(fn (AuditTier $state): string => app(AuditTierPricing::class)->labelWithPrice($state, auth()->user())),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (AuditRequest $record, AuditRequestStatusMapper $mapper): string => $mapper->mapColor($record->status))

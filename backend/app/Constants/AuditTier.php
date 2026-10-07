@@ -46,6 +46,18 @@ enum AuditTier: string
         return null;
     }
 
+    /** The one-time product this tier is sold as (its config('pricing.tiers') key), or null if unpriced. */
+    public function productSlug(): ?string
+    {
+        foreach ((array) config('pricing.tiers') as $slug => $definition) {
+            if (($definition['tier'] ?? null) === $this->value) {
+                return (string) $slug;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * The plain label with the catalog price appended, for the two surfaces
      * where staff/customers need to see what an audit type costs at a

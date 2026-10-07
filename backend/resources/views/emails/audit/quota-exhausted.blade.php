@@ -14,11 +14,12 @@
             <p style="margin: 16px 0 0; line-height: 24px">
                 {{ __('Two ways to keep going:') }}
             </p>
-            {{-- The price comes from the catalog (config/pricing.php) so it can
+            {{-- Catalog prices are quoted only to an unreferred visitor (see
+                 AuditQuotaExhausted::content()). The price comes from the catalog (config/pricing.php) so it can
                  never drift from what checkout actually charges. --}}
             @php($diagnosticPrice = number_format((\App\Constants\AuditTier::DIAGNOSTIC->priceCents() ?? 0) / 100))
             <p style="margin: 24px 0 0; line-height: 24px">
-                <a href="{{ $purchaseUrl }}" style="color: #2563eb; text-decoration: underline;">{{ __('Run this audit now for $:price — full report included', ['price' => $diagnosticPrice]) }}</a>
+                <a href="{{ $purchaseUrl }}" style="color: #2563eb; text-decoration: underline;">{{ $quoteCatalogPrices ? __('Run this audit now for $:price — full report included', ['price' => $diagnosticPrice]) : __('Run this audit now — full report included') }}</a>
             </p>
             {{-- /pricing requires authentication; this email's reader is not
                  logged in, so register is the reachable next step. Cheapest
@@ -27,7 +28,7 @@
             @php($cheapestPlan = collect(config('pricing.subscriptions'))->sortBy('price')->first())
             @php($subscribePrice = number_format(($cheapestPlan['price'] ?? 0) / 100))
             <p style="margin: 12px 0 0; line-height: 24px">
-                <a href="{{ route('register') }}" style="color: #2563eb; text-decoration: underline;">{{ __('Or subscribe from $:price/month for :count analyses', ['price' => $subscribePrice, 'count' => $cheapestPlan['audit_diagnostic_credits'] ?? 0]) }}</a>
+                <a href="{{ $registerUrl }}" style="color: #2563eb; text-decoration: underline;">{{ $quoteCatalogPrices ? __('Or subscribe from $:price/month for :count analyses', ['price' => $subscribePrice, 'count' => $cheapestPlan['audit_diagnostic_credits'] ?? 0]) : __('Or create an account and subscribe to a plan') }}</a>
             </p>
         </td>
     </tr>
