@@ -23,7 +23,7 @@ class AuditVerificationTest extends FeatureTest
         config(['audit.admin_email' => 'admin@flexpick.net']);
     }
 
-    public function test_submit_creates_pending_request_and_sends_only_verification_email(): void
+    public function test_submit_creates_pending_request_and_emails_the_visitor_and_the_admin(): void
     {
         $response = $this->postJson('/api/audit-requests', [
             'name' => 'Ada', 'email' => 'ada-verify@example.com',
@@ -38,7 +38,8 @@ class AuditVerificationTest extends FeatureTest
         $this->assertTrue($request->marketing_consent);
         $this->assertNotNull($request->consented_at);
         Mail::assertQueued(AuditVerifyEmail::class, fn ($mail) => $mail->hasTo('ada-verify@example.com'));
-        Mail::assertNotQueued(NewAuditRequestAdminNotification::class);
+        // The admin hears about the lead at once; nothing runs until the visitor confirms.
+        Mail::assertQueued(NewAuditRequestAdminNotification::class);
         Queue::assertNothingPushed();
     }
 

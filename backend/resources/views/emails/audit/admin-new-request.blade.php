@@ -17,6 +17,11 @@
             <p style="margin: 16px 0 0; line-height: 24px">
                 {{ __('Status:') }} {{ $auditRequest->status }}
             </p>
+            @if ($auditRequest->status === \App\Constants\AuditRequestStatus::PENDING_VERIFICATION->value)
+                <p style="margin: 16px 0 0; line-height: 24px">
+                    {{ __('They have not confirmed their email yet. The audit starts once they click the confirmation link we sent them; you will get another update then.') }}
+                </p>
+            @endif
         </td>
     </tr>
 </x-layouts.email>

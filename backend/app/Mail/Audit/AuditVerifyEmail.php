@@ -18,6 +18,7 @@ class AuditVerifyEmail extends Mailable implements ShouldQueue
     public function __construct(
         public AuditRequest $auditRequest,
         public string $verificationUrl,
+        public ?string $registrationUrl = null,
     ) {}
 
     public function envelope(): Envelope

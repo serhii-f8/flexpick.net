@@ -4,6 +4,7 @@ namespace Tests\Feature\Services;
 
 use App\Constants\AuditRequestStatus;
 use App\Constants\PaymentProviderConstants;
+use App\Mail\Audit\AuditVerifyEmail;
 use App\Mail\Audit\NewAuditRequestAdminNotification;
 use App\Models\AuditRequest;
 use App\Models\PaymentProvider;
@@ -138,5 +139,65 @@ class PartnerContactTest extends FeatureTest
             NewAuditRequestAdminNotification::class,
             fn ($mail) => $mail->hasTo('admin@flexpick.net') && $mail->cc === [],
         );
+    }
+
+    public function test_submitting_the_form_emails_the_admin_and_the_referrer_at_once(): void
+    {
+        Mail::fake();
+        [, , $code] = $this->partner();
+
+        $this->postJson('/api/audit-requests', ['name' => 'Ada', 'email' => 'ada-'.Str::random(10).'@example.com', 'repo_url' => 'https://github.com/acme/app', 'referral_code' => $code])->assertCreated();
+
+        // Before the visitor confirms anything: the partner learns about the lead now.
+        Mail::assertQueued(
+            NewAuditRequestAdminNotification::class,
+            fn ($mail) => $mail->hasTo('admin@flexpick.net') && $mail->hasCc($this->referrerEmail),
+        );
+    }
+
+    public function test_an_unreferred_submission_emails_only_the_admin(): void
+    {
+        Mail::fake();
+
+        $this->postJson('/api/audit-requests', ['name' => 'Bob', 'email' => 'bob-'.Str::random(10).'@example.com'])->assertCreated();
+
+        Mail::assertQueued(
+            NewAuditRequestAdminNotification::class,
+            fn ($mail) => $mail->hasTo('admin@flexpick.net') && $mail->cc === [],
+        );
+    }
+
+    public function test_the_admin_email_says_the_visitor_has_not_confirmed_yet(): void
+    {
+        $request = AuditRequest::factory()->create(['status' => AuditRequestStatus::PENDING_VERIFICATION->value]);
+
+        $this->assertStringContainsString('not confirmed their email yet', (new NewAuditRequestAdminNotification($request))->render());
+    }
+
+    public function test_the_client_email_links_to_registration_through_the_referrers_code(): void
+    {
+        Mail::fake();
+        [, , $code] = $this->partner();
+
+        $this->postJson('/api/audit-requests', ['name' => 'Ada', 'email' => 'ada-'.Str::random(10).'@example.com', 'repo_url' => 'https://github.com/acme/app', 'referral_code' => $code])->assertCreated();
+
+        Mail::assertQueued(AuditVerifyEmail::class, function (AuditVerifyEmail $mail) use ($code): bool {
+            $html = $mail->render();
+
+            return str_contains($mail->registrationUrl, '/register')
+                && str_contains($mail->registrationUrl, 'rc='.$code)
+                && str_contains($html, e($mail->registrationUrl))
+                && str_contains($html, 'connect your GitHub, GitLab or Bitbucket account');
+        });
+    }
+
+    public function test_an_unreferred_client_gets_a_plain_registration_link(): void
+    {
+        Mail::fake();
+
+        $this->postJson('/api/audit-requests', ['name' => 'Bob', 'email' => 'bob-'.Str::random(10).'@example.com', 'referral_code' => 'REF-NOPE'])->assertCreated();
+
+        Mail::assertQueued(AuditVerifyEmail::class, fn (AuditVerifyEmail $mail): bool => str_contains($mail->registrationUrl, '/register')
+            && ! str_contains($mail->registrationUrl, 'rc='));
     }
 }

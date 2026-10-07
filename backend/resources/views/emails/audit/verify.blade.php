@@ -16,6 +16,20 @@
                     {{ __('Confirm my email') }}
                 </a>
             </p>
+            <p style="margin: 16px 0 0; line-height: 24px">
+                {{ __('Once confirmed, we analyse your repository and email you the report — usually within the hour.') }}
+            </p>
+            @if ($registrationUrl)
+                <p style="margin: 24px 0 0; line-height: 24px">
+                    <strong>{{ __('Track your audit, and give us access to private code') }}</strong>
+                </p>
+                <p style="margin: 8px 0 0; line-height: 24px">
+                    {{ __('Create your free FlexPick account with this same email address. In your dashboard you can follow the status of your report, and connect your GitHub, GitLab or Bitbucket account so we can read a private repository.') }}
+                </p>
+                <p style="margin: 16px 0 0; line-height: 24px">
+                    <a href="{{ $registrationUrl }}" style="color: #2563eb; text-decoration: underline;">{{ __('Create my account') }}</a>
+                </p>
+            @endif
             <p style="margin: 24px 0 0; line-height: 24px; font-size: 13px; color: #64748b;">
                 {{ __('This link expires in :hours hours. If you didn\'t request an audit from FlexPick, you can ignore this email.', ['hours' => config('audit.verification_link_hours')]) }}
             </p>
