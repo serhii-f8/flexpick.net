@@ -4,6 +4,7 @@ namespace App\Mail\Audit;
 
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Filament\Dashboard\Pages\GitConnections;
+use App\Mail\Concerns\TracksAuditEmailLog;
 use App\Models\AuditRequest;
 use App\Services\GitProviders\GitProviderResolver;
 use Illuminate\Bus\Queueable;
@@ -15,7 +16,7 @@ use Illuminate\Queue\SerializesModels;
 
 class AuditRepoAccessNeeded extends Mailable implements ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, TracksAuditEmailLog;
 
     /**
      * @param  bool  $accessProblem  we could not reach the repository at all,

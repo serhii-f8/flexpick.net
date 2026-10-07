@@ -2,6 +2,7 @@
 
 namespace App\Mail\Audit;
 
+use App\Mail\Concerns\TracksAuditEmailLog;
 use App\Models\AuditRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,7 +13,7 @@ use Illuminate\Queue\SerializesModels;
 
 class AuditVerifyReminderEmail extends Mailable implements ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, TracksAuditEmailLog;
 
     public function __construct(
         public AuditRequest $auditRequest,

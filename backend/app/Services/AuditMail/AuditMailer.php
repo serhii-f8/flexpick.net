@@ -4,6 +4,7 @@ namespace App\Services\AuditMail;
 
 use App\Models\AuditEmailLog;
 use App\Models\AuditRequest;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
@@ -55,9 +56,22 @@ class AuditMailer
             'sent_at' => now(),
         ]);
 
+        // A ShouldQueue mailable is only queued here. Its row stays pending until
+        // the worker's transport accepts it (MarkAuditEmailSent) or the job gives
+        // up (TracksAuditEmailLog::failed()); marking it sent now would report a
+        // message that never left as delivered.
+        $tracked = $mailable instanceof ShouldQueue && property_exists($mailable, 'auditEmailLogId');
+
+        if ($tracked) {
+            $mailable->auditEmailLogId = $log->id;
+        }
+
         try {
             Mail::to($recipient)->cc($cc)->send($mailable);
-            $log->update(['status' => AuditEmailLog::STATUS_SENT]);
+
+            if (! $tracked) {
+                $log->update(['status' => AuditEmailLog::STATUS_SENT]);
+            }
         } catch (Throwable $e) {
             $log->update(['status' => AuditEmailLog::STATUS_FAILED, 'last_error' => $e->getMessage()]);
 

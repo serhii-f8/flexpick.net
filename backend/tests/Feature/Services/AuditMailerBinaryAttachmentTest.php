@@ -46,7 +46,8 @@ class AuditMailerBinaryAttachmentTest extends FeatureTest
             $report->auditRequest,
         );
 
-        $this->assertSame(AuditEmailLog::STATUS_SENT, $log->status);
+        // Queued, not yet sent: the worker flips it to sent (MarkAuditEmailSent).
+        $this->assertSame(AuditEmailLog::STATUS_PENDING, $log->status);
         $this->assertNull($log->last_error);
         $this->assertSame(1, DB::table('jobs')->count());
     }

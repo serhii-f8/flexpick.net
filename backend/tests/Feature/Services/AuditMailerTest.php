@@ -15,7 +15,7 @@ use Throwable;
 
 class AuditMailerTest extends FeatureTest
 {
-    public function test_sends_and_logs_sent_row(): void
+    public function test_a_queued_email_is_logged_pending_until_the_worker_sends_it(): void
     {
         Mail::fake();
 
@@ -27,12 +27,43 @@ class AuditMailerTest extends FeatureTest
             $request
         );
 
-        $this->assertSame(AuditEmailLog::STATUS_SENT, $log->status);
+        // Only queued: reporting it sent here is how an undelivered email looked delivered.
+        $this->assertSame(AuditEmailLog::STATUS_PENDING, $log->status);
         $this->assertSame('AuditRequestReceived', $log->mailable);
         $this->assertSame(1, $log->attempts);
         $this->assertNotSame('', $log->body);
         $this->assertNull($log->last_error);
         Mail::assertQueued(AuditRequestReceived::class);
+    }
+
+    public function test_the_row_turns_sent_once_the_transport_accepts_the_message(): void
+    {
+        $request = AuditRequest::factory()->create(['email' => 'worker-send@example.com']);
+
+        // The sync queue runs the queued mail job inline, through the real mailer.
+        $log = app(AuditMailer::class)->send(
+            new AuditRequestReceived($request, 'https://status.example'),
+            $request->email,
+            $request
+        );
+
+        $this->assertSame(AuditEmailLog::STATUS_SENT, $log->fresh()->status);
+    }
+
+    public function test_the_row_turns_failed_when_the_queued_job_gives_up(): void
+    {
+        Mail::fake();
+        $request = AuditRequest::factory()->create(['email' => 'worker-fail@example.com']);
+        $mailable = new AuditRequestReceived($request, 'https://status.example');
+
+        $log = app(AuditMailer::class)->send($mailable, $request->email, $request);
+
+        // What SendQueuedMailable::failed() does when the worker runs out of tries.
+        $mailable->failed(new \RuntimeException('Expected response code 250 but got 550'));
+
+        $log->refresh();
+        $this->assertSame(AuditEmailLog::STATUS_FAILED, $log->status);
+        $this->assertStringContainsString('550', (string) $log->last_error);
     }
 
     public function test_send_failure_logs_failed_row_and_rethrows(): void
