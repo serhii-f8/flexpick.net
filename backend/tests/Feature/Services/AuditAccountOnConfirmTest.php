@@ -3,28 +3,45 @@
 namespace Tests\Feature\Services;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\AuditTier;
+use App\Constants\OrderStatus;
 use App\Constants\PaymentProviderConstants;
 use App\Constants\TenancyPermissionConstants;
 use App\Filament\Dashboard\Pages\GitConnections;
+use App\Filament\Dashboard\Resources\PartnerOrders\Pages\ListPartnerOrders;
+use App\Jobs\GenerateAuditReport;
 use App\Jobs\RouteVerifiedAuditRequest;
 use App\Mail\Audit\AuditAccountReady;
+use App\Mail\Audit\AuditAwaitingPartnerApproval;
+use App\Mail\Audit\AuditQuotaExhausted;
+use App\Mail\CashPayments\PartnerNewPendingOrder;
 use App\Models\AuditRequest;
+use App\Models\Currency;
+use App\Models\OneTimeProduct;
+use App\Models\OneTimeProductPrice;
+use App\Models\Order;
+use App\Models\PartnerProductOffering;
 use App\Models\PaymentProvider;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AuditRequestService;
+use App\Services\CashPayments\OrderApprovalService;
 use App\Services\PartnerPricingResolver;
 use App\Services\ReferralService;
+use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Livewire\Livewire;
 use Tests\Feature\FeatureTest;
 
 /**
  * Confirming the landing form's email is the whole sign-up: it creates the
- * account (attributed to whoever invited the visitor).
+ * account (attributed to whoever invited the visitor), and when the audit has
+ * to be paid for, it puts a cash order in front of the inviting partner to
+ * approve.
  */
 class AuditAccountOnConfirmTest extends FeatureTest
 {
@@ -47,6 +64,24 @@ class AuditAccountOnConfirmTest extends FeatureTest
         $code = app(ReferralService::class)->getOrCreateReferralCode($approver)->code;
 
         return [$tenant, $approver, $code];
+    }
+
+    private function resells(Tenant $partner, AuditTier $tier, int $price): void
+    {
+        $slug = $tier->productSlug();
+        $product = OneTimeProduct::where('slug', $slug)->first()
+            ?? OneTimeProduct::factory()->create(['slug' => $slug, 'is_active' => true]);
+        OneTimeProductPrice::updateOrCreate(
+            ['one_time_product_id' => $product->id, 'currency_id' => Currency::where('code', 'USD')->first()->id],
+            ['price' => $tier->priceCents()],
+        );
+        PartnerProductOffering::factory()->create([
+            'tenant_id' => $partner->id,
+            'one_time_product_id' => $product->id,
+            'price' => $price,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
     }
 
     private function landingRequest(array $meta = []): AuditRequest
@@ -174,5 +209,82 @@ class AuditAccountOnConfirmTest extends FeatureTest
         $this->followingRedirects()->get(app(AuditRequestService::class)->verificationUrl($request))
             ->assertSee('Set your password')
             ->assertSee('Connect GitHub, GitLab or Bitbucket');
+    }
+
+    public function test_a_referred_audit_that_needs_payment_lands_in_the_partners_orders_at_once(): void
+    {
+        Mail::fake();
+        Queue::fake([GenerateAuditReport::class]);
+        [$partner, $approver, $code] = $this->partner();
+        $this->resells($partner, AuditTier::DIAGNOSTIC, 7700);
+        $request = $this->landingRequest(['referral_code' => $code]);
+
+        $this->confirm($request); // routing runs inline (sync queue)
+
+        $request->refresh();
+        $this->assertSame(AuditRequestStatus::AWAITING_PAYMENT->value, $request->status);
+
+        $order = Order::withoutGlobalScopes()->where('tenant_id', $request->tenant_id)->sole();
+        $this->assertSame(OrderStatus::PENDING->value, $order->status);
+        $this->assertSame($partner->id, $order->partner_tenant_id);
+        $this->assertTrue((bool) $order->is_local);
+        $this->assertSame(7700, (int) $order->total_amount);
+        $this->assertSame(PaymentProviderConstants::OFFLINE_SLUG, $order->paymentProvider->slug);
+
+        Mail::assertQueued(PartnerNewPendingOrder::class, fn ($mail) => $mail->hasTo($approver->email));
+        Mail::assertQueued(AuditAwaitingPartnerApproval::class, fn ($mail) => $mail->hasTo($request->email));
+        Mail::assertNotQueued(AuditQuotaExhausted::class);
+
+        // It is waiting on the partner's own Partner Orders page (pending tab, the default).
+        auth()->logout();
+        $this->actingAs($approver);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($partner);
+        Livewire::test(ListPartnerOrders::class)->assertCanSeeTableRecords([$order]);
+
+        // The partner confirms the cash arrived: the audit runs.
+        $this->assertTrue(app(OrderApprovalService::class)->approveAsPartner($order, $approver, $partner));
+
+        $this->assertSame(AuditRequestStatus::QUEUED->value, $request->fresh()->status);
+        Queue::assertPushed(GenerateAuditReport::class, fn ($job) => $job->auditRequest->is($request));
+    }
+
+    public function test_routing_again_does_not_open_a_second_order(): void
+    {
+        Mail::fake();
+        Queue::fake([GenerateAuditReport::class]);
+        [$partner, , $code] = $this->partner();
+        $this->resells($partner, AuditTier::DIAGNOSTIC, 7700);
+        $request = $this->landingRequest(['referral_code' => $code]);
+        $this->confirm($request);
+
+        $request->refresh()->update(['status' => AuditRequestStatus::PENDING_VERIFICATION->value]);
+        app(AuditRequestService::class)->routeVerified($request);
+
+        $this->assertSame(1, Order::withoutGlobalScopes()->where('tenant_id', $request->tenant_id)->count());
+    }
+
+    public function test_an_unreferred_audit_that_needs_payment_keeps_the_pay_now_email(): void
+    {
+        Mail::fake();
+        $request = $this->landingRequest();
+
+        $this->confirm($request);
+
+        $this->assertSame(AuditRequestStatus::AWAITING_PAYMENT->value, $request->fresh()->status);
+        $this->assertSame(0, Order::withoutGlobalScopes()->where('tenant_id', $request->fresh()->tenant_id)->count());
+        Mail::assertQueued(AuditQuotaExhausted::class);
+    }
+
+    public function test_a_tier_the_partner_does_not_resell_opens_no_order(): void
+    {
+        Mail::fake();
+        [, , $code] = $this->partner();
+        $request = $this->landingRequest(['referral_code' => $code]);
+
+        $this->confirm($request);
+
+        $this->assertSame(0, Order::withoutGlobalScopes()->where('tenant_id', $request->fresh()->tenant_id)->count());
+        Mail::assertNotQueued(AuditAwaitingPartnerApproval::class);
     }
 }

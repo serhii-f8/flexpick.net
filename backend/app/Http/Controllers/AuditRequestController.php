@@ -150,6 +150,10 @@ class AuditRequestController extends Controller
 
     private function label(AuditRequest $auditRequest): string
     {
+        if ($auditRequest->status === AuditRequestStatus::AWAITING_PAYMENT->value && isset($auditRequest->meta['partner_order_id'])) {
+            return __('Waiting for your FlexPick partner to confirm payment — we start as soon as they do');
+        }
+
         return match ($auditRequest->status) {
             'pending_verification' => __('Waiting for you to confirm your email'),
             'new' => __('Request received'),

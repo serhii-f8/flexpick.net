@@ -8,6 +8,7 @@ use App\Constants\AuditTier;
 use App\Constants\AwaitingCreditReason;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Jobs\GenerateAuditReport;
+use App\Mail\Audit\AuditAwaitingPartnerApproval;
 use App\Mail\Audit\AuditCreditNeeded;
 use App\Mail\Audit\AuditQuotaExhausted;
 use App\Mail\Audit\AuditRepoAccessNeeded;
@@ -22,6 +23,7 @@ use App\Models\User;
 use App\Services\AuditMail\AuditMailer;
 use App\Services\AuditReport\AuditEntitlementService;
 use App\Services\AuditReport\AuditFunnelRecorder;
+use App\Services\AuditReport\AuditPartnerOrderService;
 use App\Services\AuditReport\RepositoryCloner;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -199,6 +201,19 @@ class AuditRequestService
 
         if ($routed === AuditRequestStatus::AWAITING_PAYMENT) {
             $this->funnel->record(AuditFunnelRecorder::STAGE_AWAITING_PAYMENT, $auditRequest);
+
+            // A referred customer pays their partner: the cash order is put in
+            // front of the partner to approve now, and the customer is told so
+            // instead of being sent to a checkout. Resolved lazily -- the order
+            // side reaches back into pricing and subscription services.
+            $order = app(AuditPartnerOrderService::class)->openFor($auditRequest);
+
+            if ($order !== null) {
+                $this->auditMailer->send(new AuditAwaitingPartnerApproval($auditRequest, $order), $auditRequest->email, $auditRequest);
+                $this->notifyAdmin($auditRequest);
+
+                return;
+            }
 
             $this->auditMailer->send(new AuditQuotaExhausted($auditRequest, $this->purchaseRunUrl($auditRequest)), $auditRequest->email, $auditRequest);
             $this->notifyAdmin($auditRequest);
