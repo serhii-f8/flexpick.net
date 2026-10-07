@@ -80,7 +80,11 @@ class GitLabProvider implements GitProvider
 
         if ($cached === null) {
             $cached = $this->fetchRepositoryPage($connection, $term, $page);
-            Cache::put($key, $cached, now()->addSeconds((int) config('audit.repo_picker.cache_seconds')));
+
+            // An empty page is not cached: a project created a moment later should show up at once.
+            if ($cached['items'] !== []) {
+                Cache::put($key, $cached, now()->addSeconds((int) config('audit.repo_picker.cache_seconds')));
+            }
         }
 
         return new RepositoryPage(array_map(RepositoryEntry::fromArray(...), $cached['items']), $cached['has_more']);

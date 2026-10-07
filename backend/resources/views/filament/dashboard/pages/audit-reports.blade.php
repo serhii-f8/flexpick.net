@@ -48,7 +48,11 @@
 
                                         @if ($picker->page->items === [])
                                             <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                                {{ __('No repositories found for this account.') }}
+                                                @if (trim($repoSearch) !== '')
+                                                    {{ __('No repositories match your search.') }}
+                                                @else
+                                                    {{ __('No repositories found in your connected :provider account. Create one (or get added to one) on :provider, then reopen this list — or paste a URL instead.', ['provider' => $pickerLabels[$pickerProvider]]) }}
+                                                @endif
                                                 @if ($pickerProvider === 'github')
                                                     {{ __('Organization repositories appear only after the organization approves FlexPick on GitHub.') }}
                                                 @endif

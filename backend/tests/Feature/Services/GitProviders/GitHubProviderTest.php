@@ -196,6 +196,18 @@ class GitHubProviderTest extends FeatureTest
         $this->assertSame([], $none->items);
     }
 
+    public function test_an_empty_listing_is_not_cached_so_a_new_repository_shows_up_at_once(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9106]);
+        Http::fake(['api.github.com/user/repos*' => Http::response([])]);
+
+        $provider = new GitHubProvider;
+        $this->assertSame([], $provider->listRepositories($connection, null, 1)->items);
+        $provider->listRepositories($connection, null, 1);
+
+        Http::assertSentCount(2);
+    }
+
     public function test_the_listing_is_cached_per_connection_and_not_shared_between_connections(): void
     {
         $a = TenantGitConnection::factory()->make(['id' => 9104, 'access_token' => 'token-a']);

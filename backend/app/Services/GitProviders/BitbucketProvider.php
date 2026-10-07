@@ -31,7 +31,7 @@ class BitbucketProvider implements GitProvider
     /**
      * `repository` covers clone and the branch/repository REST calls. `account` is needed
      * only by the picker: Bitbucket has no per-token repository list, so it enumerates the
-     * member's workspaces first (GET /2.0/workspaces). A connection made before `account`
+     * member's workspaces first (GET /2.0/user/workspaces). A connection made before `account`
      * was requested gets a 403 there and the picker asks the member to reconnect.
      * Deploy note: the OAuth consumer must grant "Account: Read" as well as "Repositories: Read".
      */
@@ -82,7 +82,11 @@ class BitbucketProvider implements GitProvider
 
         if ($rows === null) {
             $rows = $this->fetchRepositories($connection);
-            Cache::put($key, $rows, now()->addSeconds((int) config('audit.repo_picker.cache_seconds')));
+
+            // An empty account is not cached: a repository created a moment later should show up at once.
+            if ($rows !== []) {
+                Cache::put($key, $rows, now()->addSeconds((int) config('audit.repo_picker.cache_seconds')));
+            }
         }
 
         return RepositoryPage::fromEntries(array_map(RepositoryEntry::fromArray(...), $rows), $search, $page);
@@ -109,10 +113,12 @@ class BitbucketProvider implements GitProvider
     private function fetchRepositories(TenantGitConnection $connection): array
     {
         // A rejection here (missing `account` scope, revoked token) is what calls for a reconnect.
-        $values = $this->get($connection, 'https://api.bitbucket.org/2.0/workspaces', ['role' => 'member', 'pagelen' => 20])->json('values');
+        // GET /2.0/workspaces was removed on 2026-04-14 (CHANGE-2770) and now 404s; its
+        // replacement wraps each workspace in a workspace_access object.
+        $values = $this->get($connection, 'https://api.bitbucket.org/2.0/user/workspaces', ['sort' => 'slug', 'pagelen' => 100])->json('values');
 
         $slugs = collect(is_array($values) ? $values : [])
-            ->map(fn (mixed $workspace): mixed => is_array($workspace) ? ($workspace['slug'] ?? null) : null)
+            ->map(fn (mixed $access): mixed => is_array($access) && is_array($access['workspace'] ?? null) ? ($access['workspace']['slug'] ?? null) : null)
             ->filter(fn (mixed $slug): bool => is_string($slug) && $slug !== '')
             ->take(self::MAX_WORKSPACES);
 

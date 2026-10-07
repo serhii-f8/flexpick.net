@@ -221,6 +221,18 @@ class GitLabProviderTest extends FeatureTest
         Http::assertSent(fn ($request) => ! str_contains($request->url(), 'search='));
     }
 
+    public function test_an_empty_page_is_not_cached_so_a_new_project_shows_up_at_once(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9204]);
+        Http::fake(['gitlab.com/api/v4/projects*' => Http::response([])]);
+
+        $provider = new GitLabProvider;
+        $this->assertSame([], $provider->listRepositories($connection, null, 1)->items);
+        $provider->listRepositories($connection, null, 1);
+
+        Http::assertSentCount(2);
+    }
+
     public function test_pages_are_cached_per_connection_search_and_page(): void
     {
         $connection = TenantGitConnection::factory()->make(['id' => 9203]);

@@ -185,7 +185,7 @@ class BitbucketProviderTest extends FeatureTest
     private function fakeBitbucket(array $workspaces, array $reposBySlug): void
     {
         Http::fake(array_merge(
-            ['api.bitbucket.org/2.0/workspaces*' => Http::response(['values' => array_map(fn ($s) => ['slug' => $s], $workspaces)])],
+            ['api.bitbucket.org/2.0/user/workspaces*' => Http::response(['values' => array_map(fn ($s) => ['workspace' => ['slug' => $s]], $workspaces)])],
             collect($reposBySlug)->mapWithKeys(fn ($repos, $slug) => ["api.bitbucket.org/2.0/repositories/{$slug}*" => Http::response(['values' => $repos])])->all(),
         ));
     }
@@ -207,6 +207,18 @@ class BitbucketProviderTest extends FeatureTest
         $this->assertSame('main', $page->items[1]->defaultBranch);
         Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer bb_list_token')
             && str_contains($request->url(), 'role=member'));
+    }
+
+    public function test_workspaces_come_from_the_current_user_endpoint_not_the_removed_cross_workspace_one(): void
+    {
+        // Atlassian removed GET /2.0/workspaces on 2026-04-14 (CHANGE-2770); it now 404s.
+        $connection = TenantGitConnection::factory()->make(['id' => 9309]);
+        $this->fakeBitbucket(['acme'], ['acme' => [$this->bitbucketRepo('acme/api')]]);
+
+        (new BitbucketProvider)->listRepositories($connection, null, 1);
+
+        Http::assertSent(fn ($request) => str_starts_with($request->url(), 'https://api.bitbucket.org/2.0/user/workspaces'));
+        Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://api.bitbucket.org/2.0/workspaces'));
     }
 
     public function test_search_filters_locally_and_the_listing_is_cached(): void
@@ -242,10 +254,22 @@ class BitbucketProviderTest extends FeatureTest
         $this->assertSame([], (new BitbucketProvider)->listRepositories($connection, null, 1)->items);
     }
 
+    public function test_an_empty_listing_is_not_cached_so_a_new_repository_shows_up_at_once(): void
+    {
+        $connection = TenantGitConnection::factory()->make(['id' => 9310]);
+        $this->fakeBitbucket(['acme'], ['acme' => []]);
+
+        $provider = new BitbucketProvider;
+        $provider->listRepositories($connection, null, 1);
+        $provider->listRepositories($connection, null, 1);
+
+        Http::assertSentCount(4); // workspaces + repositories, twice
+    }
+
     public function test_a_403_on_the_workspace_list_means_the_account_scope_is_missing(): void
     {
         $connection = TenantGitConnection::factory()->make(['id' => 9304]);
-        Http::fake(['api.bitbucket.org/2.0/workspaces*' => Http::response(['error' => ['message' => 'Your credentials lack one or more required privilege scopes.']], 403)]);
+        Http::fake(['api.bitbucket.org/2.0/user/workspaces*' => Http::response(['error' => ['message' => 'Your credentials lack one or more required privilege scopes.']], 403)]);
 
         $this->expectException(GitRepositoryListingRejectedException::class);
 
@@ -256,7 +280,7 @@ class BitbucketProviderTest extends FeatureTest
     {
         $connection = TenantGitConnection::factory()->make(['id' => 9306]);
         Http::fake([
-            'api.bitbucket.org/2.0/workspaces*' => Http::response(['values' => [['slug' => 'locked'], ['slug' => 'acme']]]),
+            'api.bitbucket.org/2.0/user/workspaces*' => Http::response(['values' => [['workspace' => ['slug' => 'locked']], ['workspace' => ['slug' => 'acme']]]]),
             'api.bitbucket.org/2.0/repositories/locked*' => Http::response([], 403),
             'api.bitbucket.org/2.0/repositories/acme*' => Http::response(['values' => [$this->bitbucketRepo('acme/api')]]),
         ]);
@@ -270,7 +294,7 @@ class BitbucketProviderTest extends FeatureTest
     {
         $connection = TenantGitConnection::factory()->make(['id' => 9307]);
         Http::fake([
-            'api.bitbucket.org/2.0/workspaces*' => Http::response(['values' => [['slug' => 'acme']]]),
+            'api.bitbucket.org/2.0/user/workspaces*' => Http::response(['values' => [['workspace' => ['slug' => 'acme']]]]),
             'api.bitbucket.org/2.0/repositories/acme*' => Http::response([], 503),
         ]);
 
@@ -283,7 +307,7 @@ class BitbucketProviderTest extends FeatureTest
     {
         $connection = TenantGitConnection::factory()->make(['id' => 9308]);
         Http::fake([
-            'api.bitbucket.org/2.0/workspaces*' => Http::response(['values' => [['slug' => ['x']], 'junk', ['slug' => 'acme']]]),
+            'api.bitbucket.org/2.0/user/workspaces*' => Http::response(['values' => [['workspace' => ['slug' => ['x']]], 'junk', ['workspace' => 'junk'], ['workspace' => ['slug' => 'acme']]]]),
             'api.bitbucket.org/2.0/repositories/acme*' => Http::response(['values' => [['full_name' => ['bad']], 'junk', $this->bitbucketRepo('acme/api')]]),
         ]);
 
@@ -296,7 +320,7 @@ class BitbucketProviderTest extends FeatureTest
     {
         $connection = TenantGitConnection::factory()->make(['id' => 9305]);
 
-        Http::fake(['api.bitbucket.org/2.0/workspaces*' => Http::response([], 500)]);
+        Http::fake(['api.bitbucket.org/2.0/user/workspaces*' => Http::response([], 500)]);
         try {
             (new BitbucketProvider)->listRepositories($connection, null, 1);
             $this->fail('expected a transient failure');
@@ -305,7 +329,7 @@ class BitbucketProviderTest extends FeatureTest
         }
 
         Http::swap(new HttpFactory);
-        Http::fake(['api.bitbucket.org/2.0/workspaces*' => fn () => throw new ConnectionException('timeout')]);
+        Http::fake(['api.bitbucket.org/2.0/user/workspaces*' => fn () => throw new ConnectionException('timeout')]);
         $this->expectException(GitAccessTemporarilyUnavailableException::class);
         (new BitbucketProvider)->listRepositories($connection, null, 1);
     }

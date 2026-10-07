@@ -176,7 +176,21 @@ class AuditReportsRepositoryPickerTest extends FeatureTest
             ->assertSee('acme/website')
             ->assertDontSee('acme/svc-1')
             ->set('repoSearch', 'no-such-repo')
-            ->assertSee('No repositories found');
+            ->assertSee('No repositories match your search.');
+    }
+
+    public function test_an_account_with_no_repositories_says_so_instead_of_reporting_an_outage(): void
+    {
+        [$user, $tenant] = $this->manager();
+        $this->connect($tenant, 'bitbucket');
+        Http::fake([
+            'api.bitbucket.org/2.0/user/workspaces*' => Http::response(['values' => [['workspace' => ['slug' => 'solo']]]]),
+            'api.bitbucket.org/2.0/repositories/solo*' => Http::response(['values' => []]),
+        ]);
+
+        Livewire::test(AuditReports::class)
+            ->assertSee('No repositories found in your connected Bitbucket account.')
+            ->assertDontSee("Couldn't reach Bitbucket");
     }
 
     public function test_a_revoked_token_shows_reconnect_and_the_url_box_stays_reachable(): void

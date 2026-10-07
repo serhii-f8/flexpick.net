@@ -90,7 +90,11 @@ class GitHubProvider implements GitProvider
 
         if ($entries === null) {
             $rows = $this->fetchRepositories($connection);
-            Cache::put($key, $rows, now()->addSeconds((int) config('audit.repo_picker.cache_seconds')));
+
+            // An empty account is not cached: a repository created a moment later should show up at once.
+            if ($rows !== []) {
+                Cache::put($key, $rows, now()->addSeconds((int) config('audit.repo_picker.cache_seconds')));
+            }
             $entries = array_map(RepositoryEntry::fromArray(...), $rows);
         }
 
