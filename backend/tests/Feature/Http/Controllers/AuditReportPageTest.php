@@ -136,8 +136,21 @@ class AuditReportPageTest extends FeatureTest
         $response = $this->get('/reports/sample')->assertOk();
 
         foreach (AuditTier::cases() as $tier) {
-            $response->assertSee($tier->labelWithPrice());
+            $response->assertSee($tier->label());
         }
+    }
+
+    public function test_sample_report_shows_no_prices(): void
+    {
+        // A partner's visitors pay the partner's price, so the public sample
+        // must never quote the base catalog.
+        $response = $this->get('/reports/sample')->assertOk();
+
+        foreach (AuditTier::cases() as $tier) {
+            $response->assertDontSee($tier->labelWithPrice());
+        }
+
+        $this->assertDoesNotMatchRegularExpression('/\\$\s?\d/', strip_tags($response->getContent()));
     }
 
     /**
