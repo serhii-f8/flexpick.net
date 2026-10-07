@@ -6,7 +6,6 @@ use App\Constants\AuditFunding;
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
 use App\Constants\AwaitingCreditReason;
-use App\Constants\ReferralConstants;
 use App\Exceptions\AuditNotAnalyzableException;
 use App\Jobs\GenerateAuditReport;
 use App\Mail\Audit\AuditCreditNeeded;
@@ -81,7 +80,7 @@ class AuditRequestService
         $this->funnel->record(AuditFunnelRecorder::STAGE_SUBMITTED, $auditRequest);
 
         $this->auditMailer->send(
-            new AuditVerifyEmail($auditRequest, $this->verificationUrl($auditRequest), $this->registrationUrl($auditRequest)),
+            new AuditVerifyEmail($auditRequest, $this->verificationUrl($auditRequest)),
             $auditRequest->email,
             $auditRequest,
         );
@@ -91,21 +90,6 @@ class AuditRequestService
         $this->notifyAdmin($auditRequest);
 
         return $auditRequest;
-    }
-
-    /**
-     * Sign-up through the referrer's own code, so the account is attributed to
-     * them and sees their prices. Once registered, the request is claimed into
-     * the new workspace (ClaimAuditRequestsForTenant), where its status is
-     * visible and a git account can be connected.
-     */
-    public function registrationUrl(AuditRequest $auditRequest): string
-    {
-        $code = $auditRequest->meta['referral_code'] ?? null;
-
-        return $this->partnerContacts->forCode($code) === null
-            ? route('register')
-            : route('register', [ReferralConstants::HTTP_PARAM_REFERRAL_CODE => $code]);
     }
 
     /**
@@ -215,6 +199,7 @@ class AuditRequestService
 
         if ($routed === AuditRequestStatus::AWAITING_PAYMENT) {
             $this->funnel->record(AuditFunnelRecorder::STAGE_AWAITING_PAYMENT, $auditRequest);
+
             $this->auditMailer->send(new AuditQuotaExhausted($auditRequest, $this->purchaseRunUrl($auditRequest)), $auditRequest->email, $auditRequest);
             $this->notifyAdmin($auditRequest);
 

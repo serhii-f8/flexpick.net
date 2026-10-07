@@ -12,6 +12,10 @@
         .spinner { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #d4a853; margin-right: 8px; animation: pulse 1.6s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
         .btn { display: none; margin-top: 20px; background: #1c1917; color: #fafaf9; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; }
+        .account { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e7e5e4; }
+        .account p { margin-bottom: 12px; }
+        .btn-inline { display: inline-block; margin: 4px; background: #1c1917; color: #fafaf9; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px; }
+        .btn-ghost { background: transparent; color: #1c1917; border: 1px solid #1c1917; }
         .muted { font-size: 12px; color: #a8a29e; margin-top: 18px; }
     </style>
 </head>
@@ -20,6 +24,18 @@
         <h1>{{ __('Your codebase audit') }}</h1>
         <p><span class="spinner" id="spinner"></span><span id="status-label">{{ $label }}</span></p>
         <a class="btn" id="report-link" href="#">{{ __('Open my report →') }}</a>
+        @if ($setPasswordUrl || $gitConnectionsUrl)
+            <div class="account">
+                <p><strong>{{ __('Your FlexPick account is ready.') }}</strong></p>
+                @if ($setPasswordUrl)
+                    <a class="btn-inline" href="{{ $setPasswordUrl }}">{{ __('Set your password') }}</a>
+                @endif
+                @if ($gitConnectionsUrl)
+                    <a class="btn-inline btn-ghost" href="{{ $gitConnectionsUrl }}">{{ __('Connect GitHub, GitLab or Bitbucket') }}</a>
+                    <p class="muted" style="margin-top: 10px">{{ __('Needed only if the repository is private.') }}</p>
+                @endif
+            </div>
+        @endif
         <p class="muted">{{ __('This page updates automatically. We also email you at every step — safe to close.') }}</p>
     </div>
     <script>

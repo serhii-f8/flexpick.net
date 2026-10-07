@@ -123,6 +123,20 @@ class PartnerAttributionService
             return;
         }
 
+        $this->attributeToCode($user, $code, $source);
+    }
+
+    /**
+     * The same set-once attribution, from a code the caller already holds --
+     * an audit request's stored referral code, when the visitor confirms
+     * their email from a browser that never saw the referral link.
+     */
+    public function attributeToCode(User $user, string $code, PartnerAttributionSource $source): void
+    {
+        if ($user->partner_tenant_id !== null) {
+            return;
+        }
+
         $tenant = $this->resolveTenantForCode($code);
 
         if ($tenant === null) {

@@ -174,30 +174,13 @@ class PartnerContactTest extends FeatureTest
         $this->assertStringContainsString('not confirmed their email yet', (new NewAuditRequestAdminNotification($request))->render());
     }
 
-    public function test_the_client_email_links_to_registration_through_the_referrers_code(): void
+    public function test_the_client_email_says_confirming_creates_the_account(): void
     {
-        Mail::fake();
-        [, , $code] = $this->partner();
+        $request = AuditRequest::factory()->create();
 
-        $this->postJson('/api/audit-requests', ['name' => 'Ada', 'email' => 'ada-'.Str::random(10).'@example.com', 'repo_url' => 'https://github.com/acme/app', 'referral_code' => $code])->assertCreated();
+        $html = (new AuditVerifyEmail($request, 'https://verify.example'))->render();
 
-        Mail::assertQueued(AuditVerifyEmail::class, function (AuditVerifyEmail $mail) use ($code): bool {
-            $html = $mail->render();
-
-            return str_contains($mail->registrationUrl, '/register')
-                && str_contains($mail->registrationUrl, 'rc='.$code)
-                && str_contains($html, e($mail->registrationUrl))
-                && str_contains($html, 'connect your GitHub, GitLab or Bitbucket account');
-        });
-    }
-
-    public function test_an_unreferred_client_gets_a_plain_registration_link(): void
-    {
-        Mail::fake();
-
-        $this->postJson('/api/audit-requests', ['name' => 'Bob', 'email' => 'bob-'.Str::random(10).'@example.com', 'referral_code' => 'REF-NOPE'])->assertCreated();
-
-        Mail::assertQueued(AuditVerifyEmail::class, fn (AuditVerifyEmail $mail): bool => str_contains($mail->registrationUrl, '/register')
-            && ! str_contains($mail->registrationUrl, 'rc='));
+        $this->assertStringContainsString('Confirming also creates your FlexPick account', $html);
+        $this->assertStringContainsString('connect your GitHub, GitLab or Bitbucket account', $html);
     }
 }

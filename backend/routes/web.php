@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditAccountPasswordController;
 use App\Http\Controllers\AuditReportController;
 use App\Http\Controllers\AuditRequestController;
 use App\Http\Controllers\Auth\OAuthController;
@@ -221,6 +222,13 @@ Route::controller(InvoiceController::class)
 Route::get('/audit-requests/{auditRequest:uuid}/verify', [AuditRequestController::class, 'verify'])
     ->name('audit-requests.verify')
     ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
+
+Route::get('/account/set-password/{user:uuid}', [AuditAccountPasswordController::class, 'show'])
+    ->name('audit-account.set-password')
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
+
+Route::post('/account/set-password/{user:uuid}', [AuditAccountPasswordController::class, 'store'])
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed', 'throttle:10,1']);
 
 Route::get('/audit-requests/{auditRequest:uuid}/status', [AuditRequestController::class, 'status'])
     ->name('audit-requests.status')

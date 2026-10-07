@@ -11,26 +11,26 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class AuditVerifyEmail extends Mailable implements ShouldQueue
+class AuditAccountReady extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels, TracksAuditEmailLog;
 
     public function __construct(
         public AuditRequest $auditRequest,
-        public string $verificationUrl,
+        public string $setPasswordUrl,
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __('Confirm your email to get started'),
+            subject: __('Your FlexPick account is ready — set your password'),
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.audit.verify',
+            view: 'emails.audit.account-ready',
         );
     }
 }

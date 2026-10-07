@@ -59,6 +59,10 @@ return [
     // the two cannot report different delivery-rate numbers.
     'delivery_rate_window_hours' => (int) env('AUDIT_DELIVERY_RATE_WINDOW_HOURS', 168),
     'verification_link_hours' => 48,
+
+    // The one-use "set your password" link a landing-page visitor's auto-created
+    // account is emailed when they confirm (AuditAccountProvisioner).
+    'set_password_link_days' => 7,
     'unverified_purge_days' => 7,
     'benchmark_min_sample' => 20,
     'unlock_product_slug' => 'audit-report-unlock',

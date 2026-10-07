@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Constants\AuditRequestStatus;
+use App\Filament\Dashboard\Pages\GitConnections;
 use App\Http\Requests\StoreAuditRequestRequest;
 use App\Jobs\RouteVerifiedAuditRequest;
 use App\Listeners\Order\HandleAuditTierOrder;
 use App\Models\AuditRequest;
 use App\Models\TenantParameter;
+use App\Services\AuditAccountProvisioner;
 use App\Services\AuditGuestAccountService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\AuditReportService;
@@ -30,22 +32,40 @@ class AuditRequestController extends Controller
         return response()->json(['id' => $auditRequest->uuid], 201);
     }
 
-    public function verify(AuditRequest $auditRequest, AuditFunnelRecorder $funnel, AuditRequestService $auditRequestService)
+    public function verify(AuditRequest $auditRequest, AuditFunnelRecorder $funnel, AuditRequestService $auditRequestService, AuditAccountProvisioner $accounts)
     {
         if ($auditRequest->email_verified_at === null) {
             $auditRequest->update(['email_verified_at' => now()]);
             $funnel->record(AuditFunnelRecorder::STAGE_VERIFIED, $auditRequest);
-            RouteVerifiedAuditRequest::dispatch($auditRequest);
+
+            // Confirming is the sign-up: the account (and its workspace, which
+            // claims this request) exists before routing, so a referred
+            // request's cash order has a buyer and a workspace to land on.
+            $user = $accounts->provision($auditRequest);
+
+            if ($user !== null && auth()->guest()) {
+                auth()->login($user);
+                request()->session()->regenerate();
+            }
+
+            RouteVerifiedAuditRequest::dispatch($auditRequest->fresh());
         }
 
         return redirect($auditRequestService->statusUrl($auditRequest));
     }
 
-    public function status(AuditRequest $auditRequest)
+    public function status(AuditRequest $auditRequest, AuditAccountProvisioner $accounts)
     {
+        $user = auth()->user();
+        $owner = $user !== null && (int) $auditRequest->user_id === (int) $user->id;
+        $workspace = $owner ? $accounts->workspaceFor($user) : null;
+
         return view('audit.status', [
             'auditRequest' => $auditRequest,
-            'label' => $this->label($auditRequest->status),
+            'label' => $this->label($auditRequest),
+            // Only the signed-in owner gets account links; the status URL itself is shareable.
+            'setPasswordUrl' => $owner && $accounts->awaitsPassword($user) ? $accounts->setPasswordUrl($user) : null,
+            'gitConnectionsUrl' => $workspace !== null ? GitConnections::getUrl(panel: 'dashboard', tenant: $workspace) : null,
             'pollUrl' => URL::signedRoute('audit-requests.status.json', ['auditRequest' => $auditRequest->uuid]),
         ]);
     }
@@ -60,7 +80,7 @@ class AuditRequestController extends Controller
 
         return response()->json([
             'status' => $auditRequest->status,
-            'label' => $this->label($auditRequest->status),
+            'label' => $this->label($auditRequest),
             'done' => $ready,
             'failed' => $auditRequest->status === AuditRequestStatus::FAILED->value,
             // Refunded terminal closes: nothing more will happen to this
@@ -128,9 +148,9 @@ class AuditRequestController extends Controller
         return redirect()->route('buy.product', ['productSlug' => $slug, 'tenant' => $tenant->uuid]);
     }
 
-    private function label(string $status): string
+    private function label(AuditRequest $auditRequest): string
     {
-        return match ($status) {
+        return match ($auditRequest->status) {
             'pending_verification' => __('Waiting for you to confirm your email'),
             'new' => __('Request received'),
             'queued' => __('Queued for analysis'),
