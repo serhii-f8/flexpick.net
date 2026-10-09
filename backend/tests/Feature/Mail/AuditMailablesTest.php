@@ -8,6 +8,7 @@ use App\Filament\Dashboard\Pages\GitConnections;
 use App\Mail\Audit\AuditQuotaExhausted;
 use App\Mail\Audit\AuditRepoAccessNeeded;
 use App\Mail\Audit\AuditReportReady;
+use App\Mail\Audit\AuditReportUnlocked;
 use App\Mail\Audit\AuditRequestReceived;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
@@ -124,18 +125,44 @@ class AuditMailablesTest extends FeatureTest
         $mailable->assertDontSeeInHtml('Collaborators');
     }
 
-    public function test_report_ready_attaches_pdf_and_links(): void
+    public function test_report_ready_attaches_both_pdfs_and_links_both_reports(): void
     {
-        Storage::disk('local')->put('audit-reports/fixture.pdf', '%PDF-1.4 fixture');
-        $report = AuditReport::factory()->create(['pdf_path' => 'audit-reports/fixture.pdf']);
+        Storage::disk('local')->put('audit-reports/fixture.pdf', '%PDF-1.4 business');
+        Storage::disk('local')->put('audit-reports/fixture-technical.pdf', '%PDF-1.4 technical');
+        $report = AuditReport::factory()->create(['pdf_path' => 'audit-reports/fixture.pdf', 'technical_pdf_path' => 'audit-reports/fixture-technical.pdf']);
+
+        $mailable = new AuditReportReady($report, 'https://app.example.com/reports/abc?signature=x', technicalUrl: 'https://app.example.com/reports/abc/technical?signature=y');
+
+        $mailable->assertSeeInHtml('https://app.example.com/reports/abc?signature=x');
+        $mailable->assertSeeInHtml('https://app.example.com/reports/abc/technical?signature=y');
+        $mailable->assertSeeInHtml(__('Forward the developer report to your engineer'));
+        $mailable->assertHasAttachment(
+            Attachment::fromStorageDisk('local', 'audit-reports/fixture.pdf')->as('codebase-health-business.pdf')->withMime('application/pdf')
+        );
+        $mailable->assertHasAttachment(
+            Attachment::fromStorageDisk('local', 'audit-reports/fixture-technical.pdf')->as('codebase-health-developer.pdf')->withMime('application/pdf')
+        );
+    }
+
+    public function test_report_ready_without_a_developer_pdf_attaches_only_the_business_one(): void
+    {
+        Storage::disk('local')->put('audit-reports/fixture.pdf', '%PDF-1.4 business');
+        $report = AuditReport::factory()->create(['pdf_path' => 'audit-reports/fixture.pdf', 'technical_pdf_path' => null]);
 
         $mailable = new AuditReportReady($report, 'https://app.example.com/reports/abc?signature=x');
+
+        $this->assertCount(1, $mailable->attachments());
+        $mailable->assertDontSeeInHtml(__('Forward the developer report to your engineer'));
+    }
+
+    public function test_unlocked_email_links_both_reports(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create();
+
+        $mailable = new AuditReportUnlocked($report, 'https://app.example.com/reports/abc?signature=x', 'https://app.example.com/reports/abc/technical?signature=y');
+
         $mailable->assertSeeInHtml('https://app.example.com/reports/abc?signature=x');
-        $mailable->assertHasAttachment(
-            Attachment::fromStorageDisk('local', 'audit-reports/fixture.pdf')
-                ->as('codebase-health-report.pdf')
-                ->withMime('application/pdf')
-        );
+        $mailable->assertSeeInHtml('https://app.example.com/reports/abc/technical?signature=y');
     }
 
     /**

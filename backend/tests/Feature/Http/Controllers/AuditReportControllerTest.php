@@ -64,7 +64,7 @@ class AuditReportControllerTest extends FeatureTest
         $service->send($report);
 
         $this->assertSame(AuditRequestStatus::SENT->value, $request->fresh()->status);
-        Mail::assertQueued(AuditReportReady::class, fn ($mail) => $mail->hasTo($request->email));
+        Mail::assertQueued(AuditReportReady::class, fn ($mail) => $mail->hasTo($request->email) && str_contains((string) $mail->technicalUrl, '/technical'));
     }
 
     public function test_signed_url_shows_web_report(): void

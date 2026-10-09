@@ -2,6 +2,7 @@
 
 namespace App\Mail\Audit;
 
+use App\Constants\ReportVariant;
 use App\Mail\Concerns\TracksAuditEmailLog;
 use App\Models\AuditReport;
 use Illuminate\Bus\Queueable;
@@ -21,6 +22,7 @@ class AuditReportReady extends Mailable implements ShouldQueue
         public string $signedUrl,
         public ?array $deltas = null,
         public ?array $groupDeltas = null,
+        public ?string $technicalUrl = null,
     ) {}
 
     public function envelope(): Envelope
@@ -44,14 +46,20 @@ class AuditReportReady extends Mailable implements ShouldQueue
      */
     public function attachments(): array
     {
-        if ($this->report->pdf_path === null) {
-            return [];
+        $files = [
+            [ReportVariant::BUSINESS, $this->report->pdf_path],
+            [ReportVariant::TECHNICAL, $this->report->technical_pdf_path],
+        ];
+
+        $attachments = [];
+        foreach ($files as [$variant, $path]) {
+            if ($path !== null) {
+                $attachments[] = Attachment::fromStorageDisk('local', $path)
+                    ->as($variant->pdfFilename())
+                    ->withMime('application/pdf');
+            }
         }
 
-        return [
-            Attachment::fromStorageDisk('local', $this->report->pdf_path)
-                ->as('codebase-health-report.pdf')
-                ->withMime('application/pdf'),
-        ];
+        return $attachments;
     }
 }

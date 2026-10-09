@@ -18,6 +18,7 @@ class AuditReportUnlocked extends Mailable implements ShouldQueue
     public function __construct(
         public AuditReport $report,
         public string $reportUrl,
+        public ?string $technicalUrl = null,
     ) {}
 
     public function envelope(): Envelope

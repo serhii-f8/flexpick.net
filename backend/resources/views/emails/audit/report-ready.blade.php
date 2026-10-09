@@ -9,12 +9,18 @@
                 {{ __('Hi :name,', ['name' => $report->auditRequest->name]) }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
-                {{ __('Your codebase health report is ready — view it online:') }}
+                {{ __('Your codebase health report is ready. It comes in two parts: a plain-language business overview, and a developer report with every technical detail.') }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
-                <a href="{{ $signedUrl }}">{{ __('View my report') }}</a>
+                <a href="{{ $signedUrl }}">{{ __('View the business overview') }}</a>
                 ({{ __('link valid for :days days', ['days' => config('audit.report_link_days')]) }})
             </p>
+            @if ($technicalUrl !== null)
+                <p style="margin: 16px 0 0; line-height: 24px">
+                    {{ __('Forward the developer report to your engineer') }}:
+                    <a href="{{ $technicalUrl }}">{{ __('Open the developer report') }}</a>
+                </p>
+            @endif
             @if ($deltas !== null && ($deltas['deltas']['overall'] ?? 0) !== 0)
                 <p style="margin: 16px 0 0; line-height: 24px">
                     {{ $deltas['deltas']['overall'] > 0

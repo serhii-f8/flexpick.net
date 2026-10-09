@@ -92,7 +92,7 @@ class AuditReportService
             $this->funnel->record(AuditFunnelRecorder::STAGE_UNLOCK_PAID, $report->auditRequest);
         }
 
-        $this->auditMailer->send(new AuditReportUnlocked($report, $this->signedUrl($report)), $report->auditRequest->email, $report->auditRequest);
+        $this->auditMailer->send(new AuditReportUnlocked($report, $this->signedUrl($report), $this->signedUrl($report, ReportVariant::TECHNICAL)), $report->auditRequest->email, $report->auditRequest);
     }
 
     public function send(AuditReport $report): void
@@ -103,6 +103,7 @@ class AuditReportService
                 $this->signedUrl($report),
                 $this->deltaService->deltasFor($report),
                 $this->groupDeltaService->deltasFor($report),
+                technicalUrl: $this->signedUrl($report, ReportVariant::TECHNICAL),
             ),
             $report->auditRequest->email,
             $report->auditRequest,
