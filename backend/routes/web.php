@@ -253,8 +253,9 @@ Route::get('/reports/{auditReport:uuid}/technical', [AuditReportController::clas
     ->name('reports.view.technical')
     ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
 
-Route::get('/reports/{auditReport:uuid}/download', [AuditReportController::class, 'download'])
+Route::get('/reports/{auditReport:uuid}/download/{variant?}', [AuditReportController::class, 'download'])
     ->name('reports.download')
+    ->whereIn('variant', ['business', 'technical'])
     ->middleware('auth');
 
 Route::get('/reports/{auditReport:uuid}/unlock', [AuditReportController::class, 'unlock'])

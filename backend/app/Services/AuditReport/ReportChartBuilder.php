@@ -179,15 +179,15 @@ class ReportChartBuilder
             $count = (int) ($counts[$area] ?? 0);
             $y = $i * 30;
             $body .= sprintf('<text x="0" y="%d" font-size="12" fill="%s" %s>%s</text>', $y + 15, self::INK, self::FONT, $this->e(__($label)));
-            $body .= sprintf('<rect x="150" y="%d" width="180" height="12" rx="6" fill="%s"/>', $y + 5, self::TRACK);
+            $body .= sprintf('<rect x="165" y="%d" width="180" height="12" rx="6" fill="%s"/>', $y + 5, self::TRACK);
             if ($count > 0) {
-                $body .= sprintf('<rect x="150" y="%d" width="%s" height="12" rx="6" fill="%s"/>', $y + 5, round(180 * $count / $max, 2), self::BAND_COLORS['healthy']);
+                $body .= sprintf('<rect x="165" y="%d" width="%s" height="12" rx="6" fill="%s"/>', $y + 5, round(180 * $count / $max, 2), self::BAND_COLORS['healthy']);
             }
-            $body .= sprintf('<text x="360" y="%d" text-anchor="end" font-size="12" font-weight="bold" fill="%s" %s>%d</text>', $y + 15, self::INK, self::FONT, $count);
+            $body .= sprintf('<text x="375" y="%d" text-anchor="end" font-size="12" font-weight="bold" fill="%s" %s>%d</text>', $y + 15, self::INK, self::FONT, $count);
             $i++;
         }
 
-        return $this->svg(__('Findings by part of your business'), 360, $i * 30, $body);
+        return $this->svg(__('Findings by part of your business'), 375, $i * 30, $body);
     }
 
     private function emptyState(string $message, int $width): string

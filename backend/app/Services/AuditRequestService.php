@@ -246,16 +246,16 @@ class AuditRequestService
      * and audit_funnel_events null out so the delivery and funnel history
      * survives the record it described.
      *
-     * The PDF does not. A DB-level cascade never fires Eloquent events, so no
+     * The PDFs do not. A DB-level cascade never fires Eloquent events, so no
      * hook on AuditReport can ever see this coming — the file has to be
      * removed here, before the row that names it disappears.
      */
     public function delete(AuditRequest $auditRequest): void
     {
-        $pdfPath = $auditRequest->report?->pdf_path;
-
-        if ($pdfPath !== null) {
-            Storage::disk('local')->delete($pdfPath);
+        foreach ([$auditRequest->report?->pdf_path, $auditRequest->report?->technical_pdf_path] as $path) {
+            if ($path !== null) {
+                Storage::disk('local')->delete($path);
+            }
         }
 
         $auditRequest->delete();

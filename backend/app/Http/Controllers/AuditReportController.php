@@ -141,15 +141,22 @@ class AuditReportController extends Controller
         return view($variant->webView(), $data);
     }
 
-    public function download(AuditReport $auditReport)
+    public function download(AuditReport $auditReport, ?string $variant = null)
     {
         // Membership of the request's workspace, or the personal owner rule
         // for an unclaimed report; admins pass (AuditReport::isViewableBy).
         abort_unless($auditReport->isViewableBy(auth()->user()), 403);
         abort_if($auditReport->auditRequest->isHeldForExpertReview(), 403);
+        // pdf_path is only ever written on unlock, so it doubles as the
+        // "this report's PDFs exist" gate for both variants.
         abort_if($auditReport->pdf_path === null, 404);
 
-        return Storage::disk('local')->download($auditReport->pdf_path, 'codebase-health-report.pdf');
+        $variant = ReportVariant::from($variant ?? ReportVariant::BUSINESS->value);
+        $path = $variant === ReportVariant::TECHNICAL
+            ? app(AuditReportService::class)->ensureTechnicalPdf($auditReport)
+            : $auditReport->pdf_path;
+
+        return Storage::disk('local')->download($path, $variant->pdfFilename());
     }
 
     public function unlock(AuditReport $auditReport, AuditGuestAccountService $guestAccounts)

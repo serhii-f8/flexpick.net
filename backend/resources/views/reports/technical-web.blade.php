@@ -311,7 +311,7 @@
                 @endforeach
             </table>
             @if (! $isSample && $report->pdf_path !== null)
-                <p class="mt-4"><a href="{{ route('reports.download', ['auditReport' => $report->uuid]) }}">{{ __('Download PDF') }}</a></p>
+                <p class="mt-4"><a href="{{ route('reports.download', ['auditReport' => $report->uuid, 'variant' => 'technical']) }}">{{ __('Download PDF') }}</a></p>
             @endif
         </div>
     @else

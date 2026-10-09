@@ -29,6 +29,6 @@ class AuditReportFactory extends Factory
 
     public function locked(): static
     {
-        return $this->state(fn () => ['unlocked_at' => null, 'pdf_path' => null]);
+        return $this->state(fn () => ['unlocked_at' => null, 'pdf_path' => null, 'technical_pdf_path' => null]);
     }
 }

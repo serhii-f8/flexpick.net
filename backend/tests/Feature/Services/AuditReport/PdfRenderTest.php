@@ -5,7 +5,11 @@ namespace Tests\Feature\Services\AuditReport;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Models\User;
+use App\Services\AuditReport\AuditReportService;
+use App\Services\AuditReport\BusinessReportPresenter;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\Feature\FeatureTest;
 
 class PdfRenderTest extends FeatureTest
@@ -80,5 +84,47 @@ class PdfRenderTest extends FeatureTest
         $this->assertStringNotContainsString(__('In plain terms'), $html);
         $this->assertStringNotContainsString('Plain-words overview for the owner.', $html);
         $this->assertStringStartsWith('%PDF-', Pdf::loadHTML($html)->output());
+    }
+
+    public function test_the_business_pdf_renders_with_its_charts(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create([
+            'payload' => AuditReport::factory()->definition()['payload'] + [
+                'groups' => [],
+                'client_summary' => [
+                    'overview' => 'Owner overview.',
+                    'verdict' => 'Owner verdict.',
+                    'areas' => [['area' => 'testing', 'meaning' => 'm', 'status' => 's']],
+                    'findings' => [['what' => 'Owner finding.', 'consequence' => 'c', 'gain' => 'g', 'urgency' => 'now', 'business_area' => 'costs']],
+                    'roadmap' => [['step' => 'Step one', 'outcome' => 'o', 'effort' => 'M']],
+                    'questions' => ['Owner question?'],
+                ],
+            ],
+        ]);
+        $business = app(BusinessReportPresenter::class)->present($report, null, 50, collect());
+
+        $html = view('reports.business-pdf', ['report' => $report->fresh(), 'business' => $business])->render();
+
+        $this->assertStringContainsString('Owner verdict.', $html);
+        $this->assertStringContainsString('Owner question?', $html);
+        $this->assertStringContainsString('data:image/svg+xml;base64,', $html);
+        $this->assertStringNotContainsString('Fixture summary.', $html);
+        $output = Pdf::loadHTML($html)->output();
+        $this->assertStringStartsWith('%PDF-', $output);
+        $this->assertGreaterThan(1000, strlen($output));
+    }
+
+    public function test_unlocking_writes_both_pdfs(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+        $report = AuditReport::factory()->locked()->create();
+
+        app(AuditReportService::class)->unlock($report);
+
+        $report->refresh();
+        Storage::disk('local')->assertExists($report->pdf_path);
+        Storage::disk('local')->assertExists($report->technical_pdf_path);
+        $this->assertStringEndsWith('-technical.pdf', $report->technical_pdf_path);
     }
 }

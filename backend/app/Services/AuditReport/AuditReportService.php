@@ -34,8 +34,10 @@ class AuditReportService
             $wasUnlocked = $existing->unlocked_at !== null;
             $unlockOrderId = $existing->unlock_order_id;
 
-            if ($existing->pdf_path !== null) {
-                Storage::disk('local')->delete($existing->pdf_path);
+            foreach ([$existing->pdf_path, $existing->technical_pdf_path] as $path) {
+                if ($path !== null) {
+                    Storage::disk('local')->delete($path);
+                }
             }
             $existing->delete();
         }
@@ -47,6 +49,7 @@ class AuditReportService
             'user_id' => $auditRequest->user_id ?? User::where('email', $auditRequest->email)->value('id'),
             'payload' => $payload,
             'pdf_path' => null,
+            'technical_pdf_path' => null,
             'unlocked_at' => $unlocked ? now() : null,
             'unlock_order_id' => $wasUnlocked ? $unlockOrderId : null,
             'scoring_version' => $scoringVersion,
@@ -154,10 +157,42 @@ class AuditReportService
 
     private function generatePdf(AuditReport $report): void
     {
-        $pdfPath = config('audit.reports_dir').'/'.$report->uuid.'.pdf';
-        $pdf = Pdf::loadView(ReportVariant::TECHNICAL->pdfView(), ['report' => $report]);
-        Storage::disk('local')->put($pdfPath, $pdf->output());
+        $report->update([
+            'pdf_path' => $this->renderPdf($report, ReportVariant::BUSINESS),
+            'technical_pdf_path' => $this->renderPdf($report, ReportVariant::TECHNICAL),
+        ]);
+    }
 
-        $report->update(['pdf_path' => $pdfPath]);
+    /** Renders one report's PDF to local storage and returns its path. */
+    public function renderPdf(AuditReport $report, ReportVariant $variant): string
+    {
+        $path = config('audit.reports_dir').'/'.$report->uuid.$variant->pdfSuffix().'.pdf';
+        $data = ['report' => $report];
+
+        if ($variant === ReportVariant::BUSINESS) {
+            $data['business'] = app(BusinessReportPresenter::class)->present(
+                $report,
+                $this->deltaService->deltasFor($report),
+                app(AuditBenchmarkService::class)->percentileFor((int) data_get($report->payload, 'scores.overall', 0), $report->scoring_version),
+                $report->auditRequest->findingGroups,
+            );
+        }
+
+        Storage::disk('local')->put($path, Pdf::loadView($variant->pdfView(), $data)->output());
+
+        return $path;
+    }
+
+    /**
+     * Reports unlocked before the split carry only the business PDF; the
+     * developer one is written the first time somebody asks for it.
+     */
+    public function ensureTechnicalPdf(AuditReport $report): string
+    {
+        if ($report->technical_pdf_path === null) {
+            $report->update(['technical_pdf_path' => $this->renderPdf($report, ReportVariant::TECHNICAL)]);
+        }
+
+        return $report->technical_pdf_path;
     }
 }

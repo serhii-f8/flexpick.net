@@ -71,7 +71,7 @@ class AuditReportPageTest extends FeatureTest
             ->assertOk()
             ->assertSee('Add a smoke suite')
             ->assertSee('Add CI')
-            ->assertSee(route('reports.download', ['auditReport' => $report->uuid]))
+            ->assertSee(route('reports.download', ['auditReport' => $report->uuid, 'variant' => 'technical']))
             ->assertDontSee(__('Unlock full report'));
     }
 

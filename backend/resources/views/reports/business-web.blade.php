@@ -175,7 +175,8 @@
         <div class="mt-4 flex flex-wrap gap-3">
             <a class="inline-block rounded-lg bg-primary-500 px-5 py-2.5 font-bold text-stone-900 no-underline" href="{{ $tabUrls['technical'] }}">{{ __('Open the developer report') }}</a>
             @if (! $isSample && $unlocked && $report->pdf_path !== null)
-                <a class="inline-block rounded-lg border border-stone-600 px-5 py-2.5 font-bold text-stone-50 no-underline" href="{{ route('reports.download', ['auditReport' => $report->uuid]) }}">{{ __('Download PDF') }}</a>
+                <a class="inline-block rounded-lg border border-stone-600 px-5 py-2.5 font-bold text-stone-50 no-underline" href="{{ route('reports.download', ['auditReport' => $report->uuid, 'variant' => 'business']) }}">{{ __('Business PDF') }}</a>
+                <a class="inline-block rounded-lg border border-stone-600 px-5 py-2.5 font-bold text-stone-50 no-underline" href="{{ route('reports.download', ['auditReport' => $report->uuid, 'variant' => 'technical']) }}">{{ __('Developer PDF') }}</a>
             @endif
         </div>
     </section>

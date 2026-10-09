@@ -457,4 +457,21 @@ class AuditRequestResourceTest extends FeatureTest
         Storage::disk('local')->assertMissing('audit-reports/doomed.pdf');
         $this->assertDatabaseMissing('audit_requests', ['id' => $request->id]);
     }
+
+    public function test_deleting_an_audit_request_removes_both_report_pdfs_from_disk(): void
+    {
+        Storage::disk('local')->put('audit-reports/doomed.pdf', '%PDF-1.4');
+        Storage::disk('local')->put('audit-reports/doomed-technical.pdf', '%PDF-1.4');
+        $request = AuditRequest::factory()->create();
+        AuditReport::factory()->create([
+            'audit_request_id' => $request->id,
+            'pdf_path' => 'audit-reports/doomed.pdf',
+            'technical_pdf_path' => 'audit-reports/doomed-technical.pdf',
+        ]);
+
+        app(AuditRequestService::class)->delete($request);
+
+        Storage::disk('local')->assertMissing('audit-reports/doomed.pdf');
+        Storage::disk('local')->assertMissing('audit-reports/doomed-technical.pdf');
+    }
 }

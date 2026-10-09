@@ -12,7 +12,7 @@ class AuditReport extends Model
     use HasFactory, HasUuids;
 
     protected $fillable = [
-        'audit_request_id', 'user_id', 'payload', 'pdf_path',
+        'audit_request_id', 'user_id', 'payload', 'pdf_path', 'technical_pdf_path',
         'unlocked_at', 'unlock_order_id',
         'scoring_version', 'payload_schema_version',
     ];
