@@ -51,7 +51,7 @@ class PdfRenderTest extends FeatureTest
             ],
         ]);
 
-        $output = Pdf::loadView('reports.audit', [
+        $output = Pdf::loadView('reports.technical-pdf', [
             'report' => $report->fresh(),
             'payload' => $report->payload,
         ])->output();
@@ -60,7 +60,7 @@ class PdfRenderTest extends FeatureTest
         $this->assertGreaterThan(1000, strlen($output));
     }
 
-    public function test_the_pdf_carries_the_plain_language_summary(): void
+    public function test_the_developer_pdf_has_no_plain_terms_section(): void
     {
         $report = AuditReport::factory()->create([
             'payload' => AuditReport::factory()->definition()['payload'] + [
@@ -75,13 +75,10 @@ class PdfRenderTest extends FeatureTest
             ],
         ]);
 
-        $html = view('reports.audit', ['report' => $report->fresh(), 'payload' => $report->payload])->render();
+        $html = view('reports.technical-pdf', ['report' => $report->fresh(), 'payload' => $report->payload])->render();
 
-        $this->assertStringContainsString(__('In plain terms'), $html);
-        $this->assertStringContainsString('Plain-words overview for the owner.', $html);
-        $this->assertStringContainsString('Nothing is checked before a release.', $html);
-        $this->assertStringContainsString('A change can break checkout.', $html);
-        $this->assertStringContainsString('Fewer surprises.', $html);
+        $this->assertStringNotContainsString(__('In plain terms'), $html);
+        $this->assertStringNotContainsString('Plain-words overview for the owner.', $html);
         $this->assertStringStartsWith('%PDF-', Pdf::loadHTML($html)->output());
     }
 }

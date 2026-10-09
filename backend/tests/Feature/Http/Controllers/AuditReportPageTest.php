@@ -82,46 +82,6 @@ class AuditReportPageTest extends FeatureTest
         ];
     }
 
-    public function test_an_unlocked_report_shows_the_plain_language_summary(): void
-    {
-        $report = AuditReport::factory()->unlocked()->create([
-            'payload' => AuditReport::factory()->definition()['payload'] + ['client_summary' => $this->clientSummary()],
-        ]);
-
-        $this->get(app(AuditReportService::class)->signedUrl($report))
-            ->assertOk()
-            ->assertSee(__('In plain terms'))
-            ->assertSee('Your app works today, but a few weak spots')
-            ->assertSee('Almost nothing is checked automatically')
-            ->assertSee('quietly break checkout')
-            ->assertSee('far fewer surprises');
-    }
-
-    public function test_a_locked_report_shows_the_overview_but_hides_the_findings(): void
-    {
-        $report = AuditReport::factory()->locked()->create([
-            'payload' => AuditReport::factory()->definition()['payload'] + ['client_summary' => $this->clientSummary()],
-        ]);
-
-        $this->get(app(AuditReportService::class)->signedUrl($report))
-            ->assertOk()
-            ->assertSee(__('In plain terms'))
-            ->assertSee('Your app works today, but a few weak spots')
-            ->assertDontSee('Almost nothing is checked automatically')
-            ->assertDontSee('quietly break checkout')
-            ->assertDontSee('far fewer surprises');
-    }
-
-    public function test_a_report_without_the_section_renders_without_it(): void
-    {
-        // Reports generated before the section existed carry no client_summary.
-        $report = AuditReport::factory()->unlocked()->create();
-
-        $this->get(app(AuditReportService::class)->signedUrl($report))
-            ->assertOk()
-            ->assertDontSee(__('In plain terms'));
-    }
-
     public function test_sample_report_is_public_and_unlocked(): void
     {
         $this->get('/reports/sample')
@@ -138,10 +98,9 @@ class AuditReportPageTest extends FeatureTest
      */
     public function test_sample_report_shows_every_section_a_report_can_carry(): void
     {
-        $response = $this->get('/reports/sample')->assertOk();
+        $response = $this->get('/reports/sample/technical')->assertOk();
 
         foreach ([
-            'In plain terms',
             'Health scores',
             'What we found',
             'Repository facts',

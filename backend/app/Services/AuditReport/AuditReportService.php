@@ -4,6 +4,7 @@ namespace App\Services\AuditReport;
 
 use App\Constants\AuditRequestStatus;
 use App\Constants\AuditTier;
+use App\Constants\ReportVariant;
 use App\Mail\Audit\AuditReportReady;
 use App\Mail\Audit\AuditReportUnlocked;
 use App\Models\AuditReport;
@@ -142,10 +143,10 @@ class AuditReportService
         $this->generatePdf($report);
     }
 
-    public function signedUrl(AuditReport $report): string
+    public function signedUrl(AuditReport $report, ReportVariant $variant = ReportVariant::BUSINESS): string
     {
         return URL::temporarySignedRoute(
-            'reports.view',
+            $variant->routeName(),
             now()->addDays((int) config('audit.report_link_days')),
             ['auditReport' => $report->uuid],
         );
@@ -154,7 +155,7 @@ class AuditReportService
     private function generatePdf(AuditReport $report): void
     {
         $pdfPath = config('audit.reports_dir').'/'.$report->uuid.'.pdf';
-        $pdf = Pdf::loadView('reports.audit', ['report' => $report]);
+        $pdf = Pdf::loadView(ReportVariant::TECHNICAL->pdfView(), ['report' => $report]);
         Storage::disk('local')->put($pdfPath, $pdf->output());
 
         $report->update(['pdf_path' => $pdfPath]);

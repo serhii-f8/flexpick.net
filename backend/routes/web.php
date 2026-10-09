@@ -243,9 +243,14 @@ Route::get('/audit-requests/{auditRequest:uuid}/purchase-run', [AuditRequestCont
     ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
 
 Route::get('/reports/sample', [AuditReportController::class, 'sample'])->name('reports.sample');
+Route::get('/reports/sample/technical', [AuditReportController::class, 'sampleTechnical'])->name('reports.sample.technical');
 
 Route::get('/reports/{auditReport:uuid}', [AuditReportController::class, 'show'])
     ->name('reports.view')
+    ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
+
+Route::get('/reports/{auditReport:uuid}/technical', [AuditReportController::class, 'showTechnical'])
+    ->name('reports.view.technical')
     ->middleware([RepairHtmlEscapedQueryString::class, 'signed']);
 
 Route::get('/reports/{auditReport:uuid}/download', [AuditReportController::class, 'download'])

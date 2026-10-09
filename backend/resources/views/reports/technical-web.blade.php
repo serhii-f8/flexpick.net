@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ __('Codebase Health Report') }}</title>
+    <title>{{ __('Codebase Health — Developer Report') }}</title>
     @vite('resources/css/app.css')
     <style>
         /* The bundle's daisyUI theme is dark by default; this document is a
@@ -31,8 +31,10 @@
         </div>
     @endif
 
+    @include('reports.partials.web.report-tabs')
+
     <div class="mb-5 rounded-xl border border-stone-200 bg-white p-7">
-        <h1 class="mb-1 text-2xl font-bold">{{ __('Codebase Health Report') }}</h1>
+        <h1 class="mb-1 text-2xl font-bold">{{ __('Codebase Health — Developer Report') }}</h1>
         <p class="text-xs text-stone-500">{{ $report->auditRequest->repo_url }} · {{ $report->created_at->format('Y-m-d') }}</p>
         <div class="flex flex-wrap items-baseline gap-4">
             <span class="text-5xl font-bold text-primary-600">{{ $payload['scores']['overall'] }}</span>
@@ -49,13 +51,6 @@
         @endif
         <p class="mt-3.5">{{ $payload['summary'] }}</p>
     </div>
-
-    @if (($payload['client_summary'] ?? null) !== null)
-        <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
-            @includeWhen($isSample, 'reports.partials.web.sample-tier-badge', ['tier' => 'diagnostic'])
-            @include('reports.partials.web.client-summary', ['payload' => $payload, 'unlocked' => $unlocked])
-        </div>
-    @endif
 
     @php($notMeasured = $report->auditRequest->metrics['not_measured'] ?? [])
     <div class="rounded-xl border border-stone-200 bg-white p-7 mb-5">
@@ -320,13 +315,7 @@
             @endif
         </div>
     @else
-        <div class="rounded-xl bg-stone-900 p-7 text-center text-stone-50 mb-5">
-            <h2 class="text-base font-bold mb-3">{{ __('Unlock full report') }}</h2>
-            <p class="text-stone-300">{{ __('Get every finding\'s evidence and recommendation, the prioritized fix-first plan, and PDF export.') }}</p>
-            <a class="inline-block rounded-lg bg-primary-500 px-6 py-3 font-bold text-stone-900 no-underline" href="{{ $unlockUrl }}">{{ ($quoteCatalogPrices ?? true) ? __('Unlock for $5') : __('Unlock the full report') }}</a>
-            @php($cheapestPlan = collect(config('pricing.subscriptions'))->sortBy('price')->first())
-            <a class="inline-block rounded-lg border border-stone-600 px-6 py-3 font-bold text-stone-50 no-underline" href="{{ route('register') }}">{{ ($quoteCatalogPrices ?? true) ? __('Or subscribe from $:price/mo', ['price' => number_format(($cheapestPlan['price'] ?? 0) / 100)]) : __('Or subscribe to a plan') }}</a>
-        </div>
+        @include('reports.partials.web.unlock-cta')
     @endif
 
     <p class="text-xs text-stone-500 text-center">

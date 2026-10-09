@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{ __('Codebase Health Report') }}</title>
+    <title>{{ __('Codebase Health — Developer Report') }}</title>
     <style>
         {{-- No page background: the web report keeps the cream wash, but a PDF
              is printed and read on paper-white, where a full-bleed tint costs
@@ -33,7 +33,7 @@
 <body>
     @php($payload = $report->payload)
 
-    <h1>{{ __('Codebase Health Report') }}</h1>
+    <h1>{{ __('Codebase Health — Developer Report') }}</h1>
     <p class="muted">
         {{ $report->auditRequest->repo_url }} ·
         {{ __('Generated :date by FlexPick automated analysis', ['date' => $report->created_at->format('Y-m-d')]) }}
@@ -41,19 +41,6 @@
 
     <h2>{{ __('Summary') }}</h2>
     <p>{{ $payload['summary'] }}</p>
-
-    @if (($payload['client_summary'] ?? null) !== null)
-        <h2>{{ __('In plain terms') }}</h2>
-        <p class="muted">{{ __('A non-technical summary of what we found, what it may cause, and what you gain by fixing it.') }}</p>
-        <p>{{ $payload['client_summary']['overview'] }}</p>
-        @foreach ($payload['client_summary']['findings'] as $finding)
-            <p>
-                <strong>{{ $finding['what'] }}</strong><br>
-                <strong>{{ __('What it may cause') }}:</strong> {{ $finding['consequence'] }}<br>
-                <strong>{{ __('What you gain by fixing it') }}:</strong> {{ $finding['gain'] }}
-            </p>
-        @endforeach
-    @endif
 
     @php($notMeasured = $report->auditRequest->metrics['not_measured'] ?? [])
     <h2>{{ __('Health scores') }} <span class="muted">(0–100, {{ __('higher is healthier') }})</span></h2>

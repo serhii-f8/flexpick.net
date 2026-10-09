@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Constants\ReportVariant;
 use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
@@ -21,22 +22,51 @@ class AuditReportController extends Controller
 {
     public function show(AuditReport $auditReport, AuditBenchmarkService $benchmark)
     {
+        return $this->renderReport($auditReport, $benchmark, ReportVariant::BUSINESS);
+    }
+
+    public function showTechnical(AuditReport $auditReport, AuditBenchmarkService $benchmark)
+    {
+        return $this->renderReport($auditReport, $benchmark, ReportVariant::TECHNICAL);
+    }
+
+    public function sample()
+    {
+        return $this->renderSample(ReportVariant::BUSINESS);
+    }
+
+    public function sampleTechnical()
+    {
+        return $this->renderSample(ReportVariant::TECHNICAL);
+    }
+
+    private function renderReport(AuditReport $auditReport, AuditBenchmarkService $benchmark, ReportVariant $variant)
+    {
         // A report held for expert review still carries the raw, un-reviewed
         // AI payload -- exactly what the review stage exists to catch before
         // a customer sees it. The blade already hides the link, but a signed
-        // URL bypasses that, so this is the real gate.
+        // URL bypasses that, so this is the real gate -- for both reports.
         abort_if($auditReport->auditRequest->isHeldForExpertReview(), 403);
 
         if ($auditReport->auditRequest->source !== 'dashboard') {
             app(AuditFunnelRecorder::class)->record(
                 AuditFunnelRecorder::STAGE_REPORT_VIEWED,
                 $auditReport->auditRequest,
-                ['unlocked' => $auditReport->unlocked_at !== null],
+                ['unlocked' => $auditReport->unlocked_at !== null, 'variant' => $variant->value],
             );
         }
 
-        return view('reports.audit-web', [
+        $reports = app(AuditReportService::class);
+
+        // Until the business view ships, both routes render the developer
+        // report.
+        return view(ReportVariant::TECHNICAL->webView(), [
             'report' => $auditReport,
+            'variant' => $variant,
+            'tabUrls' => [
+                ReportVariant::BUSINESS->value => $reports->signedUrl($auditReport, ReportVariant::BUSINESS),
+                ReportVariant::TECHNICAL->value => $reports->signedUrl($auditReport, ReportVariant::TECHNICAL),
+            ],
             'unlocked' => $auditReport->unlocked_at !== null,
             'isSample' => false,
             // A reader a partner referred buys at the partner's price (checkout
@@ -54,7 +84,7 @@ class AuditReportController extends Controller
         ]);
     }
 
-    public function sample()
+    private function renderSample(ReportVariant $variant)
     {
         $path = resource_path('data/sample-audit-report.json');
 
@@ -69,8 +99,13 @@ class AuditReportController extends Controller
         $report->setRelation('auditRequest', $request);
         $report->created_at = now();
 
-        return view('reports.audit-web', [
+        return view(ReportVariant::TECHNICAL->webView(), [
             'report' => $report,
+            'variant' => $variant,
+            'tabUrls' => [
+                ReportVariant::BUSINESS->value => route(ReportVariant::BUSINESS->sampleRouteName()),
+                ReportVariant::TECHNICAL->value => route(ReportVariant::TECHNICAL->sampleRouteName()),
+            ],
             'unlocked' => true,
             'isSample' => true,
             'percentile' => $fixture['percentile'],
