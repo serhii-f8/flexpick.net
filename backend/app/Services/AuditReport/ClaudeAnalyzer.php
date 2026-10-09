@@ -23,11 +23,23 @@ it as healthy. Scores are 0-100, higher is healthier. Rank risks by impact. The 
 must be concrete and ordered by leverage.
 
 The client_summary is written for a non-technical reader -- the business owner who paid for
-the audit, not their engineer. Plain everyday language: no tool names, file paths, rule ids,
-jargon or code. The overview is two or three sentences on the overall state of the codebase.
-Then three to five findings, the ones that matter most to the business, each in three parts:
-what is wrong in plain terms, what problems it may cause for them (lost customers, outages,
-slow or costly changes, security or legal exposure), and what they gain by fixing it.
+the audit, not their engineer. Plain everyday language in every field: no tool names, file
+paths, rule ids, jargon or code.
+- verdict: one headline sentence on where the codebase stands and what matters most.
+- overview: two or three sentences on the overall state of the codebase.
+- areas: one entry for each dimension present in computed_scores, and none for a dimension
+  absent from it. meaning says in one sentence what that area is and why an owner should care;
+  status says how this codebase is doing on it.
+- findings: three to five, the ones that matter most to the business, each with what is wrong
+  in plain terms, what problems it may cause them (lost customers, outages, slow or costly
+  changes, security or legal exposure), and what they gain by fixing it. urgency is now (risk
+  of harm today), soon (will hurt within months) or later (worth fixing when convenient).
+  business_area is the one the finding most affects: customers, costs, security or speed (how
+  fast the team can ship changes).
+- roadmap: the fix-first plan, same order, each step restated as what will be done, the
+  business outcome it produces, and its effort (S, M or L, matching the plan).
+- questions: three to five questions the owner can ask their development team about these
+  findings.
 PROMPT;
 
     private const SCHEMA = [
@@ -102,6 +114,20 @@ PROMPT;
                 'type' => 'object',
                 'properties' => [
                     'overview' => ['type' => 'string'],
+                    'verdict' => ['type' => 'string'],
+                    'areas' => [
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'area' => ['type' => 'string', 'enum' => ['structure', 'duplication', 'testing', 'dependencies', 'security_hygiene']],
+                                'meaning' => ['type' => 'string'],
+                                'status' => ['type' => 'string'],
+                            ],
+                            'required' => ['area', 'meaning', 'status'],
+                            'additionalProperties' => false,
+                        ],
+                    ],
                     'findings' => [
                         'type' => 'array',
                         'items' => [
@@ -110,13 +136,29 @@ PROMPT;
                                 'what' => ['type' => 'string'],
                                 'consequence' => ['type' => 'string'],
                                 'gain' => ['type' => 'string'],
+                                'urgency' => ['type' => 'string', 'enum' => ReportPayload::URGENCIES],
+                                'business_area' => ['type' => 'string', 'enum' => ReportPayload::BUSINESS_AREAS],
                             ],
-                            'required' => ['what', 'consequence', 'gain'],
+                            'required' => ['what', 'consequence', 'gain', 'urgency', 'business_area'],
                             'additionalProperties' => false,
                         ],
                     ],
+                    'roadmap' => [
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'step' => ['type' => 'string'],
+                                'outcome' => ['type' => 'string'],
+                                'effort' => ['type' => 'string', 'enum' => ['S', 'M', 'L']],
+                            ],
+                            'required' => ['step', 'outcome', 'effort'],
+                            'additionalProperties' => false,
+                        ],
+                    ],
+                    'questions' => ['type' => 'array', 'items' => ['type' => 'string']],
                 ],
-                'required' => ['overview', 'findings'],
+                'required' => ['overview', 'verdict', 'areas', 'findings', 'roadmap', 'questions'],
                 'additionalProperties' => false,
             ],
         ],

@@ -45,7 +45,11 @@ class FakeAiAnalyzer implements AiAnalyzer
                 'groups' => [],
                 'client_summary' => [
                     'overview' => 'Fake plain-language overview.',
-                    'findings' => [['what' => 'Nothing is tested.', 'consequence' => 'Changes break things.', 'gain' => 'Fewer surprises.']],
+                    'verdict' => 'Fake verdict.',
+                    'areas' => [['area' => 'testing', 'meaning' => 'Automatic checks.', 'status' => 'Very few.']],
+                    'findings' => [['what' => 'Nothing is tested.', 'consequence' => 'Changes break things.', 'gain' => 'Fewer surprises.', 'urgency' => 'soon', 'business_area' => 'speed']],
+                    'roadmap' => [['step' => 'Add checks', 'outcome' => 'Safer releases', 'effort' => 'S']],
+                    'questions' => ['Which parts are tested today?'],
                 ],
             ],
             inputTokens: 100,

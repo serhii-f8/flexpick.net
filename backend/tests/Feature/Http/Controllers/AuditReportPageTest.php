@@ -193,6 +193,14 @@ class AuditReportPageTest extends FeatureTest
         $this->assertArrayHasKey('deep_review', $validated);
         $this->assertArrayHasKey('expert_review', $validated);
         $this->assertArrayHasKey('client_summary', $validated);
+
+        foreach (['verdict', 'areas', 'roadmap', 'questions'] as $key) {
+            $this->assertNotEmpty($validated['client_summary'][$key], "sample client_summary.{$key}");
+        }
+        foreach ($validated['client_summary']['findings'] as $finding) {
+            $this->assertArrayHasKey('urgency', $finding);
+            $this->assertArrayHasKey('business_area', $finding);
+        }
     }
 
     public function test_unlock_route_stores_intent_and_redirects_to_checkout(): void

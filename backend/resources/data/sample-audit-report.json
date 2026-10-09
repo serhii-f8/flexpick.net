@@ -9,23 +9,87 @@
                 {
                     "what": "Anyone on the internet can tell your system that an order has been paid, without actually paying.",
                     "consequence": "Free orders, refund disputes and lost revenue that only shows up when you reconcile the books.",
-                    "gain": "Closing this gap means only your payment provider can mark an order as paid, so revenue and orders always match."
+                    "gain": "Closing this gap means only your payment provider can mark an order as paid, so revenue and orders always match.",
+                    "urgency": "now",
+                    "business_area": "customers"
                 },
                 {
                     "what": "Passwords and access keys for one of your environments are stored inside the code itself.",
                     "consequence": "Whoever gets a copy of the code -- a contractor, a leaked laptop, a public repository by mistake -- gets the keys too.",
-                    "gain": "Moving them out of the code and rotating them removes a standing risk of a data breach and a compliance headache."
+                    "gain": "Moving them out of the code and rotating them removes a standing risk of a data breach and a compliance headache.",
+                    "urgency": "now",
+                    "business_area": "security"
                 },
                 {
                     "what": "The same business rules, such as how discounts are applied, exist in several copies that have already started to differ.",
                     "consequence": "Customers can be charged different amounts for the same basket depending on which screen they use, and a fix in one place does not fix the others.",
-                    "gain": "One shared version of each rule means consistent prices for customers and changes that take an afternoon instead of a week."
+                    "gain": "One shared version of each rule means consistent prices for customers and changes that take an afternoon instead of a week.",
+                    "urgency": "soon",
+                    "business_area": "costs"
                 },
                 {
                     "what": "Almost nothing is tested automatically before a release.",
                     "consequence": "Every update is a gamble: a small change can quietly break sign-up or checkout and you learn about it from customers.",
-                    "gain": "A basic safety net lets you ship improvements faster and with far fewer surprises."
+                    "gain": "A basic safety net lets you ship improvements faster and with far fewer surprises.",
+                    "urgency": "soon",
+                    "business_area": "speed"
                 }
+            ],
+            "verdict": "Your product works, but four gaps put revenue and customer trust at risk -- two of them need fixing this month.",
+            "areas": [
+                {
+                    "area": "structure",
+                    "meaning": "How well the code is organised, which decides how quickly a developer can find and safely change things.",
+                    "status": "Mixed: most of it is tidy, but a few oversized parts slow every change down."
+                },
+                {
+                    "area": "duplication",
+                    "meaning": "How often the same logic is copied instead of shared, which decides whether one fix fixes everything.",
+                    "status": "Weak: important rules exist in several copies that already disagree."
+                },
+                {
+                    "area": "testing",
+                    "meaning": "How much is checked automatically before a release, which decides how often updates break things.",
+                    "status": "Very weak: almost nothing is checked, so problems reach customers first."
+                },
+                {
+                    "area": "dependencies",
+                    "meaning": "The outside building blocks your product relies on, and whether they are current and safe.",
+                    "status": "Fair: mostly up to date, with a few known security issues to patch."
+                },
+                {
+                    "area": "security_hygiene",
+                    "meaning": "Basic security habits, such as keeping passwords and keys out of the code.",
+                    "status": "Needs work: some access keys are stored where they should not be."
+                }
+            ],
+            "roadmap": [
+                {
+                    "step": "Replace the exposed passwords and keys and move them out of the code",
+                    "outcome": "Nobody with a copy of the code can get into your systems",
+                    "effort": "S"
+                },
+                {
+                    "step": "Add automatic checks around checkout and payments",
+                    "outcome": "Payment bugs are caught before customers see them",
+                    "effort": "M"
+                },
+                {
+                    "step": "Merge the copied pricing rules into one",
+                    "outcome": "Every customer pays the same, correct price",
+                    "effort": "M"
+                },
+                {
+                    "step": "Run those checks automatically on every change",
+                    "outcome": "The improvements stay in place as the product grows",
+                    "effort": "S"
+                }
+            ],
+            "questions": [
+                "How do we confirm a payment really came from our payment provider?",
+                "Where are our passwords and access keys kept, and who can see them?",
+                "If we change a price rule, how many places have to be updated?",
+                "What gets checked automatically before an update goes live?"
             ]
         },
         "scores": {
