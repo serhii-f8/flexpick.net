@@ -49,7 +49,8 @@ class AuditReportsRenderTest extends FeatureTest
         Livewire::test(AuditReports::class)
             ->assertOk()
             ->assertSee('In expert review')
-            ->assertDontSee(route('reports.download', $report));
+            ->assertDontSee(route('reports.download', $report))
+            ->assertDontSee(route('reports.download', ['auditReport' => $report, 'variant' => 'technical']));
     }
 
     public function test_each_listed_report_shows_the_tier_it_ran_at(): void
@@ -77,6 +78,27 @@ class AuditReportsRenderTest extends FeatureTest
 
         $this->assertStringContainsString(AuditTier::DEEP_AI->label(), $listMarkup);
         $this->assertStringNotContainsString(AuditTier::EXPERT->label(), $listMarkup);
+    }
+
+    public function test_each_listed_report_offers_both_pdfs(): void
+    {
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5);
+        $this->actAsTenantUser($user, $tenant);
+
+        $report = AuditReport::factory()->unlocked()->create(['user_id' => $user->id]);
+        $report->auditRequest->update([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+            'email' => $user->email,
+            'status' => AuditRequestStatus::SENT->value,
+        ]);
+
+        Livewire::test(AuditReports::class)
+            ->assertOk()
+            ->assertSee(route('reports.download', ['auditReport' => $report, 'variant' => 'business']))
+            ->assertSee(route('reports.download', ['auditReport' => $report, 'variant' => 'technical']))
+            ->assertSee(__('Business PDF'))
+            ->assertSee(__('Developer PDF'));
     }
 
     public function test_the_launch_form_explains_private_repo_access(): void

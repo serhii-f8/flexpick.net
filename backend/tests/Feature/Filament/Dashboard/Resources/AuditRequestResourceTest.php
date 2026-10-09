@@ -156,7 +156,8 @@ class AuditRequestResourceTest extends FeatureTest
 
         $response->assertSee('55'); // overall score from AuditReportFactory payload
         $response->assertSee(__('Open report'));
-        $response->assertSee(__('Download PDF'));
+        $response->assertSee(__('Business PDF'));
+        $response->assertSee(__('Developer PDF'));
     }
 
     public function test_view_hides_report_actions_and_results_while_in_expert_review(): void
@@ -176,7 +177,8 @@ class AuditRequestResourceTest extends FeatureTest
             ->assertSuccessful();
 
         $response->assertDontSee(__('Open report'));
-        $response->assertDontSee(__('Download PDF'));
+        $response->assertDontSee(__('Business PDF'));
+        $response->assertDontSee(__('Developer PDF'));
         $response->assertDontSee(__('Overall score'));
         $response->assertDontSee(__('Category scores'));
     }

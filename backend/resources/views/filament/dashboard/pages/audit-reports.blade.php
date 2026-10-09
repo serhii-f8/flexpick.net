@@ -275,8 +275,11 @@
                                     <x-filament::badge color="warning">{{ __('In expert review') }}</x-filament::badge>
                                 @else
                                     <x-fp.score :value="data_get($report->payload, 'scores.overall')" size="sm" class="w-10 justify-end" />
-                                    <x-filament::button tag="a" size="xs" color="gray" href="{{ route('reports.download', $report) }}">
-                                        {{ __('PDF') }}
+                                    <x-filament::button tag="a" size="xs" color="gray" href="{{ route('reports.download', ['auditReport' => $report, 'variant' => 'business']) }}">
+                                        {{ __('Business PDF') }}
+                                    </x-filament::button>
+                                    <x-filament::button tag="a" size="xs" color="gray" href="{{ route('reports.download', ['auditReport' => $report, 'variant' => 'technical']) }}">
+                                        {{ __('Developer PDF') }}
                                     </x-filament::button>
                                     <x-filament::button tag="a" size="xs" color="primary" href="{{ app(\App\Services\AuditReport\AuditReportService::class)->signedUrl($report) }}">
                                         {{ __('View') }}

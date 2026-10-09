@@ -44,9 +44,14 @@ class ViewAuditRequest extends ViewRecord
                 ->url(fn (): string => app(AuditReportService::class)->signedUrl($record->report))
                 ->openUrlInNewTab()
                 ->visible(fn (): bool => $record->report !== null && ! $record->isHeldForExpertReview()),
-            Action::make('downloadPdf')
-                ->label(__('Download PDF'))
-                ->url(fn (): string => route('reports.download', $record->report))
+            Action::make('downloadBusinessPdf')
+                ->label(__('Business PDF'))
+                ->url(fn (): string => route('reports.download', ['auditReport' => $record->report, 'variant' => 'business']))
+                ->openUrlInNewTab()
+                ->visible(fn (): bool => $record->report !== null && ! $record->isHeldForExpertReview()),
+            Action::make('downloadTechnicalPdf')
+                ->label(__('Developer PDF'))
+                ->url(fn (): string => route('reports.download', ['auditReport' => $record->report, 'variant' => 'technical']))
                 ->openUrlInNewTab()
                 ->visible(fn (): bool => $record->report !== null && ! $record->isHeldForExpertReview()),
         ];

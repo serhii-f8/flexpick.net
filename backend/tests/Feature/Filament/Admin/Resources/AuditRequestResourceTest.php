@@ -399,7 +399,8 @@ class AuditRequestResourceTest extends FeatureTest
         $this->actingAs($admin)
             ->get(AuditRequestResource::getUrl('view', ['record' => $request], true, 'admin'))
             ->assertSuccessful()
-            ->assertSee(route('reports.download', $report), escape: false)
+            ->assertSee(route('reports.download', ['auditReport' => $report, 'variant' => 'business']), escape: false)
+            ->assertSee(route('reports.download', ['auditReport' => $report, 'variant' => 'technical']), escape: false)
             ->assertSee('/reports/'.$report->uuid, escape: false);
     }
 
@@ -421,6 +422,7 @@ class AuditRequestResourceTest extends FeatureTest
             ->get(AuditRequestResource::getUrl('view', ['record' => $request], true, 'admin'))
             ->assertSuccessful()
             ->assertDontSee(route('reports.download', $report), escape: false)
+            ->assertDontSee(route('reports.download', ['auditReport' => $report, 'variant' => 'technical']), escape: false)
             ->assertSee('/reports/'.$report->uuid, escape: false);
     }
 

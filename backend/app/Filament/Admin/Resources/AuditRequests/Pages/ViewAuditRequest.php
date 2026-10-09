@@ -36,14 +36,22 @@ class ViewAuditRequest extends ViewRecord
                 ->url(fn (): string => app(AuditReportService::class)->signedUrl($record->report))
                 ->openUrlInNewTab()
                 ->visible(fn (): bool => $record->report !== null && ! $record->isHeldForExpertReview()),
-            Action::make('downloadPdf')
-                ->label(__('Download PDF'))
+            Action::make('downloadBusinessPdf')
+                ->label(__('Business PDF'))
                 ->icon('heroicon-m-arrow-down-tray')
-                ->url(fn (): string => route('reports.download', $record->report))
+                ->url(fn (): string => route('reports.download', ['auditReport' => $record->report, 'variant' => 'business']))
                 ->openUrlInNewTab()
                 // reports.download 404s with no file behind the row, and the
                 // PDF is written after the payload, so report !== null is not
                 // enough on its own.
+                ->visible(fn (): bool => $record->report?->pdf_path !== null && ! $record->isHeldForExpertReview()),
+            Action::make('downloadTechnicalPdf')
+                ->label(__('Developer PDF'))
+                ->icon('heroicon-m-arrow-down-tray')
+                ->url(fn (): string => route('reports.download', ['auditReport' => $record->report, 'variant' => 'technical']))
+                ->openUrlInNewTab()
+                // Same gate: the developer PDF is generated on demand only for
+                // a report whose business PDF already exists.
                 ->visible(fn (): bool => $record->report?->pdf_path !== null && ! $record->isHeldForExpertReview()),
             Action::make('editResults')
                 ->label(__('Edit results'))
