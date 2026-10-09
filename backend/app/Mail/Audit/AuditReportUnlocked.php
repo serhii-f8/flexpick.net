@@ -2,6 +2,7 @@
 
 namespace App\Mail\Audit;
 
+use App\Mail\Concerns\AttachesReportPdfs;
 use App\Mail\Concerns\TracksAuditEmailLog;
 use App\Models\AuditReport;
 use Illuminate\Bus\Queueable;
@@ -13,7 +14,7 @@ use Illuminate\Queue\SerializesModels;
 
 class AuditReportUnlocked extends Mailable implements ShouldQueue
 {
-    use Queueable, SerializesModels, TracksAuditEmailLog;
+    use AttachesReportPdfs, Queueable, SerializesModels, TracksAuditEmailLog;
 
     public function __construct(
         public AuditReport $report,

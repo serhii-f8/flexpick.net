@@ -9,14 +9,15 @@
                 {{ __('Hi :name,', ['name' => $report->auditRequest->name]) }}
             </p>
             <p style="margin: 16px 0 0; line-height: 24px">
-                {{ __('Thanks for your purchase — every finding, recommendation, and the fix-first plan in your report is now visible, and both PDFs are attached to your dashboard downloads.') }}
+                {{ __('Thanks for your purchase — every finding, recommendation, and the fix-first plan in your report is now visible, and both PDFs (the business overview and the developer report) are attached to this email.') }}
             </p>
             <p style="margin: 24px 0 0; line-height: 24px; text-align: center;">
                 <a href="{{ $reportUrl }}" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
                     {{ __('Open my full report') }}
                 </a>
             </p>
-            @if ($technicalUrl !== null)
+            {{-- A mail queued before the split carries no developer link. --}}
+            @if (($technicalUrl ?? null) !== null)
                 <p style="margin: 16px 0 0; line-height: 24px; text-align: center;">
                     <a href="{{ $technicalUrl }}">{{ __('Open the developer report') }}</a>
                 </p>

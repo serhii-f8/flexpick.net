@@ -4,6 +4,7 @@ namespace Tests\Feature\Console;
 
 use App\Constants\AuditRequestStatus;
 use App\Models\AuditReport;
+use App\Services\AuditReport\AuditReportService;
 use Illuminate\Support\Facades\Storage;
 use Tests\Feature\FeatureTest;
 
@@ -33,5 +34,31 @@ class RegenerateReportPdfsTest extends FeatureTest
         $this->artisan('app:regenerate-report-pdfs', ['--dry-run' => true])->assertSuccessful();
 
         $this->assertNull($report->fresh()->technical_pdf_path);
+    }
+
+    public function test_one_failing_report_does_not_stop_the_rest(): void
+    {
+        Storage::fake('local');
+        $broken = AuditReport::factory()->unlocked()->create(['pdf_path' => null]);
+        $healthy = AuditReport::factory()->unlocked()->create(['pdf_path' => null]);
+        $attempted = [];
+
+        $this->partialMock(AuditReportService::class, function ($mock) use ($broken, &$attempted): void {
+            $mock->shouldReceive('regeneratePdf')->andReturnUsing(function (AuditReport $report) use ($broken, &$attempted): void {
+                $attempted[] = $report->id;
+
+                if ($report->id === $broken->id) {
+                    throw new \RuntimeException('dompdf choked');
+                }
+            });
+        });
+
+        $this->artisan('app:regenerate-report-pdfs')->assertFailed();
+
+        // Other tests' reports may share the table; what matters is that the
+        // healthy report, created after the broken one, was still reached.
+        $this->assertContains($broken->id, $attempted);
+        $this->assertContains($healthy->id, $attempted);
+        $this->assertGreaterThan(array_search($broken->id, $attempted, true), array_search($healthy->id, $attempted, true));
     }
 }

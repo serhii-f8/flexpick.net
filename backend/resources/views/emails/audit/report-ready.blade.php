@@ -15,7 +15,8 @@
                 <a href="{{ $signedUrl }}">{{ __('View the business overview') }}</a>
                 ({{ __('link valid for :days days', ['days' => config('audit.report_link_days')]) }})
             </p>
-            @if ($technicalUrl !== null)
+            {{-- A mail queued before the split carries no developer link. --}}
+            @if (($technicalUrl ?? null) !== null)
                 <p style="margin: 16px 0 0; line-height: 24px">
                     {{ __('Forward the developer report to your engineer') }}:
                     <a href="{{ $technicalUrl }}">{{ __('Open the developer report') }}</a>

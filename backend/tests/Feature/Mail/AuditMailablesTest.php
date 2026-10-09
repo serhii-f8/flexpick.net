@@ -191,4 +191,44 @@ class AuditMailablesTest extends FeatureTest
         (new AuditQuotaExhausted($request, 'https://app.example.com/x'))
             ->assertSeeInHtml('Run this audit now for $12');
     }
+
+    public function test_unlocked_email_attaches_both_pdfs(): void
+    {
+        Storage::disk('local')->put('audit-reports/fixture.pdf', '%PDF-1.4 business');
+        Storage::disk('local')->put('audit-reports/fixture-technical.pdf', '%PDF-1.4 technical');
+        $report = AuditReport::factory()->unlocked()->create(['pdf_path' => 'audit-reports/fixture.pdf', 'technical_pdf_path' => 'audit-reports/fixture-technical.pdf']);
+
+        $mailable = new AuditReportUnlocked($report, 'https://app.example.com/reports/abc?signature=x');
+
+        $mailable->assertHasAttachment(
+            Attachment::fromStorageDisk('local', 'audit-reports/fixture.pdf')->as('codebase-health-business.pdf')->withMime('application/pdf')
+        );
+        $mailable->assertHasAttachment(
+            Attachment::fromStorageDisk('local', 'audit-reports/fixture-technical.pdf')->as('codebase-health-developer.pdf')->withMime('application/pdf')
+        );
+        $mailable->assertDontSeeInHtml('dashboard downloads');
+    }
+
+    /**
+     * A mail queued before the split is unserialized without $technicalUrl:
+     * a promoted property with no default stays uninitialized, and Mailable
+     * skips uninitialized properties when it builds the view data.
+     */
+    public function test_report_emails_queued_before_the_split_still_render(): void
+    {
+        $report = AuditReport::factory()->unlocked()->create(['pdf_path' => null]);
+
+        $ready = (new \ReflectionClass(AuditReportReady::class))->newInstanceWithoutConstructor();
+        $ready->report = $report;
+        $ready->signedUrl = 'https://app.example.com/reports/abc?signature=x';
+        $ready->deltas = null;
+        $ready->groupDeltas = null;
+
+        $unlocked = (new \ReflectionClass(AuditReportUnlocked::class))->newInstanceWithoutConstructor();
+        $unlocked->report = $report;
+        $unlocked->reportUrl = 'https://app.example.com/reports/abc?signature=x';
+
+        $ready->assertSeeInHtml('https://app.example.com/reports/abc?signature=x');
+        $unlocked->assertSeeInHtml('https://app.example.com/reports/abc?signature=x');
+    }
 }
