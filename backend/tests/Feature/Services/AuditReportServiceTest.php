@@ -136,7 +136,9 @@ class AuditReportServiceTest extends FeatureTest
 
         $report = app(AuditReportService::class)->create($request, $this->payload(), 1);
 
-        $pdfContents = Storage::disk('local')->get($report->pdf_path);
+        // Rule families are developer detail: they belong in the developer
+        // PDF, never the business one (pdf_path).
+        $pdfContents = Storage::disk('local')->get($report->technical_pdf_path);
         // dompdf encodes text as UTF-16LE with null bytes, so we search for that pattern
         $this->assertTrue($this->pdfContainsString($pdfContents, 'jscpd.duplication'));
     }
