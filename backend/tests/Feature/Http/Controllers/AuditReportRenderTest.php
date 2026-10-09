@@ -3,6 +3,7 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\AuditTier;
+use App\Constants\ReportVariant;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditReportService;
@@ -44,7 +45,7 @@ class AuditReportRenderTest extends FeatureTest
     {
         $report = $this->reportWith($this->payload());
 
-        $this->get(app(AuditReportService::class)->signedUrl($report))
+        $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL))
             ->assertOk()
             ->assertSee('SQL by string interpolation.')
             ->assertSee('Public controllers.')
@@ -55,7 +56,7 @@ class AuditReportRenderTest extends FeatureTest
     {
         $report = $this->reportWith($this->payload());
 
-        $this->get(app(AuditReportService::class)->signedUrl($report))->assertSee('37');
+        $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL))->assertSee('37');
     }
 
     public function test_marks_unmeasured_dimensions_rather_than_scoring_them(): void
@@ -66,7 +67,7 @@ class AuditReportRenderTest extends FeatureTest
             ['not_measured' => ['duplication', 'security_hygiene']],
         );
 
-        $this->get(app(AuditReportService::class)->signedUrl($report))
+        $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL))
             ->assertOk()
             ->assertSee(__('Not measured'));
     }
@@ -87,7 +88,7 @@ class AuditReportRenderTest extends FeatureTest
             ],
         ]);
 
-        $this->get(app(AuditReportService::class)->signedUrl($report))
+        $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL))
             ->assertOk()
             ->assertSee('Legacy report.');
     }
@@ -109,7 +110,7 @@ class AuditReportRenderTest extends FeatureTest
             'unlocked_at' => null,
         ]);
 
-        $this->get(app(AuditReportService::class)->signedUrl($report))
+        $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL))
             ->assertOk()
             ->assertDontSee('Cheaper changes.');
     }

@@ -13,6 +13,7 @@ use App\Services\AuditReport\AuditDeltaService;
 use App\Services\AuditReport\AuditFunnelRecorder;
 use App\Services\AuditReport\AuditGroupDeltaService;
 use App\Services\AuditReport\AuditReportService;
+use App\Services\AuditReport\BusinessReportPresenter;
 use App\Services\PartnerContactResolver;
 use App\Services\PartnerPricingResolver;
 use Illuminate\Support\Facades\Storage;
@@ -58,9 +59,7 @@ class AuditReportController extends Controller
 
         $reports = app(AuditReportService::class);
 
-        // Until the business view ships, both routes render the developer
-        // report.
-        return view(ReportVariant::TECHNICAL->webView(), [
+        $data = [
             'report' => $auditReport,
             'variant' => $variant,
             'tabUrls' => [
@@ -81,7 +80,15 @@ class AuditReportController extends Controller
             'deltas' => app(AuditDeltaService::class)->deltasFor($auditReport),
             'groupDeltas' => app(AuditGroupDeltaService::class)->deltasFor($auditReport),
             'allGroups' => $auditReport->auditRequest->findingGroups,
-        ]);
+        ];
+
+        if ($variant === ReportVariant::BUSINESS) {
+            $data['business'] = app(BusinessReportPresenter::class)->present(
+                $auditReport, $data['deltas'], $data['percentile'], $data['allGroups'],
+            );
+        }
+
+        return view($variant->webView(), $data);
     }
 
     private function renderSample(ReportVariant $variant)
@@ -99,7 +106,7 @@ class AuditReportController extends Controller
         $report->setRelation('auditRequest', $request);
         $report->created_at = now();
 
-        return view(ReportVariant::TECHNICAL->webView(), [
+        $data = [
             'report' => $report,
             'variant' => $variant,
             'tabUrls' => [
@@ -123,7 +130,15 @@ class AuditReportController extends Controller
             // there is no audit_finding_groups row to list or diff.
             'groupDeltas' => null,
             'allGroups' => collect(),
-        ]);
+        ];
+
+        if ($variant === ReportVariant::BUSINESS) {
+            $data['business'] = app(BusinessReportPresenter::class)->present(
+                $report, $data['deltas'], $data['percentile'], collect(),
+            );
+        }
+
+        return view($variant->webView(), $data);
     }
 
     public function download(AuditReport $auditReport)

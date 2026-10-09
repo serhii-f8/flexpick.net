@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Http\Controllers;
 
+use App\Constants\ReportVariant;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditReportService;
@@ -32,7 +33,7 @@ class AuditReportFactsTest extends FeatureTest
         $request = AuditRequest::factory()->verified()->create(['metrics' => $this->metrics()]);
         $report = AuditReport::factory()->locked()->create(['audit_request_id' => $request->id]);
 
-        $this->get(app(AuditReportService::class)->signedUrl($report))
+        $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL))
             ->assertOk()
             ->assertSee(__('Repository facts'))
             ->assertSee('68,450')
@@ -45,14 +46,14 @@ class AuditReportFactsTest extends FeatureTest
         $request = AuditRequest::factory()->verified()->create(['metrics' => null]);
         $report = AuditReport::factory()->locked()->create(['audit_request_id' => $request->id]);
 
-        $this->get(app(AuditReportService::class)->signedUrl($report))
+        $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL))
             ->assertOk()
             ->assertDontSee(__('Repository facts'));
     }
 
     public function test_sample_report_shows_repository_facts(): void
     {
-        $this->get(route('reports.sample'))
+        $this->get(route('reports.sample.technical'))
             ->assertOk()
             ->assertSee(__('Repository facts'));
     }

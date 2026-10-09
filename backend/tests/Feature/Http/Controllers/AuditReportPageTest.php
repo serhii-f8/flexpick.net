@@ -3,6 +3,7 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\AuditTier;
+use App\Constants\ReportVariant;
 use App\Listeners\Order\HandleAuditUnlockOrder;
 use App\Models\AuditReport;
 use App\Models\User;
@@ -22,7 +23,7 @@ class AuditReportPageTest extends FeatureTest
     public function test_locked_report_shows_titles_but_hides_details(): void
     {
         $report = AuditReport::factory()->locked()->create();
-        $url = app(AuditReportService::class)->signedUrl($report);
+        $url = app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL);
 
         $response = $this->get($url);
 
@@ -38,10 +39,12 @@ class AuditReportPageTest extends FeatureTest
     {
         $report = AuditReport::factory()->locked()->create();
 
-        $this->get(app(AuditReportService::class)->signedUrl($report))
-            ->assertOk()
-            ->assertSee(__('Unlock for $5'))
-            ->assertSee('/mo');
+        foreach (ReportVariant::cases() as $variant) {
+            $this->get(app(AuditReportService::class)->signedUrl($report, $variant))
+                ->assertOk()
+                ->assertSee(__('Unlock for $5'))
+                ->assertSee('/mo');
+        }
     }
 
     public function test_a_locked_report_quotes_no_base_price_to_a_referred_reader(): void
@@ -51,16 +54,18 @@ class AuditReportPageTest extends FeatureTest
         $report = AuditReport::factory()->locked()->create();
         $report->auditRequest->update(['meta' => ['referral_code' => $code]]);
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($report))->assertOk();
+        foreach (ReportVariant::cases() as $variant) {
+            $response = $this->get(app(AuditReportService::class)->signedUrl($report, $variant))->assertOk();
 
-        $response->assertSee(__('Unlock full report'))->assertSee('/unlock');
-        $this->assertDoesNotMatchRegularExpression('/\\$\s?\d/', strip_tags($response->getContent()));
+            $response->assertSee(__('Unlock full report'))->assertSee('/unlock');
+            $this->assertDoesNotMatchRegularExpression('/\\$\s?\d/', strip_tags($response->getContent()));
+        }
     }
 
     public function test_unlocked_report_shows_everything_and_pdf_link(): void
     {
         $report = AuditReport::factory()->unlocked()->create();
-        $url = app(AuditReportService::class)->signedUrl($report);
+        $url = app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL);
 
         $this->get($url)
             ->assertOk()
@@ -87,7 +92,7 @@ class AuditReportPageTest extends FeatureTest
         $this->get('/reports/sample')
             ->assertOk()
             ->assertSee(__('Sample report'))
-            ->assertSee(__('What to fix first'));
+            ->assertSee(__('Your roadmap'));
     }
 
     /**
@@ -116,7 +121,7 @@ class AuditReportPageTest extends FeatureTest
     /** Each section is labelled with the lowest tier that includes it. */
     public function test_sample_report_labels_each_section_with_its_tier(): void
     {
-        $response = $this->get('/reports/sample')->assertOk();
+        $response = $this->get('/reports/sample/technical')->assertOk();
 
         foreach (AuditTier::cases() as $tier) {
             $response->assertSee($tier->label());
@@ -127,13 +132,15 @@ class AuditReportPageTest extends FeatureTest
     {
         // A partner's visitors pay the partner's price, so the public sample
         // must never quote the base catalog.
-        $response = $this->get('/reports/sample')->assertOk();
+        foreach (['/reports/sample', '/reports/sample/technical'] as $url) {
+            $response = $this->get($url)->assertOk();
 
-        foreach (AuditTier::cases() as $tier) {
-            $response->assertDontSee($tier->labelWithPrice());
+            foreach (AuditTier::cases() as $tier) {
+                $response->assertDontSee($tier->labelWithPrice());
+            }
+
+            $this->assertDoesNotMatchRegularExpression('/\\$\s?\d/', strip_tags($response->getContent()));
         }
-
-        $this->assertDoesNotMatchRegularExpression('/\\$\s?\d/', strip_tags($response->getContent()));
     }
 
     /**

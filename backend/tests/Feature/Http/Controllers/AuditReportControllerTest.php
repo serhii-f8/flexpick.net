@@ -3,6 +3,7 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Constants\AuditRequestStatus;
+use App\Constants\ReportVariant;
 use App\Mail\Audit\AuditReportReady;
 use App\Models\AuditFindingGroup;
 use App\Models\AuditReport;
@@ -70,7 +71,7 @@ class AuditReportControllerTest extends FeatureTest
     {
         $report = AuditReport::factory()->create();
 
-        $url = app(AuditReportService::class)->signedUrl($report);
+        $url = app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL);
         $response = $this->get($url);
 
         $response->assertStatus(200);
@@ -90,7 +91,7 @@ class AuditReportControllerTest extends FeatureTest
             'not_measured_reasons' => ['dependencies' => 'lockfile_unreadable'],
         ]]);
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL));
 
         $response->assertStatus(200);
         $response->assertSeeInOrder(['21', '%', 'test file ratio']);
@@ -198,7 +199,7 @@ class AuditReportControllerTest extends FeatureTest
             ]),
         ]);
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL));
 
         $response->assertOk();
         $response->assertSee('Reviewed thoroughly, no blockers.');
@@ -209,7 +210,7 @@ class AuditReportControllerTest extends FeatureTest
     {
         $report = AuditReport::factory()->create();
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL));
 
         $response->assertOk();
         $response->assertDontSee('Human expert review');
@@ -225,7 +226,7 @@ class AuditReportControllerTest extends FeatureTest
             'severity' => 'high',
         ]);
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL));
 
         $response->assertOk();
         $response->assertSee('php.injection');
@@ -251,7 +252,7 @@ class AuditReportControllerTest extends FeatureTest
             'count' => 2,
         ]);
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport));
+        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport, ReportVariant::TECHNICAL));
 
         $response->assertOk();
         $response->assertSee('1 issue resolved', false);
@@ -263,7 +264,7 @@ class AuditReportControllerTest extends FeatureTest
         $report = AuditReport::factory()->unlocked()->create();
         AuditFindingGroup::factory()->create(['audit_request_id' => $report->audit_request_id]);
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($report));
+        $response = $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL));
 
         $response->assertOk();
         $response->assertDontSee('issue resolved', false);
@@ -298,7 +299,7 @@ class AuditReportControllerTest extends FeatureTest
             'count' => 1,
         ]);
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport));
+        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport, ReportVariant::TECHNICAL));
 
         $response->assertOk();
         $response->assertSee('+3', false);
@@ -320,7 +321,7 @@ class AuditReportControllerTest extends FeatureTest
         $currentRequest = AuditRequest::factory()->verified()->create(['email' => 'allfixed@example.com', 'repo_url' => 'https://github.com/acme/app']);
         $currentReport = AuditReport::factory()->unlocked()->create(['audit_request_id' => $currentRequest->id, 'scoring_version' => ScoreCalculator::VERSION]);
 
-        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport));
+        $response = $this->get(app(AuditReportService::class)->signedUrl($currentReport, ReportVariant::TECHNICAL));
 
         $response->assertOk();
         $response->assertSee('resolved', false);

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Http;
 
+use App\Constants\ReportVariant;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
 use App\Services\AuditReport\AuditReportService;
@@ -45,7 +46,7 @@ class DeepReviewRenderingTest extends FeatureTest
 
     private function renderReport(AuditReport $report): string
     {
-        return $this->get(app(AuditReportService::class)->signedUrl($report))
+        return $this->get(app(AuditReportService::class)->signedUrl($report, ReportVariant::TECHNICAL))
             ->assertOk()
             ->getContent();
     }
