@@ -14,7 +14,7 @@ use App\Exceptions\AiAnalysisException;
 class ReportPayload
 {
     /** Bump when the payload contract changes. */
-    public const VERSION = 5;
+    public const VERSION = 6;
 
     private const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
@@ -23,6 +23,13 @@ class ReportPayload
     private const FINDING_CATEGORIES = ['business_logic', 'authorization', 'architecture', 'security'];
 
     private const EFFORTS = ['S', 'M', 'L'];
+
+    /** Score dimensions the plain-language areas may describe; never `overall`. */
+    private const AREA_DIMENSIONS = ['structure', 'duplication', 'testing', 'dependencies', 'security_hygiene'];
+
+    public const URGENCIES = ['now', 'soon', 'later'];
+
+    public const BUSINESS_AREAS = ['customers', 'costs', 'security', 'speed'];
 
     public static function validate(mixed $payload, ?int $version = null): array
     {
@@ -40,6 +47,7 @@ class ReportPayload
             3 => self::validateV3($payload),
             4 => self::validateV4($payload),
             5 => self::validateV5($payload),
+            6 => self::validateV6($payload),
             default => throw new AiAnalysisException("Unknown payload schema version: {$version}"),
         };
     }
@@ -211,6 +219,86 @@ class ReportPayload
         // validating on view.
         if (array_key_exists('client_summary', $payload)) {
             self::validateClientSummary($payload['client_summary']);
+        }
+
+        return $payload;
+    }
+
+    private static function validateV6(array $payload): array
+    {
+        $payload = self::validateV5($payload);
+
+        // Every v6 field is optional here for the same reason as every
+        // section since v3: a v5 report must keep validating on view. The
+        // Claude schema is where they are required.
+        if (! array_key_exists('client_summary', $payload)) {
+            return $payload;
+        }
+
+        $summary = $payload['client_summary'];
+
+        if (array_key_exists('verdict', $summary) && ! is_string($summary['verdict'])) {
+            throw new AiAnalysisException('Malformed client_summary verdict');
+        }
+
+        foreach ($summary['findings'] as $finding) {
+            if (array_key_exists('urgency', $finding) && ! in_array($finding['urgency'], self::URGENCIES, true)) {
+                throw new AiAnalysisException('Malformed client_summary finding: urgency');
+            }
+
+            if (array_key_exists('business_area', $finding) && ! in_array($finding['business_area'], self::BUSINESS_AREAS, true)) {
+                throw new AiAnalysisException('Malformed client_summary finding: business_area');
+            }
+        }
+
+        if (array_key_exists('areas', $summary)) {
+            if (! is_array($summary['areas'])) {
+                throw new AiAnalysisException('Malformed client_summary areas');
+            }
+
+            foreach ($summary['areas'] as $area) {
+                if (! is_array($area)
+                    || ! in_array($area['area'] ?? null, self::AREA_DIMENSIONS, true)
+                    || ! is_string($area['meaning'] ?? null)
+                    || ! is_string($area['status'] ?? null)) {
+                    throw new AiAnalysisException('Malformed client_summary area entry');
+                }
+            }
+
+            // A dimension absent from scores was not measured on this run.
+            // Describing it would tell the owner something nobody checked,
+            // so the entry goes -- the report itself is still sound.
+            $payload['client_summary']['areas'] = array_values(array_filter(
+                $summary['areas'],
+                fn (array $area): bool => array_key_exists($area['area'], $payload['scores'] ?? []),
+            ));
+        }
+
+        if (array_key_exists('roadmap', $summary)) {
+            if (! is_array($summary['roadmap'])) {
+                throw new AiAnalysisException('Malformed client_summary roadmap');
+            }
+
+            foreach ($summary['roadmap'] as $step) {
+                if (! is_array($step)
+                    || ! is_string($step['step'] ?? null)
+                    || ! is_string($step['outcome'] ?? null)
+                    || ! in_array($step['effort'] ?? null, self::EFFORTS, true)) {
+                    throw new AiAnalysisException('Malformed client_summary roadmap step');
+                }
+            }
+        }
+
+        if (array_key_exists('questions', $summary)) {
+            if (! is_array($summary['questions'])) {
+                throw new AiAnalysisException('Malformed client_summary questions');
+            }
+
+            foreach ($summary['questions'] as $question) {
+                if (! is_string($question)) {
+                    throw new AiAnalysisException('Malformed client_summary question');
+                }
+            }
         }
 
         return $payload;

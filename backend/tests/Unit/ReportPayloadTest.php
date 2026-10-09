@@ -146,8 +146,98 @@ class ReportPayloadTest extends TestCase
         }
     }
 
-    public function test_default_version_is_now_five(): void
+    public function test_default_version_is_now_six(): void
     {
-        $this->assertSame(5, ReportPayload::VERSION);
+        $this->assertSame(6, ReportPayload::VERSION);
+    }
+
+    private function v6Summary(): array
+    {
+        return [
+            'overview' => 'Plain overview.',
+            'verdict' => 'Solid, but two risks need attention.',
+            'areas' => [
+                ['area' => 'testing', 'meaning' => 'Automatic checks.', 'status' => 'Barely any.'],
+            ],
+            'findings' => [[
+                'what' => 'w', 'consequence' => 'c', 'gain' => 'g',
+                'urgency' => 'now', 'business_area' => 'customers',
+            ]],
+            'roadmap' => [['step' => 'Add checks', 'outcome' => 'Fewer surprises', 'effort' => 'M']],
+            'questions' => ['Which parts are tested?'],
+        ];
+    }
+
+    public function test_accepts_a_v6_client_summary(): void
+    {
+        $payload = $this->valid() + ['client_summary' => $this->v6Summary()];
+
+        $this->assertSame($payload, ReportPayload::validate($payload));
+    }
+
+    public function test_a_v5_client_summary_still_validates_under_v6(): void
+    {
+        $payload = $this->valid() + ['client_summary' => [
+            'overview' => 'o',
+            'findings' => [['what' => 'w', 'consequence' => 'c', 'gain' => 'g']],
+        ]];
+
+        $this->assertSame($payload, ReportPayload::validate($payload, 6));
+    }
+
+    public function test_rejects_an_unknown_urgency(): void
+    {
+        $summary = $this->v6Summary();
+        $summary['findings'][0]['urgency'] = 'yesterday';
+
+        $this->expectException(AiAnalysisException::class);
+        ReportPayload::validate($this->valid() + ['client_summary' => $summary]);
+    }
+
+    public function test_rejects_an_unknown_business_area(): void
+    {
+        $summary = $this->v6Summary();
+        $summary['findings'][0]['business_area'] = 'vibes';
+
+        $this->expectException(AiAnalysisException::class);
+        ReportPayload::validate($this->valid() + ['client_summary' => $summary]);
+    }
+
+    public function test_rejects_a_malformed_roadmap_step(): void
+    {
+        $summary = $this->v6Summary();
+        $summary['roadmap'][0]['effort'] = 'XL';
+
+        $this->expectException(AiAnalysisException::class);
+        ReportPayload::validate($this->valid() + ['client_summary' => $summary]);
+    }
+
+    public function test_rejects_a_non_string_question(): void
+    {
+        $summary = $this->v6Summary();
+        $summary['questions'] = [42];
+
+        $this->expectException(AiAnalysisException::class);
+        ReportPayload::validate($this->valid() + ['client_summary' => $summary]);
+    }
+
+    public function test_rejects_an_area_that_is_not_a_score_dimension(): void
+    {
+        $summary = $this->v6Summary();
+        $summary['areas'][0]['area'] = 'overall';
+
+        $this->expectException(AiAnalysisException::class);
+        ReportPayload::validate($this->valid() + ['client_summary' => $summary]);
+    }
+
+    public function test_drops_an_area_for_a_dimension_that_was_not_measured(): void
+    {
+        $payload = $this->valid();
+        unset($payload['scores']['testing']);
+        $payload['client_summary'] = $this->v6Summary();
+
+        $validated = ReportPayload::validate($payload);
+
+        $this->assertSame([], $validated['client_summary']['areas']);
     }
 }
