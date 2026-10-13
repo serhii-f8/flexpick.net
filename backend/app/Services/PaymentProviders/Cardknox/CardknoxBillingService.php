@@ -3,15 +3,16 @@
 namespace App\Services\PaymentProviders\Cardknox;
 
 use App\Client\CardknoxClient;
-use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
 use App\Models\CardknoxCharge;
+use App\Models\Currency;
 use App\Models\Discount;
 use App\Models\Order;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\Tenant;
 use App\Models\Transaction;
 use App\Services\SubscriptionService;
 use Carbon\Carbon;
@@ -39,7 +40,7 @@ class CardknoxBillingService
     /** The card must already be remembered in the vault. */
     public function startSubscription(Subscription $subscription, int $quantity, ?Discount $discount): CardknoxResult
     {
-        if ($subscription->currency->code !== 'USD') {
+        if (Currency::query()->findOrFail($subscription->currency_id)->code !== 'USD') {
             return CardknoxResult::error(__('Cardknox only accepts payments in USD.'));
         }
 
@@ -93,7 +94,7 @@ class CardknoxBillingService
 
     public function payOrder(Order $order, string $token): CardknoxResult
     {
-        if ($order->currency->code !== 'USD') {
+        if (Currency::query()->findOrFail($order->currency_id)->code !== 'USD') {
             return CardknoxResult::error(__('Cardknox only accepts payments in USD.'));
         }
 
@@ -180,7 +181,7 @@ class CardknoxBillingService
     {
         // Seat plans bill the tenant's member count, as CalculationService::calculateNewPlanTotals() does.
         $quantity = $newPlan->type === PlanType::SEAT_BASED->value
-            ? max(1, $subscription->tenant->users()->count())
+            ? max(1, Tenant::query()->findOrFail($subscription->tenant_id)->users()->count())
             : max(1, (int) $subscription->quantity);
 
         $newPrice = $this->pricing->planPrice($newPlan, $subscription->currency_id);
@@ -234,7 +235,7 @@ class CardknoxBillingService
     {
         if ($subscription->type !== SubscriptionType::PAYMENT_PROVIDER_MANAGED
             || $subscription->ends_at === null
-            || $subscription->paymentProvider?->slug !== PaymentProviderConstants::CARDKNOX_SLUG
+            || $subscription->payment_provider_id !== $this->ledger->provider()->id
             || Carbon::parse($subscription->ends_at)->isFuture()) {
             return false;
         }
@@ -302,7 +303,7 @@ class CardknoxBillingService
 
     private function startsWithTrial(Subscription $subscription): bool
     {
-        return (bool) $subscription->plan->has_trial && ! $this->subscriptionService->shouldSkipTrial($subscription);
+        return (bool) Plan::query()->findOrFail($subscription->plan_id)->has_trial && ! $this->subscriptionService->shouldSkipTrial($subscription);
     }
 
     /** @return array{amount: int, discount: int} */

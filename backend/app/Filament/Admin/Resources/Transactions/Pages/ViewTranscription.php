@@ -2,7 +2,6 @@
 
 namespace App\Filament\Admin\Resources\Transactions\Pages;
 
-use App\Constants\PaymentProviderConstants;
 use App\Constants\TransactionStatus;
 use App\Filament\Admin\Resources\Transactions\TransactionResource;
 use App\Models\Transaction;
@@ -20,7 +19,7 @@ class ViewTranscription extends ViewRecord
     {
         // Cardknox has no dashboard of subscription objects to act on, so
         // refunds and disputes are recorded from here.
-        $isCardknox = fn (Transaction $record): bool => $record->paymentProvider?->slug === PaymentProviderConstants::CARDKNOX_SLUG;
+        $isCardknox = fn (Transaction $record): bool => $record->payment_provider_id === app(CardknoxChargeLedger::class)->provider()->id;
 
         return [
             Action::make('cardknox_refund')

@@ -7,6 +7,7 @@ use App\Constants\PlanPriceTierConstants;
 use App\Constants\PlanPriceType;
 use App\Constants\PlanType;
 use App\Models\Discount;
+use App\Models\Interval;
 use App\Models\Plan;
 use App\Models\PlanPrice;
 use App\Models\Subscription;
@@ -23,7 +24,7 @@ class CardknoxPricing
 {
     public function planPrice(Plan $plan, int $currencyId): PlanPrice
     {
-        return $plan->prices()->where('currency_id', $currencyId)->firstOrFail();
+        return PlanPrice::query()->where('plan_id', $plan->id)->where('currency_id', $currencyId)->firstOrFail();
     }
 
     public function recurringSubtotal(Plan $plan, int $currencyId, int $quantity): int
@@ -97,7 +98,7 @@ class CardknoxPricing
 
     public function renewalAmount(Subscription $subscription, Carbon $periodStart, Carbon $periodEnd): CardknoxAmount
     {
-        $plan = $subscription->plan;
+        $plan = Plan::query()->findOrFail($subscription->plan_id);
         $subtotal = $this->recurringSubtotal($plan, $subscription->currency_id, max(1, (int) $subscription->quantity));
         $usage = 0;
 
@@ -132,12 +133,12 @@ class CardknoxPricing
     public function addInterval(Subscription $subscription, Carbon $from): Carbon
     {
         // overflow=false: Jan 31 + 1 month is Feb 28/29, never Mar 3.
-        return $from->copy()->add((string) $subscription->interval->date_identifier, (int) $subscription->interval_count, false);
+        return $from->copy()->add((string) Interval::query()->findOrFail($subscription->interval_id)->date_identifier, (int) $subscription->interval_count, false);
     }
 
     public function subInterval(Subscription $subscription, Carbon $from): Carbon
     {
-        return $from->copy()->sub((string) $subscription->interval->date_identifier, (int) $subscription->interval_count, false);
+        return $from->copy()->sub((string) Interval::query()->findOrFail($subscription->interval_id)->date_identifier, (int) $subscription->interval_count, false);
     }
 
     /** @return array{0: int, 1: list<int>} */

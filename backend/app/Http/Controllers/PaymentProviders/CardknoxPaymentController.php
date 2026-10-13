@@ -8,8 +8,10 @@ use App\Constants\SubscriptionType;
 use App\Filament\Dashboard\Resources\Subscriptions\SubscriptionResource;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CardknoxCardRequest;
+use App\Models\Currency;
 use App\Models\Discount;
 use App\Models\Order;
+use App\Models\Plan;
 use App\Models\Subscription;
 use App\Services\PaymentProviders\Cardknox\CardknoxBillingService;
 use App\Services\PaymentProviders\Cardknox\CardknoxCardVault;
@@ -38,10 +40,10 @@ class CardknoxPaymentController extends Controller
     {
         $subscription = $this->ownedSubscription($subscriptionUuid);
         $amount = $this->billing->quoteFirstCharge($subscription, $this->quantity($request), $this->discount($request));
-        $price = (string) money($amount, $subscription->currency->code);
+        $price = (string) money($amount, Currency::query()->findOrFail($subscription->currency_id)->code);
 
         return $this->page(
-            title: $subscription->plan->name,
+            title: Plan::query()->findOrFail($subscription->plan_id)->name,
             summary: $amount === 0
                 ? __('Nothing is charged today. Your card is saved for future renewals.')
                 : __('You will be charged :amount today.', ['amount' => $price]),
@@ -49,7 +51,7 @@ class CardknoxPaymentController extends Controller
             buttonLabel: $amount === 0 ? __('Save card') : __('Pay :amount', ['amount' => $price]),
             cancelUrl: $subscription->type === SubscriptionType::LOCALLY_MANAGED
                 ? route('checkout.convert-local-subscription', ['subscriptionUuid' => $subscription->uuid])
-                : route('checkout.subscription', ['planSlug' => $subscription->plan->slug]),
+                : route('checkout.subscription', ['planSlug' => Plan::query()->findOrFail($subscription->plan_id)->slug]),
             offerSaveCard: false,
         );
     }
@@ -86,7 +88,7 @@ class CardknoxPaymentController extends Controller
     public function showOrder(string $orderUuid): View
     {
         $order = $this->ownedOrder($orderUuid);
-        $price = (string) money((int) $order->total_amount_after_discount, $order->currency->code);
+        $price = (string) money((int) $order->total_amount_after_discount, Currency::query()->findOrFail($order->currency_id)->code);
 
         return $this->page(
             title: __('Complete your purchase'),

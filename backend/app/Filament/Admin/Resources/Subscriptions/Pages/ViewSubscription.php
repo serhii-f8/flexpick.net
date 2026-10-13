@@ -2,12 +2,12 @@
 
 namespace App\Filament\Admin\Resources\Subscriptions\Pages;
 
-use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Filament\Admin\Resources\Subscriptions\SubscriptionResource;
 use App\Models\Subscription;
 use App\Services\PaymentProviders\Cardknox\CardknoxBillingService;
+use App\Services\PaymentProviders\Cardknox\CardknoxChargeLedger;
 use App\Services\PaymentProviders\PaymentService;
 use App\Services\PlanService;
 use App\Services\SubscriptionDiscountService;
@@ -46,7 +46,7 @@ class ViewSubscription extends ViewRecord
                     ->icon('heroicon-o-credit-card')
                     ->requiresConfirmation()
                     ->modalDescription(__('Charges the overdue renewal immediately instead of waiting for the next retry.'))
-                    ->visible(fn (Subscription $record): bool => $record->paymentProvider?->slug === PaymentProviderConstants::CARDKNOX_SLUG
+                    ->visible(fn (Subscription $record): bool => $record->payment_provider_id === app(CardknoxChargeLedger::class)->provider()->id
                         && $record->status === SubscriptionStatus::PAST_DUE->value)
                     ->action(function (Subscription $record, CardknoxBillingService $billing): void {
                         $result = $billing->retryOutstanding($record);

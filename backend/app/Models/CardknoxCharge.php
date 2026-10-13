@@ -22,6 +22,7 @@ class CardknoxCharge extends Model
         'period_end' => 'datetime',
     ];
 
+    /** @return BelongsTo<Transaction, $this> */
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(Transaction::class);

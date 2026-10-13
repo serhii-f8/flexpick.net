@@ -15,6 +15,7 @@ use App\Models\PlanPrice;
 use App\Models\Subscription;
 use App\Models\Transaction;
 use App\Models\UserCardknoxData;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -30,6 +31,14 @@ trait CardknoxTestHelpers
     {
         PaymentProvider::where('slug', PaymentProviderConstants::CARDKNOX_SLUG)
             ->update(['is_active' => false, 'is_enabled_for_new_payments' => false]);
+
+        // Tests that freeze time into the future (Carbon::setTestNow) stamp rows
+        // with future created_at values. FeatureTest never rolls back, so those
+        // rows would become "latest()" for every later suite. Runs after the
+        // test has restored the real clock.
+        foreach (['subscriptions', 'transactions', 'orders'] as $table) {
+            DB::table($table)->where('created_at', '>', now())->update(['created_at' => now()->subYear()]);
+        }
     }
 
     protected function configureCardknox(): void
@@ -100,6 +109,8 @@ trait CardknoxTestHelpers
             'interval_count' => 1,
             'has_trial' => false,
             'is_active' => true,
+            // FeatureTest never rolls back: keep these out of paginated public plan lists.
+            'is_visible' => false,
         ], $plan));
 
         PlanPrice::factory()->create(array_merge([

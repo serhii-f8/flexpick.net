@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Livewire\Component;
 
+/** @property Schema $form */
 class CardknoxSettings extends Component implements HasForms
 {
     use InteractsWithForms;
