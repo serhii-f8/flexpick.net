@@ -18,6 +18,7 @@ use App\Services\TransactionService;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Owns the lifecycle of one gateway charge: open a pending transaction under
@@ -171,6 +172,36 @@ class CardknoxChargeLedger
                 ]);
             }
         });
+    }
+
+    /**
+     * Webhooks confirm; they never drive state on their own. Every branch is
+     * idempotent (settle/markRefunded check the current status), which is
+     * what makes duplicate and out-of-order deliveries harmless.
+     */
+    public function applyWebhook(array $fields): void
+    {
+        $command = strtolower((string) ($fields['xCommand'] ?? ''));
+        $invoice = (string) ($fields['xInvoice'] ?? '');
+        $charge = $invoice === '' ? null : CardknoxCharge::query()->where('invoice', $invoice)->first();
+
+        if ($charge === null) {
+            Log::info('Cardknox webhook matched no charge', ['command' => $command, 'ref' => $fields['xRefNum'] ?? null]);
+
+            return;
+        }
+
+        $result = CardknoxResult::fromResponse($fields);
+
+        if ($command === 'cc:sale') {
+            $this->settle($charge, $result);
+
+            return;
+        }
+
+        if (in_array($command, ['cc:refund', 'cc:void'], true) && $result->isApproved()) {
+            $this->markRefunded($charge);
+        }
     }
 
     public static function mergeData(Subscription $subscription, array $values): array

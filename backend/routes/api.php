@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuditRequestController;
+use App\Http\Controllers\PaymentProviders\CardknoxController;
 use App\Http\Controllers\PaymentProviders\CreemController;
 use App\Http\Controllers\PaymentProviders\LemonSqueezyController;
 use App\Http\Controllers\PaymentProviders\PaddleController;
@@ -47,3 +48,8 @@ Route::post('/payments-providers/polar/webhook', [
     PolarController::class,
     'handleWebhook',
 ])->name('payments-providers.polar.webhook');
+
+Route::post('/payments-providers/cardknox/webhook', [
+    CardknoxController::class,
+    'handleWebhook',
+])->name('payments-providers.cardknox.webhook');

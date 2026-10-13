@@ -2,14 +2,17 @@
 
 namespace App\Services\PaymentProviders\Cardknox;
 
+use App\Client\CardknoxClient;
 use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
+use App\Models\CardknoxCharge;
 use App\Models\Discount;
 use App\Models\Order;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\Transaction;
 use App\Services\SubscriptionService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +28,7 @@ class CardknoxBillingService
         private CardknoxPricing $pricing,
         private CardknoxCardVault $vault,
         private SubscriptionService $subscriptionService,
+        private CardknoxClient $client,
     ) {}
 
     public function quoteFirstCharge(Subscription $subscription, int $quantity, ?Discount $discount): int
@@ -201,6 +205,29 @@ class CardknoxBillingService
         $newSubtotal = $this->pricing->recurringSubtotal($subscription->plan, $subscription->currency_id, $quantity);
 
         return $this->applyChange($subscription, $oldSubtotal, $newSubtotal, $prorate, ['quantity' => $quantity]);
+    }
+
+    public function refund(Transaction $transaction): CardknoxResult
+    {
+        $charge = CardknoxCharge::query()->where('transaction_id', $transaction->id)->firstOrFail();
+
+        if ($charge->ref_num === null) {
+            return CardknoxResult::error(__('This charge has no gateway reference to refund.'));
+        }
+
+        $result = $this->client->refund($charge->ref_num);
+
+        // An unsettled charge cannot be refunded, only voided. Never void after
+        // an Unknown refund: the refund may have gone through.
+        if (in_array($result->outcome, [CardknoxOutcome::Declined, CardknoxOutcome::Error], true)) {
+            $result = $this->client->void($charge->ref_num);
+        }
+
+        if ($result->isApproved()) {
+            $this->ledger->markRefunded($charge);
+        }
+
+        return $result;
     }
 
     private function isDue(Subscription $subscription, bool $force): bool
