@@ -18,6 +18,7 @@ use App\Services\AuditReport\Scanners\OsvScanner;
 use App\Services\AuditReport\Scanners\SccScanner;
 use App\Services\AuditReport\Scanners\SemgrepScanner;
 use App\Services\PartnerPricingResolver;
+use App\Services\PaymentProviders\Cardknox\CardknoxProvider;
 use App\Services\PaymentProviders\Creem\CreemProvider;
 use App\Services\PaymentProviders\LemonSqueezy\LemonSqueezyProvider;
 use App\Services\PaymentProviders\Offline\OfflineProvider;
@@ -50,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
             LemonSqueezyProvider::class,
             CreemProvider::class,
             PolarProvider::class,
+            CardknoxProvider::class,
             OfflineProvider::class,
         ], 'payment-providers');
 
