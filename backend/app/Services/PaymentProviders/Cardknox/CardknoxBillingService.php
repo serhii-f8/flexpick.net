@@ -3,10 +3,12 @@
 namespace App\Services\PaymentProviders\Cardknox;
 
 use App\Constants\PaymentProviderConstants;
+use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
 use App\Models\Discount;
 use App\Models\Order;
+use App\Models\Plan;
 use App\Models\Subscription;
 use App\Services\SubscriptionService;
 use Carbon\Carbon;
@@ -170,6 +172,37 @@ class CardknoxBillingService
         return $this->chargeRenewal($subscription, force: true);
     }
 
+    public function changePlan(Subscription $subscription, Plan $newPlan, bool $prorate): bool
+    {
+        // Seat plans bill the tenant's member count, as CalculationService::calculateNewPlanTotals() does.
+        $quantity = $newPlan->type === PlanType::SEAT_BASED->value
+            ? max(1, $subscription->tenant->users()->count())
+            : max(1, (int) $subscription->quantity);
+
+        $newPrice = $this->pricing->planPrice($newPlan, $subscription->currency_id);
+        $oldSubtotal = $this->pricing->recurringSubtotal($subscription->plan, $subscription->currency_id, max(1, (int) $subscription->quantity));
+        $newSubtotal = $this->pricing->recurringSubtotal($newPlan, $subscription->currency_id, $quantity);
+
+        return $this->applyChange($subscription, $oldSubtotal, $newSubtotal, $prorate, [
+            'plan_id' => $newPlan->id,
+            'price' => $newPrice->price,
+            'quantity' => $quantity,
+            'interval_id' => $newPlan->interval_id,
+            'interval_count' => $newPlan->interval_count,
+            'price_type' => $newPrice->type,
+            'price_tiers' => $newPrice->tiers,
+            'price_per_unit' => $newPrice->price_per_unit,
+        ]);
+    }
+
+    public function changeQuantity(Subscription $subscription, int $quantity, bool $prorate): bool
+    {
+        $oldSubtotal = $this->pricing->recurringSubtotal($subscription->plan, $subscription->currency_id, max(1, (int) $subscription->quantity));
+        $newSubtotal = $this->pricing->recurringSubtotal($subscription->plan, $subscription->currency_id, $quantity);
+
+        return $this->applyChange($subscription, $oldSubtotal, $newSubtotal, $prorate, ['quantity' => $quantity]);
+    }
+
     private function isDue(Subscription $subscription, bool $force): bool
     {
         if ($subscription->type !== SubscriptionType::PAYMENT_PROVIDER_MANAGED
@@ -190,6 +223,54 @@ class CardknoxBillingService
         $nextRetryAt = $subscription->extra_payment_provider_data['next_retry_at'] ?? null;
 
         return $force || $nextRetryAt === null || Carbon::parse($nextRetryAt)->lte(now());
+    }
+
+    /**
+     * Upgrade: charge the prorated difference now; the change is applied by
+     * the ledger only when that charge settles approved. Downgrade: apply now
+     * and bank the difference as credit for the next renewal (no card refund).
+     */
+    private function applyChange(Subscription $subscription, int $oldSubtotal, int $newSubtotal, bool $prorate, array $change): bool
+    {
+        $onTrial = $subscription->trial_ends_at !== null && Carbon::parse($subscription->trial_ends_at)->isFuture();
+
+        if (! $prorate || $onTrial) {
+            $this->subscriptionService->updateSubscription($subscription, $change);
+
+            return true;
+        }
+
+        $delta = $this->pricing->prorationAmount($subscription, $oldSubtotal, $newSubtotal, now());
+
+        if ($delta <= 0) {
+            $credit = (int) ($subscription->extra_payment_provider_data['pending_credit'] ?? 0) + abs($delta);
+
+            $this->subscriptionService->updateSubscription($subscription, $change + [
+                'extra_payment_provider_data' => CardknoxChargeLedger::mergeData($subscription, ['pending_credit' => $credit]),
+            ]);
+
+            return true;
+        }
+
+        $card = $this->vault->cardFor($subscription->tenant_id, $subscription->user_id);
+
+        if ($card === null) {
+            return false;
+        }
+
+        $charge = $this->ledger->open(
+            'S'.$subscription->id.'-P'.now()->timestamp,
+            CardknoxChargePurpose::Proration,
+            $subscription,
+            $delta,
+            meta: ['change' => $change],
+        );
+
+        if ($charge === null) {
+            return false;
+        }
+
+        return $this->ledger->execute($charge, $card->card_token, merchantInitiated: false)->isApproved();
     }
 
     private function startsWithTrial(Subscription $subscription): bool
