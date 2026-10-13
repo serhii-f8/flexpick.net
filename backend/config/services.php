@@ -111,6 +111,17 @@ return [
         'is_sandbox' => env('POLAR_IS_SANDBOX', false),
     ],
 
+    'cardknox' => [
+        'transaction_key' => env('CARDKNOX_TRANSACTION_KEY'),
+        'ifields_key' => env('CARDKNOX_IFIELDS_KEY'),
+        'webhook_pin' => env('CARDKNOX_WEBHOOK_PIN'),
+        'gateway_url' => env('CARDKNOX_GATEWAY_URL', 'https://x1.cardknox.com'),
+        // Pinned iFields release; confirm the current one in the sandbox pass (Task 14).
+        'ifields_version' => env('CARDKNOX_IFIELDS_VERSION', '2.15.2401.3101'),
+        // Days after the period end at which a declined renewal is retried.
+        'retry_days' => [1, 3, 5],
+    ],
+
     'twilio' => [
         'sid' => env('TWILIO_SID'),
         'token' => env('TWILIO_TOKEN'),

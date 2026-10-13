@@ -27,6 +27,8 @@ class ConfigConstants
         'recaptcha.api_secret_key',
         'services.polar.access_token',
         'services.polar.webhook_secret',
+        'services.cardknox.transaction_key',
+        'services.cardknox.webhook_pin',
         'services.twilio.sid',
         'services.twilio.token',
     ];
@@ -82,6 +84,9 @@ class ConfigConstants
         'services.polar.access_token',
         'services.polar.webhook_secret',
         'services.polar.is_sandbox',
+        'services.cardknox.transaction_key',
+        'services.cardknox.ifields_key',
+        'services.cardknox.webhook_pin',
 
         'services.postmark.token',
         'services.resend.key',

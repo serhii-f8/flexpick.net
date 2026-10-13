@@ -14,5 +14,7 @@ class PaymentProviderConstants
 
     public const POLAR_SLUG = 'polar';
 
+    public const CARDKNOX_SLUG = 'cardknox';
+
     public const OFFLINE_SLUG = 'offline';
 }

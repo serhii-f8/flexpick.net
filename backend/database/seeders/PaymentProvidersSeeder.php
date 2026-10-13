@@ -56,6 +56,13 @@ class PaymentProvidersSeeder extends Seeder
                 'is_active' => false,
                 'sort' => 6,
             ],
+            [
+                'name' => 'Cardknox',
+                'slug' => PaymentProviderConstants::CARDKNOX_SLUG,
+                'type' => 'multi',
+                'is_active' => false,
+                'sort' => 7,
+            ],
         ];
 
         foreach ($providers as $provider) {
