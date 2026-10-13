@@ -18,6 +18,9 @@ class HealthCheckRegistrationTest extends FeatureTest
         $expected = [
             'AuditPipelineFailureRate',
             'Cache',
+            'CardknoxDeclineRate',
+            'CardknoxPendingTransactions',
+            'CardknoxRenewalBacklog',
             'Database',
             'Horizon',
             'MailFailureRate',

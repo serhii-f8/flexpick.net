@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use App\Health\Checks\AuditPipelineFailureRateCheck;
+use App\Health\Checks\CardknoxDeclineRateCheck;
+use App\Health\Checks\CardknoxPendingTransactionsCheck;
+use App\Health\Checks\CardknoxRenewalBacklogCheck;
 use App\Health\Checks\MailFailureRateCheck;
 use App\Health\Checks\OldestPendingAuditCheck;
 use App\Health\Checks\ScannerDegradationCheck;
@@ -46,6 +49,9 @@ class HealthServiceProvider extends ServiceProvider
             AuditPipelineFailureRateCheck::new(),
             MailFailureRateCheck::new(),
             ScannerDegradationCheck::new(),
+            CardknoxRenewalBacklogCheck::new(),
+            CardknoxDeclineRateCheck::new(),
+            CardknoxPendingTransactionsCheck::new(),
         ]);
     }
 }

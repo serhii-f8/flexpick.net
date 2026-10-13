@@ -66,6 +66,18 @@ return [
             'fail_percent' => (int) env('HEALTH_SCANNER_DEGRADATION_FAIL_PERCENT', 20),
         ],
 
+        'cardknox' => [
+            // An ACTIVE Cardknox subscription this long past ends_at with no
+            // attempt means the renewal command is not running.
+            'renewal_backlog_hours' => (int) env('HEALTH_CARDKNOX_BACKLOG_HOURS', 2),
+            'pending_minutes' => (int) env('HEALTH_CARDKNOX_PENDING_MINUTES', 60),
+            'decline' => [
+                'window_hours' => (int) env('HEALTH_CARDKNOX_DECLINE_WINDOW_HOURS', 24),
+                'min_samples' => (int) env('HEALTH_CARDKNOX_DECLINE_MIN_SAMPLES', 5),
+                'fail_percent' => (int) env('HEALTH_CARDKNOX_DECLINE_FAIL_PERCENT', 30),
+            ],
+        ],
+
         /*
          * Severity bands per spec §15.6. Only bands listed in `paging_bands`
          * affect the /health status code; the rest are reported in the body
@@ -81,6 +93,10 @@ return [
             'AuditPipelineFailureRate' => 'high',
             'MailFailureRate' => 'high',
             'ScannerDegradation' => 'medium',
+            // Missed renewals are lost revenue and silent churn: page.
+            'CardknoxRenewalBacklog' => 'high',
+            'CardknoxDeclineRate' => 'medium',
+            'CardknoxPendingTransactions' => 'medium',
             'Schedule' => 'medium',
             'UsedDiskSpace' => 'medium',
             'Cache' => 'medium',

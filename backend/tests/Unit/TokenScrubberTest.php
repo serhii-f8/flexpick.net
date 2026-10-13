@@ -107,4 +107,20 @@ class TokenScrubberTest extends TestCase
         $this->assertStringNotContainsString('x-access-token:', (string) $scrubbedBreadcrumb->getMessage());
         $this->assertStringNotContainsString(self::TOKEN, json_encode($scrubbedBreadcrumb->getMetadata()));
     }
+
+    public function test_cardknox_secrets_are_scrubbed_from_extra_and_messages(): void
+    {
+        $event = Event::createEvent();
+        $event->setMessage('gateway said xKey=live_secret_key&xToken=tok_abc123 failed');
+        $event->setExtra(['payload' => ['xKey' => 'live_secret_key', 'xCardNum' => 'sut_x', 'xCVV' => 'sut_y', 'xAmount' => '10.00']]);
+
+        $scrubbed = TokenScrubber::handle($event, new EventHint);
+
+        $this->assertStringNotContainsString('live_secret_key', $scrubbed->getMessage());
+        $this->assertStringNotContainsString('tok_abc123', $scrubbed->getMessage());
+        $this->assertSame('[REDACTED]', $scrubbed->getExtra()['payload']['xKey']);
+        $this->assertSame('[REDACTED]', $scrubbed->getExtra()['payload']['xCardNum']);
+        $this->assertSame('[REDACTED]', $scrubbed->getExtra()['payload']['xCVV']);
+        $this->assertSame('10.00', $scrubbed->getExtra()['payload']['xAmount']);
+    }
 }

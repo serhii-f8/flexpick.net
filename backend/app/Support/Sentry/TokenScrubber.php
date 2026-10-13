@@ -16,6 +16,10 @@ class TokenScrubber
 {
     private const REPLACEMENT = '[REDACTED]';
 
+    // Cardknox request fields that carry credentials or card tokens. Matched
+    // case-insensitively as array keys and as key=value pairs in strings.
+    private const CARDKNOX_KEYS = ['xkey', 'xtoken', 'xcardnum', 'xcvv', 'xmagstripe'];
+
     // Static so config/sentry.php can reference it as a [Class, method]
     // callable — a plain array of strings, which var_export() (used by
     // `config:cache`) can serialize. A closure or an instantiated object
@@ -100,9 +104,16 @@ class TokenScrubber
     {
         // Any embedded credential pair, whether or not it belongs to a
         // connected tenant's own token.
-        return (string) preg_replace(
+        $value = (string) preg_replace(
             '#https://[^:/@\s]+:[^@\s]+@#i',
             'https://'.self::REPLACEMENT.'@',
+            $value
+        );
+
+        // Cardknox fields in form bodies or JSON (xKey=..., "xKey":"...").
+        return (string) preg_replace(
+            '/\b('.implode('|', self::CARDKNOX_KEYS).')("?\s*[:=]\s*"?)[^&"\s,}]+/i',
+            '$1$2'.self::REPLACEMENT,
             $value
         );
     }
@@ -114,6 +125,12 @@ class TokenScrubber
     private static function scrubArray(array $values): array
     {
         foreach ($values as $key => $value) {
+            if (is_string($key) && in_array(strtolower($key), self::CARDKNOX_KEYS, true)) {
+                $values[$key] = self::REPLACEMENT;
+
+                continue;
+            }
+
             if (is_string($value)) {
                 $values[$key] = self::scrub($value);
             } elseif (is_array($value)) {
