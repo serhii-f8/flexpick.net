@@ -37,6 +37,7 @@ Schedule::command('app:issue-cash-renewal-orders')->hourly()->withoutOverlapping
 
 Schedule::command('app:expire-pending-cash-orders')->hourly()->withoutOverlapping()->onOneServer();
 Schedule::command('app:charge-cardknox-renewals')->hourly()->withoutOverlapping()->onOneServer();
+Schedule::command('app:reconcile-cardknox-transactions')->hourly()->withoutOverlapping()->onOneServer();
 
 // withoutOverlapping: the result store writes a batch row-by-row without a
 // transaction, so an overrunning check run would let the next tick read a

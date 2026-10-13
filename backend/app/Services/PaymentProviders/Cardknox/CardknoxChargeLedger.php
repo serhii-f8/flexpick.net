@@ -204,6 +204,40 @@ class CardknoxChargeLedger
         }
     }
 
+    /**
+     * Cardknox never retries a webhook, so anything still pending after the
+     * grace period is looked up directly. A charge the gateway has no record of
+     * after 24 hours never reached it, and is failed (renewals then retry).
+     */
+    public function reconcilePending(Carbon $olderThan, ?int $chargeId = null): int
+    {
+        $settled = 0;
+
+        CardknoxCharge::query()
+            ->where('created_at', '<=', $olderThan)
+            ->whereHas('transaction', fn ($query) => $query->where('status', TransactionStatus::PENDING->value))
+            ->when($chargeId !== null, fn ($query) => $query->whereKey($chargeId))
+            ->each(function (CardknoxCharge $charge) use (&$settled): void {
+                $found = $this->client->findByInvoice($charge->invoice, Carbon::parse($charge->created_at)->subHour());
+
+                if ($found === null) {
+                    if (Carbon::parse($charge->created_at)->lt(now()->subDay())) {
+                        $this->settle($charge, CardknoxResult::error(__('No gateway record of this charge after 24 hours.')));
+                        $settled++;
+                    }
+
+                    return;
+                }
+
+                if ($found->outcome !== CardknoxOutcome::Unknown) {
+                    $this->settle($charge, $found);
+                    $settled++;
+                }
+            });
+
+        return $settled;
+    }
+
     public static function mergeData(Subscription $subscription, array $values): array
     {
         return array_merge($subscription->extra_payment_provider_data ?? [], $values);
