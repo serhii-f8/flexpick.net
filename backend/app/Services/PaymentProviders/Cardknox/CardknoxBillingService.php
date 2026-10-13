@@ -2,12 +2,15 @@
 
 namespace App\Services\PaymentProviders\Cardknox;
 
+use App\Constants\PaymentProviderConstants;
 use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
 use App\Models\Discount;
 use App\Models\Order;
 use App\Models\Subscription;
 use App\Services\SubscriptionService;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Decides what to charge and when. Every gateway call goes through
@@ -101,6 +104,92 @@ class CardknoxBillingService
         }
 
         return $this->ledger->execute($charge, $token, merchantInitiated: false);
+    }
+
+    /**
+     * Phase 1 (locked, committed): decide and open the pending charge.
+     * Phase 2 (no transaction): call the gateway and settle. Splitting them
+     * means a crash after the gateway approves still leaves a committed
+     * pending transaction for reconciliation to settle.
+     */
+    public function chargeRenewal(Subscription $subscription, bool $force = false): ?CardknoxResult
+    {
+        $charge = DB::transaction(function () use ($subscription, $force) {
+            $locked = Subscription::query()->whereKey($subscription->id)->lockForUpdate()->firstOrFail();
+
+            if (! $this->isDue($locked, $force)) {
+                return null;
+            }
+
+            if ($locked->is_canceled_at_end_of_cycle) {
+                $this->subscriptionService->updateSubscription($locked, [
+                    'status' => SubscriptionStatus::CANCELED->value,
+                    'cancelled_at' => now(),
+                ]);
+
+                return null;
+            }
+
+            $periodEnd = Carbon::parse($locked->ends_at);
+            $amount = $this->pricing->renewalAmount($locked, $this->pricing->subInterval($locked, $periodEnd), $periodEnd);
+
+            return $this->ledger->open(
+                'S'.$locked->id.'-'.$periodEnd->format('Ymd'),
+                CardknoxChargePurpose::Renewal,
+                $locked,
+                $amount->total,
+                $amount->discount,
+                $periodEnd,
+                ['credit' => $amount->credit, 'discount_ids' => $amount->discountIdsUsed],
+            );
+        });
+
+        if ($charge === null) {
+            return null;
+        }
+
+        $card = $this->vault->cardFor($subscription->tenant_id, $subscription->user_id);
+
+        if ($card === null) {
+            $result = CardknoxResult::error(__('No card on file.'));
+            $this->ledger->settle($charge, $result);
+
+            return $result;
+        }
+
+        return $this->ledger->execute($charge, $card->card_token, merchantInitiated: true);
+    }
+
+    /** Used after the customer updates their card: retry an overdue renewal now. */
+    public function retryOutstanding(Subscription $subscription): ?CardknoxResult
+    {
+        if ($subscription->status !== SubscriptionStatus::PAST_DUE->value) {
+            return null;
+        }
+
+        return $this->chargeRenewal($subscription, force: true);
+    }
+
+    private function isDue(Subscription $subscription, bool $force): bool
+    {
+        if ($subscription->type !== SubscriptionType::PAYMENT_PROVIDER_MANAGED
+            || $subscription->ends_at === null
+            || $subscription->paymentProvider?->slug !== PaymentProviderConstants::CARDKNOX_SLUG
+            || Carbon::parse($subscription->ends_at)->isFuture()) {
+            return false;
+        }
+
+        if ($subscription->status === SubscriptionStatus::ACTIVE->value) {
+            return true;
+        }
+
+        if ($subscription->status !== SubscriptionStatus::PAST_DUE->value) {
+            return false;
+        }
+
+        $nextRetryAt = $subscription->extra_payment_provider_data['next_retry_at'] ?? null;
+
+        return $force || $nextRetryAt === null || Carbon::parse($nextRetryAt)->lte(now());
     }
 
     private function startsWithTrial(Subscription $subscription): bool
