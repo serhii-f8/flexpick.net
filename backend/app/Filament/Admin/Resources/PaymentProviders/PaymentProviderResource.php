@@ -2,6 +2,8 @@
 
 namespace App\Filament\Admin\Resources\PaymentProviders;
 
+use App\Constants\PaymentProviderConstants;
+use App\Filament\Admin\Resources\PaymentProviders\Pages\CardknoxSettings;
 use App\Filament\Admin\Resources\PaymentProviders\Pages\CreemSettings;
 use App\Filament\Admin\Resources\PaymentProviders\Pages\EditPaymentProvider;
 use App\Filament\Admin\Resources\PaymentProviders\Pages\LemonSqueezySettings;
@@ -10,6 +12,7 @@ use App\Filament\Admin\Resources\PaymentProviders\Pages\PaddleSettings;
 use App\Filament\Admin\Resources\PaymentProviders\Pages\PolarSettings;
 use App\Filament\Admin\Resources\PaymentProviders\Pages\StripeSettings;
 use App\Models\PaymentProvider;
+use App\Services\PaymentProviders\Cardknox\CardknoxConfiguration;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -41,6 +44,13 @@ class PaymentProviderResource extends Resource
         return __('Payment Provider');
     }
 
+    /** Cardknox cannot be switched on until its keys and webhook PIN are saved. */
+    public static function isLockedOff(?PaymentProvider $record): bool
+    {
+        return $record?->slug === PaymentProviderConstants::CARDKNOX_SLUG
+            && ! app(CardknoxConfiguration::class)->isComplete();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -54,11 +64,15 @@ class PaymentProviderResource extends Resource
                     Toggle::make('is_active')
                         ->label(__('Active'))
                         ->helperText(__('Deactivating this payment provider will prevent it from being used for new & old subscriptions. Customers will not be able to pay for their services so USE WITH CAUTION.'))
-                        ->required(),
+                        ->required()
+                        ->disabled(fn (?PaymentProvider $record): bool => static::isLockedOff($record))
+                        ->hint(fn (?PaymentProvider $record): ?string => static::isLockedOff($record) ? __('Save the transaction key, iFields key and a webhook PIN in the Cardknox settings first.') : null),
                     Toggle::make('is_enabled_for_new_payments')
                         ->label(__('Enabled for new payments'))
                         ->helperText(__('If disabled, this payment provider will not be shown on the checkout page, but will still be available for existing subscriptions and receiving webhooks.'))
-                        ->required(),
+                        ->required()
+                        ->disabled(fn (?PaymentProvider $record): bool => static::isLockedOff($record))
+                        ->hint(fn (?PaymentProvider $record): ?string => static::isLockedOff($record) ? __('Save the transaction key, iFields key and a webhook PIN in the Cardknox settings first.') : null),
                 ])->columnSpanFull(),
             ]);
     }
@@ -82,9 +96,11 @@ class PaymentProviderResource extends Resource
                     ->label(__('Slug'))
                     ->searchable(),
                 ToggleColumn::make('is_active')
-                    ->label(__('Active')),
+                    ->label(__('Active'))
+                    ->disabled(fn (PaymentProvider $record): bool => static::isLockedOff($record)),
                 ToggleColumn::make('is_enabled_for_new_payments')
-                    ->label(__('Enabled for new payments')),
+                    ->label(__('Enabled for new payments'))
+                    ->disabled(fn (PaymentProvider $record): bool => static::isLockedOff($record)),
             ])
             ->filters([
                 //
@@ -114,6 +130,7 @@ class PaymentProviderResource extends Resource
             'lemon-squeezy-settings' => LemonSqueezySettings::route('/lemon-squeezy-settings'),
             'creem-settings' => CreemSettings::route('/creem-settings'),
             'polar-settings' => PolarSettings::route('/polar-settings'),
+            'cardknox-settings' => CardknoxSettings::route('/cardknox-settings'),
         ];
     }
 

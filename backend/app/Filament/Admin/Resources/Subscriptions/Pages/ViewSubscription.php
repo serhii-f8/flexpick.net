@@ -2,10 +2,12 @@
 
 namespace App\Filament\Admin\Resources\Subscriptions\Pages;
 
+use App\Constants\PaymentProviderConstants;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Filament\Admin\Resources\Subscriptions\SubscriptionResource;
 use App\Models\Subscription;
+use App\Services\PaymentProviders\Cardknox\CardknoxBillingService;
 use App\Services\PaymentProviders\PaymentService;
 use App\Services\PlanService;
 use App\Services\SubscriptionDiscountService;
@@ -38,6 +40,20 @@ class ViewSubscription extends ViewRecord
                     })
                     ->action(function (TenantService $tenantService, Subscription $record) {
                         $tenantService->syncSubscriptionQuantity($record);
+                    }),
+                Action::make('cardknox_charge_now')
+                    ->label(__('Charge now'))
+                    ->icon('heroicon-o-credit-card')
+                    ->requiresConfirmation()
+                    ->modalDescription(__('Charges the overdue renewal immediately instead of waiting for the next retry.'))
+                    ->visible(fn (Subscription $record): bool => $record->paymentProvider?->slug === PaymentProviderConstants::CARDKNOX_SLUG
+                        && $record->status === SubscriptionStatus::PAST_DUE->value)
+                    ->action(function (Subscription $record, CardknoxBillingService $billing): void {
+                        $result = $billing->retryOutstanding($record);
+
+                        $result?->isApproved()
+                            ? Notification::make()->title(__('Payment succeeded'))->success()->send()
+                            : Notification::make()->title(__('Payment did not go through'))->body($result?->error)->danger()->send();
                     }),
                 Action::make('change-plan')
                     ->label(__('Change Plan'))
