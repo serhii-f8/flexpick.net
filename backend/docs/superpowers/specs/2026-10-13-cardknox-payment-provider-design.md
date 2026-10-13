@@ -230,3 +230,40 @@ PHPUnit, TDD per task, gateway faked with `Http::fake`. Run in Docker.
   renewal via `--subscription`; webhook via the ngrok profile; portal refund picked up by
   reconciliation; chargeback-delivery check.
 - Existing Stripe subscriptions are untouched; Cardknox is used for new checkouts only.
+
+## 12. Revisions made while writing the implementation plan
+
+These supersede the corresponding statements above.
+
+1. **No Recurring API v2.** Cards are stored with Transaction API `cc:save`, whose reusable
+   `xToken` is kept (encrypted cast) in `user_cardknox_data.card_token`. There is no
+   Cardknox customer or payment-method object, so `cardknox_customer_id` and
+   `cardknox_payment_method_id` are dropped. Fewer endpoints, same capability.
+2. **Usage records reuse `subscription_usages`.** `SubscriptionUsageService` already writes a
+   `SubscriptionUsage` row after `reportUsage()` returns true. Cardknox's `reportUsage()`
+   returns true and renewal sums `unit_count` over the period. The
+   `cardknox_usage_records` table is dropped.
+3. **New table `cardknox_charges`** (`transaction_id`, `invoice_base`, `invoice` unique,
+   `ref_num`, `purpose`, `period_end`, `meta` JSON). It carries the invoice key, so the
+   unique index enforces idempotency at the database level, and it holds the deferred
+   effect of a charge (for example, the target plan of a proration). One method,
+   `CardknoxBillingService::settle()`, applies a gateway result to a charge, and it is shared
+   by the synchronous path, the webhook job, and reconciliation.
+4. **Discounts are not written by Cardknox.** `DiscountService::redeemCodeForSubscription()`
+   already creates the `SubscriptionDiscount` row (checkout success page and
+   `SubscriptionDiscountService::applyDiscount()`). `addDiscountToSubscription()` returns
+   true; the first charge applies the checkout `Discount` directly; renewals read
+   `SubscriptionDiscount` rows. Usage of each discount is counted in
+   `extra_payment_provider_data.discount_uses` (`{discount_id: count}`), replacing
+   `discount_started_cycle` / `cycle`.
+5. **Invoice keys are short** (`S{id}-{Ymd}-{attempt}`, `S{id}-F-{attempt}`,
+   `S{id}-P{unix}-{attempt}`, `O{id}-{attempt}`), because gateway invoice fields are
+   length-limited. A new attempt for the same base is allowed only when every previous attempt
+   failed.
+6. **Merchant-initiated charges** (renewals, retries) send `xRecurringIndicator`.
+7. **Reconciliation v1 settles pending charges only.** Refunds and voids made in the portal
+   are transactions, so they arrive by webhook. Importing them through the report API is
+   deferred until the sandbox pass confirms the report row fields.
+8. **Enable guard.** The `is_active` and `is_enabled_for_new_payments` toggles for Cardknox
+   are disabled in the admin until `CardknoxConfiguration::isComplete()` (transaction key,
+   iFields key, webhook PIN of at least 15 alphanumeric characters).
