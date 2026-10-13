@@ -8,6 +8,7 @@ use App\Http\Controllers\AuthStatusController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PartnerContactController;
+use App\Http\Controllers\PaymentProviders\CardknoxPaymentController;
 use App\Http\Controllers\PaymentProviders\PaddleController;
 use App\Http\Controllers\ProductCheckoutController;
 use App\Http\Controllers\SubscriptionCheckoutController;
@@ -160,6 +161,15 @@ Route::get('/payment-provider/paddle/payment-link', [
     PaddleController::class,
     'paymentLink',
 ])->name('payment-link.paddle');
+
+Route::middleware(['auth', 'signed'])->prefix('/payments-providers/cardknox')->group(function () {
+    Route::get('/pay/subscription/{subscriptionUuid}', [CardknoxPaymentController::class, 'showSubscription'])->name('payments-providers.cardknox.pay.subscription');
+    Route::post('/pay/subscription/{subscriptionUuid}', [CardknoxPaymentController::class, 'paySubscription'])->name('payments-providers.cardknox.pay.subscription.submit');
+    Route::get('/pay/order/{orderUuid}', [CardknoxPaymentController::class, 'showOrder'])->name('payments-providers.cardknox.pay.order');
+    Route::post('/pay/order/{orderUuid}', [CardknoxPaymentController::class, 'payOrder'])->name('payments-providers.cardknox.pay.order.submit');
+    Route::get('/card/{subscriptionUuid}', [CardknoxPaymentController::class, 'showUpdateCard'])->name('payments-providers.cardknox.card');
+    Route::post('/card/{subscriptionUuid}', [CardknoxPaymentController::class, 'updateCard'])->name('payments-providers.cardknox.card.submit');
+});
 
 Route::get('/subscription/{subscriptionUuid}/change-plan/{planSlug}/tenant/{tenantUuid}', [
     SubscriptionController::class,
