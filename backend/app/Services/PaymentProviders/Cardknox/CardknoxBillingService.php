@@ -6,6 +6,7 @@ use App\Client\CardknoxClient;
 use App\Constants\PlanType;
 use App\Constants\SubscriptionStatus;
 use App\Constants\SubscriptionType;
+use App\Constants\TransactionStatus;
 use App\Models\CardknoxCharge;
 use App\Models\Currency;
 use App\Models\Discount;
@@ -34,7 +35,9 @@ class CardknoxBillingService
 
     public function quoteFirstCharge(Subscription $subscription, int $quantity, ?Discount $discount): int
     {
-        return $this->startsWithTrial($subscription) ? 0 : $this->firstCharge($subscription, $quantity, $discount)['amount'];
+        return $this->startsWithTrial($subscription)
+            ? $this->setupFee($subscription)
+            : $this->firstCharge($subscription, $quantity, $discount)['amount'];
     }
 
     /** The card must already be remembered in the vault. */
@@ -63,13 +66,25 @@ class CardknoxBillingService
         if ($withTrial) {
             $trialEndsAt = now()->addDays($this->subscriptionService->calculateSubscriptionTrialDays($subscription->plan));
 
-            $this->subscriptionService->updateSubscription($subscription, $activate + [
+            $trial = [
                 'status' => SubscriptionStatus::ACTIVE->value,
-                'trial_ends_at' => $trialEndsAt,
-                'ends_at' => $trialEndsAt,
-            ]);
+                'trial_ends_at' => $trialEndsAt->toDateTimeString(),
+                'ends_at' => $trialEndsAt->toDateTimeString(),
+            ];
+            $setupFee = $this->setupFee($subscription);
 
-            return CardknoxResult::approvedWithoutCharge();
+            if ($setupFee <= 0) {
+                $this->subscriptionService->updateSubscription($subscription, $activate + $trial);
+
+                return CardknoxResult::approvedWithoutCharge();
+            }
+
+            // A trial waives the first period, not the one-off setup fee.
+            $charge = $this->ledger->open('S'.$subscription->id.'-F', CardknoxChargePurpose::First, $subscription, $setupFee, meta: ['activate' => $activate + $trial, 'discount_ids' => []]);
+
+            return $charge === null
+                ? CardknoxResult::inFlight()
+                : $this->ledger->execute($charge, (string) $this->vault->cardFor($subscription->tenant_id, $subscription->user_id)?->card_token, merchantInitiated: false);
         }
 
         $first = $this->firstCharge($subscription, $quantity, $discount);
@@ -286,8 +301,17 @@ class CardknoxBillingService
             return false;
         }
 
+        // Numbered by settled changes, not by clock: a resubmit while an attempt
+        // is pending or approved reuses the base and is refused by open().
+        $settledChanges = CardknoxCharge::query()
+            ->where('purpose', CardknoxChargePurpose::Proration->value)
+            ->whereHas('transaction', fn ($query) => $query
+                ->where('subscription_id', $subscription->id)
+                ->where('status', TransactionStatus::SUCCESS->value))
+            ->count();
+
         $charge = $this->ledger->open(
-            'S'.$subscription->id.'-P'.now()->timestamp,
+            'S'.$subscription->id.'-P'.($settledChanges + 1),
             CardknoxChargePurpose::Proration,
             $subscription,
             $delta,
@@ -299,6 +323,11 @@ class CardknoxBillingService
         }
 
         return $this->ledger->execute($charge, $card->card_token, merchantInitiated: false)->isApproved();
+    }
+
+    private function setupFee(Subscription $subscription): int
+    {
+        return (int) ($this->pricing->planPrice(Plan::query()->findOrFail($subscription->plan_id), $subscription->currency_id)->setup_fee ?? 0);
     }
 
     private function startsWithTrial(Subscription $subscription): bool

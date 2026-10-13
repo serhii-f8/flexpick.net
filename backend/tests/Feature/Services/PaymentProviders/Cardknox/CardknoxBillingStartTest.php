@@ -148,4 +148,23 @@ class CardknoxBillingStartTest extends FeatureTest
         $this->assertSame(CardknoxOutcome::Error, $this->billing->payOrder($order, 'tok')->outcome);
         Http::assertNothingSent();
     }
+
+    public function test_trial_with_a_setup_fee_charges_only_the_fee_and_keeps_the_trial(): void
+    {
+        $trialDay = Interval::where('slug', 'day')->firstOrFail();
+        $plan = $this->cardknoxPlan(['has_trial' => true, 'trial_interval_id' => $trialDay->id, 'trial_interval_count' => 14], ['price' => 2000, 'setup_fee' => 500]);
+        $subscription = $this->cardknoxSubscription($plan, ['status' => SubscriptionStatus::NEW->value, 'ends_at' => null]);
+        $this->fakeGateway($this->gatewayApproves());
+
+        $this->assertSame(500, $this->billing->quoteFirstCharge($subscription, 1, null));
+
+        $result = $this->billing->startSubscription($subscription, 1, null);
+
+        $this->assertTrue($result->isApproved());
+        Http::assertSent(fn (Request $request): bool => $request['xAmount'] === '5.00');
+        $fresh = $subscription->fresh();
+        $this->assertSame(SubscriptionStatus::ACTIVE->value, $fresh->status);
+        $this->assertNotNull($fresh->trial_ends_at);
+        $this->assertEquals($fresh->trial_ends_at, $fresh->ends_at, 'the trial, not a paid period, is what ends_at tracks');
+    }
 }

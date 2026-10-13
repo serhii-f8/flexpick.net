@@ -4,10 +4,12 @@ namespace Tests\Feature\Console\Cardknox;
 
 use App\Constants\SubscriptionStatus;
 use App\Constants\TransactionStatus;
+use App\Events\Subscription\SubscriptionRenewed;
 use App\Models\CardknoxCharge;
 use App\Services\PaymentProviders\Cardknox\CardknoxChargeLedger;
 use App\Services\PaymentProviders\Cardknox\CardknoxChargePurpose;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\FeatureTest;
 use Tests\Support\CardknoxTestHelpers;
@@ -87,5 +89,33 @@ class ReconcileCardknoxTransactionsTest extends FeatureTest
         $this->reconcile($charge);
 
         $this->assertSame(TransactionStatus::PENDING->value, $charge->transaction->fresh()->status);
+    }
+
+    public function test_one_failing_settle_does_not_stop_the_rest(): void
+    {
+        $first = $this->pendingRenewal(now()->subHour()->toDateTimeString());
+        $second = $this->pendingRenewal(now()->subHour()->toDateTimeString());
+        $failingId = $first->transaction->subscription_id;
+        Event::listen(SubscriptionRenewed::class, function ($event) use ($failingId): void {
+            if ($event->subscription->id === $failingId) {
+                throw new \RuntimeException('listener blew up');
+            }
+        });
+        $row = fn (CardknoxCharge $charge, string $ref): array => ['xInvoice' => $charge->invoice, 'xCommand' => 'cc:Sale', 'xResponseResult' => 'Approved', 'xRefNum' => $ref];
+        Http::fake(['x1.cardknox.com/*' => Http::response(['xResult' => 'A', 'xReportData' => [$row($first, '1'), $row($second, '2')]])]);
+
+        app(CardknoxChargeLedger::class)->reconcilePending(now()->addMinute());
+
+        $this->assertSame(TransactionStatus::SUCCESS->value, $second->transaction->fresh()->status);
+    }
+
+    public function test_lookup_window_reaches_back_far_enough_to_survive_a_timezone_offset(): void
+    {
+        $charge = $this->pendingRenewal(now()->subHour()->toDateTimeString());
+        $this->fakeGateway(['xResult' => 'A', 'xReportData' => []]);
+
+        $this->reconcile($charge);
+
+        Http::assertSent(fn ($request): bool => Carbon::parse($request['xBeginDate'])->lt($charge->created_at->copy()->subHours(12)));
     }
 }

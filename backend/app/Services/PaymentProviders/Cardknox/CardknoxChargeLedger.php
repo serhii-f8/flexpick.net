@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Owns the lifecycle of one gateway charge: open a pending transaction under
@@ -218,20 +219,28 @@ class CardknoxChargeLedger
             ->whereHas('transaction', fn ($query) => $query->where('status', TransactionStatus::PENDING->value))
             ->when($chargeId !== null, fn ($query) => $query->whereKey($chargeId))
             ->each(function (CardknoxCharge $charge) use (&$settled): void {
-                $found = $this->client->findByInvoice($charge->invoice, Carbon::parse($charge->created_at)->subHour());
+                try {
+                    // The report API's timezone is unconfirmed (sandbox checklist),
+                    // so reach back a full day: a miss here fails a charge that may
+                    // really have been approved.
+                    $found = $this->client->findByInvoice($charge->invoice, Carbon::parse($charge->created_at)->subDay());
 
-                if ($found === null) {
-                    if (Carbon::parse($charge->created_at)->lt(now()->subDay())) {
-                        $this->settle($charge, CardknoxResult::error(__('No gateway record of this charge after 24 hours.')));
-                        $settled++;
+                    if ($found === null) {
+                        if (Carbon::parse($charge->created_at)->lt(now()->subDay())) {
+                            $this->settle($charge, CardknoxResult::error(__('No gateway record of this charge after 24 hours.')));
+                            $settled++;
+                        }
+
+                        return;
                     }
 
-                    return;
-                }
-
-                if ($found->outcome !== CardknoxOutcome::Unknown) {
-                    $this->settle($charge, $found);
-                    $settled++;
+                    if ($found->outcome !== CardknoxOutcome::Unknown) {
+                        $this->settle($charge, $found);
+                        $settled++;
+                    }
+                } catch (Throwable $e) {
+                    // One broken charge must not stop every other pending charge.
+                    report($e);
                 }
             });
 
@@ -261,13 +270,13 @@ class CardknoxChargeLedger
         $meta = $charge->meta ?? [];
 
         if ($purpose === CardknoxChargePurpose::First) {
-            $this->subscriptionService->updateSubscription($subscription, array_merge((array) ($meta['activate'] ?? []), [
+            $this->subscriptionService->updateSubscription($subscription, array_merge([
                 'status' => SubscriptionStatus::ACTIVE->value,
                 'ends_at' => $this->pricing->addInterval($subscription, Carbon::parse($charge->created_at)),
                 'extra_payment_provider_data' => self::mergeData($subscription, [
                     'discount_uses' => self::countUses([], (array) ($meta['discount_ids'] ?? [])),
                 ]),
-            ]));
+            ], (array) ($meta['activate'] ?? [])));
         } elseif ($purpose === CardknoxChargePurpose::Renewal) {
             $this->applyRenewal($subscription, $charge);
         } elseif ($purpose === CardknoxChargePurpose::Proration) {

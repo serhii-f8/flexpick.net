@@ -29,3 +29,6 @@ assumption baked into `app/Client/CardknoxClient.php`.
 ## Go-live
 15. Replace `public/images/payment-providers/cardknox.png` with the real logo.
 16. Swap to production keys and PIN; set the production webhook URL in the production portal.
+
+## Added after review
+17. **[contract]** Report API: confirm the timezone `xBeginDate`/`xEndDate` are read in and whether `xMaxRecords` above 1000 is honoured. `CardknoxChargeLedger::reconcilePending()` looks back a full day to tolerate an offset, but a busy account could still exceed the 1000-row cap, and a miss fails (and later retries) a charge that may have been approved.

@@ -104,4 +104,17 @@ class CardknoxPlanChangeTest extends FeatureTest
         Http::assertSent(fn (Request $request): bool => $request['xAmount'] === '10.00');
         $this->assertSame(4, (int) $subscription->fresh()->quantity);
     }
+
+    public function test_a_resubmitted_upgrade_while_the_first_is_unconfirmed_does_not_charge_again(): void
+    {
+        $subscription = $this->cardknoxSubscription($this->cardknoxPlan(price: ['price' => 3000]), ['ends_at' => '2026-12-01 00:00:00']);
+        $target = $this->cardknoxPlan(price: ['price' => 5000]);
+        Http::fake(['x1.cardknox.com/*' => Http::failedConnection()]);
+
+        $this->assertFalse($this->billing->changePlan($subscription, $target, prorate: true));
+        Carbon::setTestNow('2026-11-16 00:00:07');
+        $this->assertFalse($this->billing->changePlan($subscription->fresh(), $target, prorate: true));
+
+        Http::assertSentCount(1);
+    }
 }
