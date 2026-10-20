@@ -103,6 +103,11 @@ class CardknoxClientTest extends FeatureTest
         $this->assertSame(CardknoxOutcome::Approved, $found->outcome);
         $this->assertSame('2', $found->refNum);
         $this->assertNull($missing);
+        // The transaction endpoint rejects report commands, and report rows
+        // carry xInvoice only when it is requested.
+        Http::assertSent(fn (Request $request): bool => $request->url() === 'https://x1.cardknox.com/reportjson'
+            && $request['xCommand'] === 'report:all'
+            && str_contains($request['xFields'], 'xInvoice'));
     }
 
     public function test_failed_report_lookup_is_unknown(): void

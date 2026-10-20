@@ -27,6 +27,23 @@ class CardknoxPricing
         return PlanPrice::query()->where('plan_id', $plan->id)->where('currency_id', $currencyId)->firstOrFail();
     }
 
+    /**
+     * What one period of this subscription on $plan costs. A partner-priced
+     * subscription (partner_tenant_id set) bills the price frozen onto it at
+     * purchase, never the plan's base price. Partner offerings are flat-rate
+     * only, so any other plan type falls back to the plan's own pricing.
+     */
+    public function subscriptionSubtotal(Subscription $subscription, Plan $plan, int $quantity): int
+    {
+        if ($subscription->partner_tenant_id !== null
+            && $plan->type === PlanType::FLAT_RATE->value
+            && (int) $subscription->plan_id === (int) $plan->id) {
+            return (int) $subscription->price;
+        }
+
+        return $this->recurringSubtotal($plan, (int) $subscription->currency_id, $quantity);
+    }
+
     public function recurringSubtotal(Plan $plan, int $currencyId, int $quantity): int
     {
         $price = $this->planPrice($plan, $currencyId);
@@ -99,7 +116,7 @@ class CardknoxPricing
     public function renewalAmount(Subscription $subscription, Carbon $periodStart, Carbon $periodEnd): CardknoxAmount
     {
         $plan = Plan::query()->findOrFail($subscription->plan_id);
-        $subtotal = $this->recurringSubtotal($plan, $subscription->currency_id, max(1, (int) $subscription->quantity));
+        $subtotal = $this->subscriptionSubtotal($subscription, $plan, max(1, (int) $subscription->quantity));
         $usage = 0;
 
         if ($plan->type === PlanType::USAGE_BASED->value) {

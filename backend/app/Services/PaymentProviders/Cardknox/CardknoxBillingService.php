@@ -200,12 +200,18 @@ class CardknoxBillingService
             : max(1, (int) $subscription->quantity);
 
         $newPrice = $this->pricing->planPrice($newPlan, $subscription->currency_id);
-        $oldSubtotal = $this->pricing->recurringSubtotal($subscription->plan, $subscription->currency_id, max(1, (int) $subscription->quantity));
-        $newSubtotal = $this->pricing->recurringSubtotal($newPlan, $subscription->currency_id, $quantity);
+        $oldSubtotal = $this->pricing->subscriptionSubtotal($subscription, $subscription->plan, max(1, (int) $subscription->quantity));
+
+        // A partner-sold subscription moves to the price this buyer is offered
+        // for the new plan (the partner's, or base when it is not offered).
+        $partnerPrice = $subscription->partner_tenant_id !== null && $newPlan->type === PlanType::FLAT_RATE->value && $subscription->user !== null
+            ? $this->subscriptionService->planPriceForBuyer($newPlan, $subscription->user)
+            : null;
+        $newSubtotal = $partnerPrice ?? $this->pricing->recurringSubtotal($newPlan, $subscription->currency_id, $quantity);
 
         return $this->applyChange($subscription, $oldSubtotal, $newSubtotal, $prorate, [
             'plan_id' => $newPlan->id,
-            'price' => $newPrice->price,
+            'price' => $partnerPrice ?? $newPrice->price,
             'quantity' => $quantity,
             'interval_id' => $newPlan->interval_id,
             'interval_count' => $newPlan->interval_count,
@@ -217,8 +223,8 @@ class CardknoxBillingService
 
     public function changeQuantity(Subscription $subscription, int $quantity, bool $prorate): bool
     {
-        $oldSubtotal = $this->pricing->recurringSubtotal($subscription->plan, $subscription->currency_id, max(1, (int) $subscription->quantity));
-        $newSubtotal = $this->pricing->recurringSubtotal($subscription->plan, $subscription->currency_id, $quantity);
+        $oldSubtotal = $this->pricing->subscriptionSubtotal($subscription, $subscription->plan, max(1, (int) $subscription->quantity));
+        $newSubtotal = $this->pricing->subscriptionSubtotal($subscription, $subscription->plan, $quantity);
 
         return $this->applyChange($subscription, $oldSubtotal, $newSubtotal, $prorate, ['quantity' => $quantity]);
     }
@@ -339,7 +345,7 @@ class CardknoxBillingService
     private function firstCharge(Subscription $subscription, int $quantity, ?Discount $discount): array
     {
         $plan = $subscription->plan;
-        $subtotal = $this->pricing->recurringSubtotal($plan, $subscription->currency_id, $quantity);
+        $subtotal = $this->pricing->subscriptionSubtotal($subscription, $plan, $quantity);
         $discountAmount = $discount === null ? 0 : $this->pricing->discountFor($discount->type, $discount->amount, $subtotal);
         $setupFee = (int) ($this->pricing->planPrice($plan, $subscription->currency_id)->setup_fee ?? 0);
 

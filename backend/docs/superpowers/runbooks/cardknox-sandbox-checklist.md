@@ -32,3 +32,15 @@ assumption baked into `app/Client/CardknoxClient.php`.
 
 ## Added after review
 17. **[contract]** Report API: confirm the timezone `xBeginDate`/`xEndDate` are read in and whether `xMaxRecords` above 1000 is honoured. `CardknoxChargeLedger::reconcilePending()` looks back a full day to tolerate an offset, but a busy account could still exceed the 1000-row cap, and a miss fails (and later retries) a charge that may have been approved.
+
+## Sandbox findings (2026-10-20)
+- 4, 10: iFields 2.15.2401.3101 works; `xRecurringIndicator=Recurring` is accepted on renewals.
+- 12, 13: reports are a separate endpoint (`/reportjson`), and their default columns omit `xInvoice` —
+  `findByInvoice()` now requests it via `xFields`. Refund report rows carry the original `xInvoice`;
+  still unconfirmed for real webhooks, because the sandbox delivered none (check the portal's Gateway Settings > Webhook).
+- 17: report dates (`xEnteredDate`) are US Eastern; the one-day lookback covers the offset.
+- Webhooks and report rows carry the outcome as `xResponseResult` ("Approved"), not `xResult`;
+  `CardknoxResult::fromNotification()` maps it. Sola sends one webhook per transaction, single attempt.
+- Sandbox decline trigger: amount $9.91 (we never send `xName`). Amounts over $10 need a listed test card (4444333322221111).
+- Partner-priced plans and products are now payable by Cardknox as well as Offline
+  (`PaymentProviderConstants::PARTNER_PRICE_SLUGS`); Cardknox bills the subscription's frozen partner price.

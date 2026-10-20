@@ -112,7 +112,10 @@ class LocalSubscriptionCheckoutForm extends CheckoutForm
         } catch (SubscriptionCreationNotAllowedException $e) {
             return redirect()->route('checkout.subscription.already-subscribed');
         } catch (PurchaseNotAllowedException $e) {
-            return redirect()->back()->with('error', __('This plan is not available for your account.'));
+            // back() has no previous page inside a Livewire request, so redirect explicitly.
+            session()->flash('error', __('This plan is not available for your account.'));
+
+            return redirect()->route('checkout.subscription', ['planSlug' => $planSlug]);
         }
 
         $subscriptionCheckoutDto->subscriptionId = $subscription->id;

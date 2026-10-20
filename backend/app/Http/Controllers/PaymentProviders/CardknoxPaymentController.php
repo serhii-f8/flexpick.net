@@ -78,11 +78,18 @@ class CardknoxPaymentController extends Controller
             return $this->failed($tokenized, __('Your card could not be verified.'));
         }
 
+        $previousCard = $this->vault->cardFor($subscription->tenant_id, (int) $subscription->user_id);
         $this->vault->remember($request->user(), $subscription->tenant, $tokenized, $request->exp());
 
         $result = $this->billing->startSubscription($subscription, $this->quantity($request), $this->discount($request));
 
-        return $this->isFailure($result) ? $this->failed($result, __('Your card was declined.')) : redirect()->to($successUrl);
+        if ($this->isFailure($result)) {
+            $this->vault->restore($request->user(), $subscription->tenant, $previousCard);
+
+            return $this->failed($result, __('Your card was declined.'));
+        }
+
+        return redirect()->to($successUrl);
     }
 
     public function showOrder(string $orderUuid): View
@@ -136,7 +143,7 @@ class CardknoxPaymentController extends Controller
                 : __('Current card: :brand ending in :last4.', ['brand' => $card->card_brand, 'last4' => $card->card_last4]),
             action: URL::temporarySignedRoute('payments-providers.cardknox.card.submit', now()->addHours(2), ['subscriptionUuid' => $subscription->uuid]),
             buttonLabel: __('Save card'),
-            cancelUrl: SubscriptionResource::getUrl(tenant: $subscription->tenant),
+            cancelUrl: SubscriptionResource::getUrl(panel: 'dashboard', tenant: $subscription->tenant),
             offerSaveCard: false,
         );
     }
@@ -158,7 +165,7 @@ class CardknoxPaymentController extends Controller
             return back()->withErrors(['card' => __('Your card was saved, but the overdue payment was declined: :reason', ['reason' => $result->error ?? __('declined')])]);
         }
 
-        return redirect()->to(SubscriptionResource::getUrl(tenant: $subscription->tenant))->with('success', __('Your card has been updated.'));
+        return redirect()->to(SubscriptionResource::getUrl(panel: 'dashboard', tenant: $subscription->tenant))->with('success', __('Your card has been updated.'));
     }
 
     private function ownedSubscription(string $uuid): Subscription

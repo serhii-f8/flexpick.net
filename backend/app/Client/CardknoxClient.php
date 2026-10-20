@@ -73,12 +73,15 @@ class CardknoxClient
      */
     public function findByInvoice(string $invoice, Carbon $since): ?CardknoxResult
     {
+        // Reports live on their own endpoint, and their default columns omit
+        // xInvoice, so the fields we match on are requested explicitly.
         $body = $this->post([
             'xCommand' => 'report:all',
             'xBeginDate' => $since->format('Y-m-d H:i:s'),
             'xEndDate' => now()->format('Y-m-d H:i:s'),
             'xMaxRecords' => 1000,
-        ]);
+            'xFields' => 'xRefNum,xCommand,xInvoice,xResponseResult,xAmount,xEnteredDate,xToken,xMaskedCardNumber',
+        ], '/reportjson');
 
         if ($body === null) {
             return CardknoxResult::unknown('Report lookup failed');
@@ -89,14 +92,7 @@ class CardknoxClient
                 continue;
             }
 
-            $result = match (strtolower((string) ($row['xResponseResult'] ?? ''))) {
-                'approved' => 'A',
-                'declined' => 'D',
-                'error' => 'E',
-                default => null,
-            };
-
-            return CardknoxResult::fromResponse(array_merge($row, ['xResult' => $result]));
+            return CardknoxResult::fromNotification($row);
         }
 
         return null;
@@ -116,7 +112,7 @@ class CardknoxClient
             : CardknoxResult::fromResponse($body);
     }
 
-    private function post(array $fields): ?array
+    private function post(array $fields, string $endpoint = '/gatewayjson'): ?array
     {
         $key = $this->configuration->transactionKey()
             ?? throw new RuntimeException('Cardknox is not configured: missing transaction key.');
@@ -126,7 +122,7 @@ class CardknoxClient
                 ->acceptJson()
                 ->connectTimeout(10)
                 ->timeout(45)
-                ->post($this->configuration->gatewayUrl().'/gatewayjson', array_merge([
+                ->post($this->configuration->gatewayUrl().$endpoint, array_merge([
                     'xKey' => $key,
                     'xVersion' => self::VERSION,
                     'xSoftwareName' => (string) config('app.name'),

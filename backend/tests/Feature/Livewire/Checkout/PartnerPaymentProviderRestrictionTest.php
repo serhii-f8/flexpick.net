@@ -141,6 +141,41 @@ class PartnerPaymentProviderRestrictionTest extends FeatureTest
         $this->assertSame([PaymentProviderConstants::OFFLINE_SLUG], $this->slugs($filtered));
     }
 
+    /** Cardknox charges an app-computed amount, so it can collect the partner price; Stripe cannot. */
+    public function test_a_partner_priced_plan_also_offers_cardknox_when_it_is_open(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        $plan = $this->flatRatePlan();
+        PartnerPlanOffering::factory()->create([
+            'tenant_id' => $partnerTenant->id,
+            'plan_id' => $plan->id,
+            'price' => 7900,
+            'quota_overrides' => [],
+            'is_enabled' => true,
+        ]);
+        $user = $this->attributedUser($partnerTenant);
+        $cardknox = PaymentProvider::firstOrCreate(
+            ['slug' => PaymentProviderConstants::CARDKNOX_SLUG],
+            ['name' => 'Cardknox', 'type' => 'multi', 'sort' => 7],
+        );
+        $cardknox->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
+        app(PartnerPricingResolver::class)->flush();
+
+        try {
+            $filtered = SubscriptionCheckoutForm::restrictToPartnerProviders(
+                app(PaymentService::class)->getActivePaymentProvidersForPlan($plan, isNewPayment: true),
+                app(PartnerPricingResolver::class)->usablePlanOffering($user, $plan),
+            );
+
+            $slugs = $this->slugs($filtered);
+            sort($slugs);
+            $this->assertSame([PaymentProviderConstants::CARDKNOX_SLUG, PaymentProviderConstants::OFFLINE_SLUG], $slugs);
+        } finally {
+            // FeatureTest does not reset the database between test classes.
+            $cardknox->update(['is_active' => false, 'is_enabled_for_new_payments' => false]);
+        }
+    }
+
     public function test_an_unconfigured_plan_keeps_the_full_provider_list(): void
     {
         $partnerTenant = $this->activePartnerTenant();

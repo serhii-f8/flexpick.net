@@ -40,6 +40,26 @@ class CardknoxCardVault
         );
     }
 
+    /**
+     * Put back the card that was on file before remember(), or forget the
+     * card entirely when there was none. Used when the charge a new card was
+     * saved for is refused: a declined card must not replace the one other
+     * subscriptions in the workspace renew on.
+     */
+    public function restore(User $user, ?Tenant $tenant, ?UserCardknoxData $previous): void
+    {
+        if ($previous === null) {
+            UserCardknoxData::query()->where('tenant_id', $tenant?->id)->where('user_id', $user->id)->delete();
+
+            return;
+        }
+
+        UserCardknoxData::query()->updateOrCreate(
+            ['tenant_id' => $tenant?->id, 'user_id' => $user->id],
+            $previous->only(['card_token', 'card_brand', 'card_last4', 'card_exp']),
+        );
+    }
+
     public function cardFor(?int $tenantId, int $userId): ?UserCardknoxData
     {
         return UserCardknoxData::query()

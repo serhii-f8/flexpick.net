@@ -87,7 +87,10 @@ class ProductCheckoutForm extends CheckoutForm
                 $cartDto->shouldCreateNewTenant,
             );
         } catch (PurchaseNotAllowedException $e) {
-            return redirect()->back()->with('error', __('This product is not available for your account.'));
+            // back() has no previous page inside a Livewire request, so redirect explicitly.
+            session()->flash('error', __('This product is not available for your account.'));
+
+            return redirect()->route('checkout.product');
         }
 
         $cartDto->orderId = $order->id;

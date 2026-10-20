@@ -14,7 +14,7 @@ use Illuminate\Support\Arr;
 class CardknoxWebhookHandler
 {
     /** Only what processing needs reaches the queue; card tokens never do. */
-    private const KEPT_FIELDS = ['xCommand', 'xResult', 'xStatus', 'xError', 'xErrorCode', 'xRefNum', 'xInvoice', 'xAmount'];
+    private const KEPT_FIELDS = ['xCommand', 'xResult', 'xResponseResult', 'xResponseError', 'xStatus', 'xError', 'xErrorCode', 'xRefNum', 'xInvoice', 'xAmount'];
 
     public function __construct(private CardknoxConfiguration $configuration) {}
 

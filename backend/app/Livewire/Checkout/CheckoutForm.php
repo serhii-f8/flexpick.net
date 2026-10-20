@@ -327,22 +327,23 @@ class CheckoutForm extends Component
     }
 
     /**
-     * A partner price is only ever payable in cash (spec §1, §8.1), so when a
-     * usable offering is driving the price, Offline is the only provider we
-     * may present.
+     * A partner price can only be collected by a provider that charges an
+     * app-computed amount (PaymentProviderConstants::PARTNER_PRICE_SLUGS:
+     * Offline cash, or a Cardknox card), so when a usable offering is driving
+     * the price, those are the only providers we may present.
      *
      * This never empties the list, because PartnerPricingResolver refuses to
-     * return an offering unless Offline would survive every filter the two
-     * callers apply: the row is active AND open to new payments, Offline
-     * supports the plan's type, and — for a plan with a trial — this buyer is
-     * still trial-eligible, so checkout will not ask for a provider that can
-     * skip the trial. The remaining filters Offline passes unconditionally
-     * (supportsSetupFees, supportsOneTimePurchaseProductQuantity), and
+     * return an offering unless at least one of them would survive every
+     * filter the two callers apply: the row is active AND open to new
+     * payments, the provider supports the plan, and — for a plan with a trial
+     * the buyer is no longer eligible for — the provider can skip the trial.
+     * Both pass the remaining filters unconditionally (supportsSetupFees,
+     * supportsOneTimePurchaseProductQuantity), and
      * supportsSeatBasedWithIncludedSeats is only ever required of a seat-based
-     * price, which Offline's flat-rate-only supportsPlan() has already
-     * excluded. Any new filter added to PaymentService must be reflected in
-     * the resolver's gates, or that claim stops holding and the customer gets
-     * an unhandled NoPaymentProvidersAvailableException.
+     * price, which the resolver's flat-rate-only gate has already excluded.
+     * Any new filter added to PaymentService must be reflected in the
+     * resolver's gates, or that claim stops holding and the customer gets an
+     * unhandled NoPaymentProvidersAvailableException.
      *
      * @param  array<int, PaymentProviderInterface>  $providers
      * @return array<int, PaymentProviderInterface>
@@ -355,7 +356,7 @@ class CheckoutForm extends Component
 
         return array_values(array_filter(
             $providers,
-            fn ($provider): bool => $provider->getSlug() === PaymentProviderConstants::OFFLINE_SLUG,
+            fn ($provider): bool => in_array($provider->getSlug(), PaymentProviderConstants::PARTNER_PRICE_SLUGS, true),
         ));
     }
 

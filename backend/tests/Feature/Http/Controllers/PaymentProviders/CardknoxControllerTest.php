@@ -106,6 +106,46 @@ class CardknoxControllerTest extends FeatureTest
         $this->assertSame(OrderStatus::REFUNDED->value, $order->fresh()->status);
     }
 
+    /** Sola's documented payload: the outcome is a word in xResponseResult, there is no xResult. */
+    public function test_documented_webhook_payload_settles_the_charge(): void
+    {
+        Queue::fake();
+        $subscription = $this->cardknoxSubscription($this->cardknoxPlan(), ['status' => SubscriptionStatus::NEW->value]);
+        $charge = app(CardknoxChargeLedger::class)->open('S'.$subscription->id.'-F', CardknoxChargePurpose::First, $subscription, 2000);
+        $fields = [
+            'xAmount' => '20.00',
+            'xCommand' => 'cc:sale',
+            'xEnteredDate' => '10/20/2026 5:27:14 AM',
+            'xInvoice' => $charge->invoice,
+            'xMaskedCardNumber' => '4xxxxxxxxxxx1111',
+            'xRefNum' => '9002',
+            'xResponseResult' => 'Approved',
+        ];
+
+        $this->postWebhook($fields, CardknoxWebhookHandler::signature($fields, 'abcdefghijklmnop1'))->assertOk();
+        Queue::assertPushed(ProcessCardknoxWebhook::class, function (ProcessCardknoxWebhook $job): bool {
+            $job->handle(app(CardknoxChargeLedger::class));
+
+            return true;
+        });
+
+        $this->assertSame(SubscriptionStatus::ACTIVE->value, $subscription->fresh()->status);
+        $this->assertSame('9002', $charge->fresh()->ref_num);
+    }
+
+    public function test_documented_refund_webhook_payload_refunds_the_order(): void
+    {
+        $subscription = $this->cardknoxSubscription($this->cardknoxPlan());
+        $order = Order::factory()->create(['user_id' => $subscription->user_id, 'tenant_id' => $subscription->tenant_id, 'total_amount' => 4900, 'total_amount_after_discount' => 4900, 'total_discount_amount' => 0]);
+        $ledger = app(CardknoxChargeLedger::class);
+        $charge = $ledger->open('O'.$order->id, CardknoxChargePurpose::Order, $order, 4900);
+        $ledger->settle($charge, CardknoxResult::fromResponse($this->gatewayApproves()));
+
+        (new ProcessCardknoxWebhook(['xCommand' => 'cc:refund', 'xResponseResult' => 'Approved', 'xRefNum' => '8', 'xInvoice' => $charge->invoice]))->handle($ledger);
+
+        $this->assertSame(OrderStatus::REFUNDED->value, $order->fresh()->status);
+    }
+
     public function test_admin_refund_falls_back_to_void_only_on_a_definite_refusal(): void
     {
         $subscription = $this->cardknoxSubscription($this->cardknoxPlan());

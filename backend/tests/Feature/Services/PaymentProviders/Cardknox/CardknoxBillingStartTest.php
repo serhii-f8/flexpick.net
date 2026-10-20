@@ -16,6 +16,7 @@ use App\Models\UserCardknoxData;
 use App\Services\PaymentProviders\Cardknox\CardknoxBillingService;
 use App\Services\PaymentProviders\Cardknox\CardknoxCardVault;
 use App\Services\PaymentProviders\Cardknox\CardknoxOutcome;
+use App\Services\PaymentProviders\Cardknox\CardknoxPricing;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\FeatureTest;
@@ -85,6 +86,25 @@ class CardknoxBillingStartTest extends FeatureTest
         $this->assertSame('ckx_sub_'.$subscription->uuid, $fresh->payment_provider_subscription_id);
         $this->assertSame([$discount->id => 1], $fresh->extra_payment_provider_data['discount_uses']);
         $this->assertSame(200, (int) Transaction::where('subscription_id', $subscription->id)->value('total_discount'));
+    }
+
+    /** A partner-sold subscription bills the price frozen onto it, not the plan's base price. */
+    public function test_partner_priced_subscription_is_charged_and_renewed_at_the_partner_price(): void
+    {
+        $plan = $this->cardknoxPlan(price: ['price' => 2000]);
+        $subscription = $this->cardknoxSubscription($plan, [
+            'status' => SubscriptionStatus::NEW->value,
+            'partner_tenant_id' => $this->createTenant()->id,
+            'price' => 7900,
+        ]);
+        $this->fakeGateway($this->gatewayApproves());
+
+        $this->assertSame(7900, $this->billing->quoteFirstCharge($subscription, 1, null));
+        $this->billing->startSubscription($subscription, 1, null);
+
+        Http::assertSent(fn (Request $request): bool => $request['xAmount'] === '79.00');
+        $renewal = app(CardknoxPricing::class)->renewalAmount($subscription->fresh(), now()->subMonth(), now());
+        $this->assertSame(7900, $renewal->total);
     }
 
     public function test_declined_first_charge_leaves_subscription_unchanged(): void

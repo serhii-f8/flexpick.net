@@ -34,7 +34,18 @@ class PartnerPricingResolverTest extends FeatureTest
         // FeatureTest does not reset the database between test classes.
         PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
             ->update(['is_active' => true, 'is_enabled_for_new_payments' => true]);
+        // Cardknox can collect a partner price too; off unless a test opts in.
+        $this->setCardknoxOpen(false);
 
+        app(PartnerPricingResolver::class)->flush();
+    }
+
+    private function setCardknoxOpen(bool $open): void
+    {
+        PaymentProvider::firstOrCreate(
+            ['slug' => PaymentProviderConstants::CARDKNOX_SLUG],
+            ['name' => 'Cardknox', 'type' => 'multi', 'sort' => 7],
+        )->update(['is_active' => $open, 'is_enabled_for_new_payments' => $open]);
         app(PartnerPricingResolver::class)->flush();
     }
 
@@ -296,6 +307,43 @@ class PartnerPricingResolverTest extends FeatureTest
 
         $this->assertNull($this->resolver()->planPrice($exhausted, $plan));
         $this->assertNull($this->resolver()->usablePlanOffering($exhausted, $plan));
+    }
+
+    public function test_cardknox_alone_can_collect_a_partner_price(): void
+    {
+        $partnerTenant = $this->activePartnerTenant();
+        [$plan] = $this->sellablePlan($partnerTenant);
+        $user = $this->attributedUser($partnerTenant);
+
+        PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)->update(['is_active' => false]);
+        $this->setCardknoxOpen(true);
+
+        try {
+            $this->assertSame(7900, $this->resolver()->planPrice($user, $plan));
+        } finally {
+            PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)->update(['is_active' => true]);
+            $this->setCardknoxOpen(false);
+        }
+    }
+
+    /** Cardknox can skip a trial, so a returning buyer keeps the partner price when it is open. */
+    public function test_a_buyer_who_cannot_have_a_trial_keeps_the_partner_price_when_cardknox_can_skip_it(): void
+    {
+        config()->set('app.limit_user_trials.enabled', true);
+        config()->set('app.limit_user_trials.max_count', 1);
+
+        $partnerTenant = $this->activePartnerTenant();
+        [$plan] = $this->sellablePlan($partnerTenant);
+        $plan->update(['has_trial' => true]);
+        $exhausted = $this->attributedUser($partnerTenant);
+        $this->recordConsumedTrial($exhausted, $plan);
+        $this->setCardknoxOpen(true);
+
+        try {
+            $this->assertSame(7900, $this->resolver()->planPrice($exhausted, $plan));
+        } finally {
+            $this->setCardknoxOpen(false);
+        }
     }
 
     /** The same buyer keeps the partner price on a plan that has no trial to skip. */

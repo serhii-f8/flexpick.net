@@ -192,7 +192,7 @@ class CardknoxChargeLedger
             return;
         }
 
-        $result = CardknoxResult::fromResponse($fields);
+        $result = CardknoxResult::fromNotification($fields);
 
         if ($command === 'cc:sale') {
             $this->settle($charge, $result);

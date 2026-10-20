@@ -87,6 +87,22 @@ class CardknoxPaymentControllerTest extends FeatureTest
             ->assertSessionHasErrors(['card' => 'Do not honor']);
 
         $this->assertSame(SubscriptionStatus::NEW->value, $subscription->fresh()->status);
+        $this->assertSame(0, UserCardknoxData::where('user_id', $subscription->user_id)->count(), 'A declined card must not stay on file.');
+    }
+
+    /** The workspace's existing subscriptions renew on the card on file; a declined new card must not replace it. */
+    public function test_decline_puts_back_the_card_that_was_on_file(): void
+    {
+        $subscription = $this->cardknoxSubscription($this->cardknoxPlan(), ['status' => SubscriptionStatus::NEW->value]);
+        $existing = UserCardknoxData::where('user_id', $subscription->user_id)->firstOrFail();
+        $this->fakeGateway($this->gatewayApproves(['xToken' => 'tok_declined_card', 'xMaskedCardNumber' => '5xxxxxxxxxxx4444']), $this->gatewayDeclines());
+
+        $this->actingAs($subscription->user)
+            ->post($this->signed('payments-providers.cardknox.pay.subscription.submit', ['subscriptionUuid' => $subscription->uuid]), self::CARD);
+
+        $card = UserCardknoxData::where('user_id', $subscription->user_id)->firstOrFail();
+        $this->assertSame($existing->card_token, $card->card_token);
+        $this->assertSame('1111', $card->card_last4);
     }
 
     public function test_order_without_save_card_keeps_existing_card(): void
@@ -127,7 +143,8 @@ class CardknoxPaymentControllerTest extends FeatureTest
 
         $this->actingAs($subscription->user)
             ->post($this->signed('payments-providers.cardknox.card.submit', ['subscriptionUuid' => $subscription->uuid]), self::CARD)
-            ->assertRedirect();
+            // A plain controller has no current panel, so an unqualified getUrl() lands on /admin.
+            ->assertRedirectContains('/dashboard/'.$subscription->tenant->uuid.'/subscriptions');
 
         $this->assertSame(SubscriptionStatus::ACTIVE->value, $subscription->fresh()->status);
         $this->assertSame('tok_fresh', UserCardknoxData::where('user_id', $subscription->user_id)->first()->card_token);

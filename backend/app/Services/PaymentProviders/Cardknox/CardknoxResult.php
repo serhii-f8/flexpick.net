@@ -14,7 +14,26 @@ final class CardknoxResult
         public readonly ?string $error = null,
     ) {}
 
-    /** Gateway responses and webhook bodies share the same x-field names. */
+    /**
+     * Report rows and webhook bodies carry the outcome as a word in
+     * xResponseResult ("Approved") rather than the gateway's one-letter
+     * xResult; everything else shares the same x-field names.
+     */
+    public static function fromNotification(array $fields): self
+    {
+        $result = match (strtolower((string) ($fields['xResponseResult'] ?? ''))) {
+            'approved' => 'A',
+            'declined' => 'D',
+            'error' => 'E',
+            default => $fields['xResult'] ?? null,
+        };
+
+        return self::fromResponse(array_merge($fields, [
+            'xResult' => $result,
+            'xError' => $fields['xError'] ?? $fields['xResponseError'] ?? null,
+        ]));
+    }
+
     public static function fromResponse(array $fields): self
     {
         $outcome = match ($fields['xResult'] ?? null) {

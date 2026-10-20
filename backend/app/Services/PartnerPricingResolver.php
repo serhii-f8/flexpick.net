@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Constants\PaymentProviderConstants;
+use App\Constants\PlanType;
 use App\Models\OneTimeProduct;
 use App\Models\PartnerPlanOffering;
 use App\Models\PartnerProductOffering;
@@ -10,6 +11,7 @@ use App\Models\PaymentProvider;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\PaymentProviders\PaymentProviderInterface;
 use App\Services\PaymentProviders\PaymentService;
 use Illuminate\Support\Collection;
 
@@ -31,17 +33,18 @@ use Illuminate\Support\Collection;
  *   - the offering exists and is_enabled,
  *   - the offering is still at or above the live admin floor (spec §5.5).
  *
- * Plus three operational preconditions, all about the Offline payment
- * provider being the only thing that can ever collect a partner price:
- *   - the Offline provider must be active AND open to new payments — the two
+ * Plus operational preconditions, all about there being a provider that can
+ * collect a partner price (PaymentProviderConstants::PARTNER_PRICE_SLUGS —
+ * Offline cash or a Cardknox card):
+ *   - at least one of them must be active AND open to new payments — the two
  *     columns checkout itself filters on (a partner price with checkout
  *     switched off would quote a price with no way to pay it),
- *   - for a plan offering specifically, Offline must actually support the
- *     plan's type (today: flat-rate only — Offline cannot bill seat-based
- *     or usage-based plans at all, partner or not), and
- *   - for a plan with a trial, this buyer must still be eligible for one —
- *     a returning customer who has used up their trials makes checkout ask
- *     for a provider that can skip the trial, which Offline cannot do.
+ *   - a plan offering must be flat-rate (spec §2: a partner sets one price,
+ *     with no seat or usage component), and one of those providers must
+ *     support the plan, and
+ *   - for a plan with a trial this buyer is no longer eligible for, checkout
+ *     asks for a provider that can skip the trial, which Offline cannot do,
+ *     so one of the providers must be able to.
  * Failing closed here makes display and checkout degrade together: for a
  * non-attributed buyer, a plan this gate rejects simply shows base pricing
  * and keeps every provider, exactly as if no partner offering existed. For
@@ -63,10 +66,8 @@ class PartnerPricingResolver
     /** @var array<string, PartnerProductOffering|null> keyed by "<userKey>:<productId>" */
     private array $productOfferingMemo = [];
 
-    private ?bool $offlineUsableMemo = null;
-
-    /** @var array<int, bool> keyed by plan id */
-    private array $offlineSupportsPlanMemo = [];
+    /** @var list<PaymentProviderInterface>|null */
+    private ?array $partnerProvidersMemo = null;
 
     public function __construct(
         private PartnerAttributionService $attributionService,
@@ -85,8 +86,7 @@ class PartnerPricingResolver
         $this->tenantMemo = [];
         $this->planOfferingMemo = [];
         $this->productOfferingMemo = [];
-        $this->offlineUsableMemo = null;
-        $this->offlineSupportsPlanMemo = [];
+        $this->partnerProvidersMemo = null;
     }
 
     public function resolvePartnerTenant(?User $user = null): ?Tenant
@@ -260,11 +260,7 @@ class PartnerPricingResolver
     {
         $tenant = $this->resolvePartnerTenant($user);
 
-        if ($tenant === null || ! $this->offlineProviderAcceptsNewPayments() || ! $this->offlineProviderSupportsPlan($plan)) {
-            return null;
-        }
-
-        if (! $this->offlineCanBillTrialPlanFor($user, $plan)) {
+        if ($tenant === null || $plan->type !== PlanType::FLAT_RATE->value || ! $this->partnerProviderCanBillPlan($user, $plan)) {
             return null;
         }
 
@@ -284,7 +280,7 @@ class PartnerPricingResolver
     {
         $tenant = $this->resolvePartnerTenant($user);
 
-        if ($tenant === null || ! $this->offlineProviderAcceptsNewPayments()) {
+        if ($tenant === null || $this->partnerProviders() === []) {
             return null;
         }
 
@@ -301,65 +297,70 @@ class PartnerPricingResolver
     }
 
     /**
-     * Both columns, deliberately: checkout resolves its provider list through
-     * PaymentService::getActivePaymentProvidersFromDatabase(), which adds
-     * is_enabled_for_new_payments whenever $isNewPayment — and both checkout
-     * forms pass true. Checking only is_active would let an admin's one-click
-     * ToggleColumn leave Offline active but closed to new payments, and then a
-     * partner price would be quoted with every provider filtered away
-     * underneath it: an unhandled NoPaymentProvidersAvailableException, i.e. a
-     * 500 for the customer.
-     */
-    /**
-     * The only buyer-dependent Offline precondition.
+     * Whether a partner-price provider would survive every filter subscription
+     * checkout applies for this buyer and plan.
      *
      * As soon as a buyer has used up their trial allowance, the subscription
      * checkout asks PaymentService for a provider that can *skip* the plan's
-     * trial ($shouldSupportSkippingTrial), and OfflineProvider::supportsSkippingTrial()
-     * is hard false — so Offline is not on the list at all. An offering that
-     * survived to here would quote a partner price into a list
-     * restrictToPartnerProviders() is about to empty: the same unhandled
-     * NoPaymentProvidersAvailableException 500 as the gate below. Failing
-     * closed makes display and checkout degrade together (spec Decision 5):
-     * such a buyer simply sees base pricing and keeps every provider.
+     * trial ($shouldSupportSkippingTrial). OfflineProvider::supportsSkippingTrial()
+     * is hard false, so for such a buyer only a provider that can skip it
+     * counts. An offering that survived with none would quote a partner price
+     * into a list restrictToPartnerProviders() is about to empty: an unhandled
+     * NoPaymentProvidersAvailableException 500. Failing closed makes display
+     * and checkout degrade together (spec Decision 5).
      *
      * The eligibility rule itself belongs to SubscriptionService and is reused
      * rather than reimplemented. Resolved lazily via the container for the
      * usual reason — SubscriptionService -> CalculationService ->
      * PartnerPricingResolver is a real cycle.
      */
-    private function offlineCanBillTrialPlanFor(?User $user, Plan $plan): bool
+    private function partnerProviderCanBillPlan(?User $user, Plan $plan): bool
     {
-        if (! $plan->has_trial) {
-            return true;
+        $mustSkipTrial = (bool) $plan->has_trial && ! app(SubscriptionService::class)->canUserHaveSubscriptionTrial($user);
+
+        foreach ($this->partnerProviders() as $provider) {
+            if ($provider->supportsPlan($plan) && (! $mustSkipTrial || $provider->supportsSkippingTrial())) {
+                return true;
+            }
         }
 
-        return app(SubscriptionService::class)->canUserHaveSubscriptionTrial($user);
-    }
-
-    private function offlineProviderAcceptsNewPayments(): bool
-    {
-        return $this->offlineUsableMemo ??= PaymentProvider::where('slug', PaymentProviderConstants::OFFLINE_SLUG)
-            ->where('is_active', true)
-            ->where('is_enabled_for_new_payments', true)
-            ->exists();
+        return false;
     }
 
     /**
-     * Resolved lazily via the container rather than constructor-injected,
-     * consistent with the rule that nothing reachable from
-     * SubscriptionService may constructor-inject this resolver — the same
-     * cycle applies in reverse here, since PaymentService is reachable from
-     * checkout/subscription code that this resolver is itself injected into.
+     * The partner-price providers that are active AND open to new payments.
+     * Both columns, deliberately: checkout resolves its provider list through
+     * PaymentService::getActivePaymentProvidersFromDatabase(), which adds
+     * is_enabled_for_new_payments whenever $isNewPayment — and both checkout
+     * forms pass true. Checking only is_active would let an admin's one-click
+     * ToggleColumn leave a provider active but closed to new payments, and
+     * then a partner price would be quoted with every provider filtered away
+     * underneath it.
      *
-     * Asks the OfflineProvider instance itself rather than re-hardcoding
-     * PlanType::FLAT_RATE here, so the two checks cannot drift apart.
+     * PaymentService is resolved lazily via the container rather than
+     * constructor-injected: it is reachable from checkout/subscription code
+     * that this resolver is itself injected into.
+     *
+     * @return list<PaymentProviderInterface>
      */
-    private function offlineProviderSupportsPlan(Plan $plan): bool
+    private function partnerProviders(): array
     {
-        return $this->offlineSupportsPlanMemo[$plan->id] ??= app(PaymentService::class)
-            ->getPaymentProviderBySlug(PaymentProviderConstants::OFFLINE_SLUG)
-            ->supportsPlan($plan);
+        if ($this->partnerProvidersMemo !== null) {
+            return $this->partnerProvidersMemo;
+        }
+
+        $slugs = PaymentProvider::query()
+            ->whereIn('slug', PaymentProviderConstants::PARTNER_PRICE_SLUGS)
+            ->where('is_active', true)
+            ->where('is_enabled_for_new_payments', true)
+            ->pluck('slug');
+
+        $paymentService = app(PaymentService::class);
+
+        return $this->partnerProvidersMemo = $slugs
+            ->map(fn (string $slug): PaymentProviderInterface => $paymentService->getPaymentProviderBySlug($slug))
+            ->values()
+            ->all();
     }
 
     private function userKey(?User $user): int
