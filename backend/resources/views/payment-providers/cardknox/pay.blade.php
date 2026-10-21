@@ -87,7 +87,8 @@
                 padding: '0 16px',
                 border: 'none',
                 outline: 'none',
-                background: 'transparent',
+                // Opaque on purpose: the iframe's own page is white behind a transparent input.
+                background: '#16130f',
                 color: '#f5f5f0',
                 'font-size': '16px',
                 'font-family': 'ui-sans-serif, system-ui, sans-serif',
