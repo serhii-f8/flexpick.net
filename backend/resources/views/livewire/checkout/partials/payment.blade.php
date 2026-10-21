@@ -13,9 +13,11 @@
                             <span>
                                 {{ $paymentProvider->getName() }}
                             </span>
-                            <span class="-m-2">
-                                <img src="{{asset('images/payment-providers/' . $paymentProvider->getSlug() . '.png')}}" alt="{{ $paymentProvider->getName() }}" class="h-6 grayscale">
-                            </span>
+                            @if ($paymentProvider->getSlug() !== \App\Constants\PaymentProviderConstants::CARDKNOX_SLUG)
+                                <span class="-m-2">
+                                    <img src="{{asset('images/payment-providers/' . $paymentProvider->getSlug() . '.png')}}" alt="{{ $paymentProvider->getName() }}" class="h-6 grayscale">
+                                </span>
+                            @endif
                         </span>
                         @if ($paymentProvider->isRedirectProvider())
                             <span class="">{{ __('You will be redirected to complete your payment.') }}</span>
