@@ -134,7 +134,7 @@ class SubscriptionResource extends Resource
                         ->action(function ($record, DiscardSubscriptionCancellationActionHandler $handler) {
                             $handler->handle($record);
                         })->visible(fn (Subscription $record, SubscriptionService $subscriptionService): bool => $subscriptionService->canDiscardSubscriptionCancellation($record)),
-                ]),
+                ])->visible(fn (): bool => static::canManage()),
             ])
             ->toolbarActions([
             ])
@@ -311,6 +311,23 @@ class SubscriptionResource extends Resource
             Filament::getTenant(),
             auth()->user(),
             TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+        );
+    }
+
+    /**
+     * Viewing a subscription and managing it are separate tenancy permissions:
+     * workspace members can see billing, only those with the update permission
+     * may change plan, cancel, edit payment details or apply a discount.
+     */
+    public static function canManage(): bool
+    {
+        /** @var TenantPermissionService $tenantPermissionService */
+        $tenantPermissionService = app(TenantPermissionService::class);
+
+        return $tenantPermissionService->tenantUserHasPermissionTo(
+            Filament::getTenant(),
+            auth()->user(),
+            TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS,
         );
     }
 

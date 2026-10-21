@@ -12,6 +12,11 @@ class CancelSubscription extends Page
 
     protected string $view = 'filament.dashboard.resources.subscription-resource.pages.cancel-subscription';
 
+    public function mount(): void
+    {
+        abort_unless(SubscriptionResource::canManage(), 403);
+    }
+
     protected function getViewData(): array
     {
         $route = Route::current();

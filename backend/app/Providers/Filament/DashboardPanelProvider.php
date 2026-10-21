@@ -158,8 +158,7 @@ class DashboardPanelProvider extends PanelProvider
                 'Audits' => NavigationGroup::make()
                     ->label(__('Audits')),
                 'Billing' => NavigationGroup::make()
-                    ->label(__('Billing'))
-                    ->collapsed(),
+                    ->label(__('Billing')),
                 'Partner' => NavigationGroup::make()
                     ->label(__('Partner')),
                 'Team Management' => NavigationGroup::make()

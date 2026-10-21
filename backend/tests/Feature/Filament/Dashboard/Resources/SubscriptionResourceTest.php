@@ -7,6 +7,7 @@ use App\Constants\TenancyPermissionConstants;
 use App\Filament\Dashboard\Resources\Subscriptions\SubscriptionResource;
 use App\Models\Plan;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\Subscription;
 use App\Services\CurrencyService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -44,6 +45,7 @@ class SubscriptionResourceTest extends FeatureTest
         $tenant = $this->createTenant();
         $user = $this->createUser($tenant, [
             TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+            TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS,
         ]);
 
         $this->actingAs($user);
@@ -66,6 +68,7 @@ class SubscriptionResourceTest extends FeatureTest
         $tenant = $this->createTenant();
         $user = $this->createUser($tenant, [
             TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+            TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS,
         ]);
 
         $this->actingAs($user);
@@ -88,6 +91,7 @@ class SubscriptionResourceTest extends FeatureTest
         $tenant = $this->createTenant();
         $user = $this->createUser($tenant, [
             TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+            TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS,
         ]);
 
         $this->actingAs($user);
@@ -110,6 +114,7 @@ class SubscriptionResourceTest extends FeatureTest
         $tenant = $this->createTenant();
         $user = $this->createUser($tenant, [
             TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+            TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS,
         ]);
 
         $this->actingAs($user);
@@ -141,5 +146,50 @@ class SubscriptionResourceTest extends FeatureTest
         $response->assertDontSee(__('You are currently on the'));
         $response->assertDontSee(__('Change Subscription Plan'));
         $response->assertSee(__('Change plan'));
+    }
+
+    /**
+     * Workspace members get the view permission only: they can see billing,
+     * but every subscription-management page refuses them.
+     */
+    public function test_a_view_only_member_cannot_open_the_management_pages(): void
+    {
+        $tenant = $this->createTenant();
+        $user = $this->createUser($tenant, [
+            TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+        ]);
+
+        $this->actingAs($user);
+        $this->withExceptionHandling();
+
+        $subscription = Subscription::factory()->for($user)->create([
+            'user_id' => $user->id,
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $this->get(SubscriptionResource::getUrl('view', [
+            'record' => $subscription->uuid,
+        ], true, 'dashboard', tenant: $tenant))
+            ->assertSuccessful()
+            ->assertDontSee(__('Manage Subscription'));
+
+        foreach (['change-plan', 'cancel', 'confirm-cancellation', 'add-discount'] as $page) {
+            $this->get(SubscriptionResource::getUrl($page, [
+                'record' => $subscription->uuid,
+            ], true, 'dashboard', tenant: $tenant))->assertForbidden();
+        }
+    }
+
+    public function test_the_member_role_can_view_billing_but_not_manage_subscriptions(): void
+    {
+        $role = Role::query()
+            ->where('name', TenancyPermissionConstants::ROLE_USER)
+            ->where('is_tenant_role', true)
+            ->firstOrFail();
+
+        $this->assertTrue($role->hasPermissionTo(TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS));
+        $this->assertTrue($role->hasPermissionTo(TenancyPermissionConstants::PERMISSION_VIEW_ORDERS));
+        $this->assertTrue($role->hasPermissionTo(TenancyPermissionConstants::PERMISSION_VIEW_TRANSACTIONS));
+        $this->assertFalse($role->hasPermissionTo(TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS));
     }
 }

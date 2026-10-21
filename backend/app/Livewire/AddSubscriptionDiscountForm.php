@@ -62,6 +62,8 @@ class AddSubscriptionDiscountForm extends Component implements HasForms
 
     public function submit()
     {
+        abort_unless(SubscriptionResource::canManage(), 403);
+
         $data = $this->form->getState();
         $code = $data['code'];
         $user = auth()->user();

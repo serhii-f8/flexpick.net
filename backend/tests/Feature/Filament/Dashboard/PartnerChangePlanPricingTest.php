@@ -70,6 +70,7 @@ class PartnerChangePlanPricingTest extends FeatureTest
         $customerTenant = $this->createTenant();
         $customer = $this->createUser($customerTenant, [
             TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+            TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS,
         ], [
             'partner_tenant_id' => $partnerTenant->id,
             'partner_attributed_at' => now(),
@@ -140,6 +141,7 @@ class PartnerChangePlanPricingTest extends FeatureTest
         $customerTenant = $this->createTenant();
         $customer = $this->createUser($customerTenant, [
             TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+            TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS,
         ], [
             'partner_tenant_id' => $partnerTenant->id,
             'partner_attributed_at' => now(),
@@ -195,6 +197,7 @@ class PartnerChangePlanPricingTest extends FeatureTest
         $customerTenant = $this->createTenant();
         $customer = $this->createUser($customerTenant, [
             TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+            TenancyPermissionConstants::PERMISSION_UPDATE_SUBSCRIPTIONS,
         ], [
             'partner_tenant_id' => $partnerTenant->id,
             'partner_attributed_at' => now(),

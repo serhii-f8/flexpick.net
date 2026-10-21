@@ -149,6 +149,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'guard_name' => 'web',
         ]);
 
-        // assign any permissions that the user role should have here
+        // Members can see the workspace's billing; managing it stays with admins.
+        $userRole->givePermissionTo([
+            TenancyPermissionConstants::PERMISSION_VIEW_SUBSCRIPTIONS,
+            TenancyPermissionConstants::PERMISSION_VIEW_ORDERS,
+            TenancyPermissionConstants::PERMISSION_VIEW_TRANSACTIONS,
+        ]);
     }
 }

@@ -58,7 +58,8 @@ class ViewSubscription extends ViewRecord
                     ->action(function ($record, DiscardSubscriptionCancellationActionHandler $handler) {
                         $handler->handle($record);
                     })->visible(fn (Subscription $record, SubscriptionService $subscriptionService): bool => $subscriptionService->canDiscardSubscriptionCancellation($record)),
-            ])->button()->icon('heroicon-s-cog')->label(__('Manage Subscription')),
+            ])->button()->icon('heroicon-s-cog')->label(__('Manage Subscription'))
+                ->visible(fn (): bool => SubscriptionResource::canManage()),
         ];
     }
 }

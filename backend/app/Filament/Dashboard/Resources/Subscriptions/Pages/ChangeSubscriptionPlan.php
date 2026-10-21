@@ -17,6 +17,8 @@ class ChangeSubscriptionPlan extends Page
 
     public function mount(): void
     {
+        abort_unless(SubscriptionResource::canManage(), 403);
+
         $subscriptionService = app(SubscriptionService::class);
         $subscription = $subscriptionService->findActiveByTenantAndSubscriptionUuid(
             Filament::getTenant(),

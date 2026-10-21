@@ -12,6 +12,11 @@ class AddDiscount extends Page
 
     protected string $view = 'filament.dashboard.resources.subscription-resource.pages.add-discount';
 
+    public function mount(): void
+    {
+        abort_unless(SubscriptionResource::canManage(), 403);
+    }
+
     protected function getViewData(): array
     {
         return array_merge(parent::getViewData(), [
