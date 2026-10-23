@@ -1,5 +1,6 @@
 ---
 import Layout from '~/layouts/Layout.astro';
+import { PRODUCT_APP } from 'flexpick:config';
 
 const metadata = { title: 'Privacy Policy' };
 ---
@@ -25,7 +26,9 @@ const metadata = { title: 'Privacy Policy' };
       To produce an audit we clone your repository into an isolated working directory, compute metrics from it, and send
       limited file excerpts to Anthropic's API for analysis. The clone is deleted as soon as the analysis finishes. We
       do not use your code to train models, and we do not share it with anyone other than the analysis provider named
-      above. We are happy to sign an NDA before you grant access.
+      above. We are happy to sign an NDA before you grant access. Our
+      <a href={`${PRODUCT_APP.url}/security`} style="color: #d4a853;">Security &amp; Privacy</a> page explains exactly how
+      we access repositories, where the code is stored, when it is deleted, and has our NDA template to download.
     </p>
 
     <h2 style="font-size: 20px; margin: 36px 0 12px; color: #f5f5f0;">How we use your data</h2>

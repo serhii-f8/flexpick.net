@@ -101,4 +101,33 @@ class LegalPagesTest extends FeatureTest
         $this->get(route('privacy-policy'))->assertSee(route('terms-of-service'), false);
         $this->get(route('terms-of-service'))->assertSee(route('privacy-policy'), false);
     }
+
+    public function test_security_page_explains_access_storage_deletion_and_offers_an_nda(): void
+    {
+        $response = $this->get(route('security'));
+
+        $response->assertOk();
+        $response->assertSee('How we access your repository');
+        $response->assertSee('read_repository, read_api');
+        $response->assertSee('We never use it to write');
+        $response->assertSee('Deleted at the end of every run');
+        $response->assertSee('Non-disclosure agreement');
+        $response->assertSee(asset('legal/flexpick-mutual-nda.docx'), false);
+        $response->assertSee(route('privacy-policy'), false);
+    }
+
+    public function test_the_nda_template_is_published(): void
+    {
+        $path = public_path('legal/flexpick-mutual-nda.docx');
+
+        $this->assertFileExists($path);
+        // A .docx is a zip archive: guard against a placeholder or an HTML error page.
+        $this->assertSame("PK\x03\x04", file_get_contents($path, length: 4));
+    }
+
+    public function test_the_privacy_policy_and_footer_link_to_the_security_page(): void
+    {
+        $this->get(route('privacy-policy'))->assertSee(route('security'), false);
+        $this->get(route('terms-of-service'))->assertSee(route('security'), false);
+    }
 }

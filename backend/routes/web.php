@@ -194,6 +194,10 @@ Route::get('/privacy-policy', function () {
     return view('pages.privacy-policy');
 })->name('privacy-policy')->middleware('sitemapped');
 
+Route::get('/security', function () {
+    return view('pages.security');
+})->name('security')->middleware('sitemapped');
+
 // Product checkout routes
 
 Route::get('/buy/product/{productSlug}/{quantity?}', [

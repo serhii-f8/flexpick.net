@@ -14,6 +14,9 @@
                         <a href="{{route('privacy-policy')}}" class="text-cream-200/70 hover:text-cream-100">{{ __('Privacy Policy') }}</a>
                     </li>
                     <li>
+                        <a href="{{route('security')}}" class="text-cream-200/70 hover:text-cream-100">{{ __('Security & Privacy') }}</a>
+                    </li>
+                    <li>
                         <a href="{{route('terms-of-service')}}" class="text-cream-200/70 hover:text-cream-100">{{ __('Terms of Service') }}</a>
                     </li>
                 </ul>

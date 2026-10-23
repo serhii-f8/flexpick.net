@@ -139,9 +139,12 @@
             still appears in your report as a finding — telling you the file and rule, never the matched value.
         </li>
         <li>
-            <strong>Private repositories.</strong> If you grant our GitHub machine account read access so we can audit
-            a private repository, that access is used only to clone it for your audits. You can revoke it at any time
-            from your GitHub settings.
+            <strong>Private repositories.</strong> If you connect a GitHub, GitLab or Bitbucket account so we can
+            audit a private repository, the token is stored encrypted and used only to list, check and clone your
+            repositories for your audits — never to write to them. You can disconnect it from your dashboard and
+            revoke it at any time from your provider's settings. Our
+            <a class="text-primary-500" href="{{ route('security') }}">Security &amp; Privacy</a> page lists the exact
+            permissions requested.
         </li>
         <li>
             <strong>Expert-tier reports are read by a person.</strong> On the Expert tier a reviewer at
@@ -156,7 +159,10 @@
 
     <p class="mb-6">
         What we keep after a run is the derived material, not the code itself: the computed metrics, the findings, the
-        report payload and the generated PDF. We are happy to sign an NDA before you grant us access to anything.
+        report payload and the generated PDF. We also derive anonymized, aggregate statistics across all audits (for
+        example, the share of codebases with exposed secrets), which we and our partners may publish; they never
+        identify you or your repository. We are happy to sign an NDA before you grant us access to anything —
+        <a class="text-primary-500" href="{{ route('security') }}#nda">download our NDA template</a>.
     </p>
 
     <x-heading.h2 class="text-xl mb-2">Why we are allowed to use it</x-heading.h2>
