@@ -65,6 +65,10 @@ return [
     'set_password_link_days' => 7,
     'unverified_purge_days' => 7,
     'benchmark_min_sample' => 20,
+    // Partner "Audit insights": nothing is shown below this many distinct
+    // codebases, since a percentage over a few describes those customers.
+    'insights_min_codebases' => (int) env('AUDIT_INSIGHTS_MIN_CODEBASES', 10),
+    'insights_cache_seconds' => 3600,
     'unlock_product_slug' => 'audit-report-unlock',
     'osv_endpoint' => 'https://api.osv.dev/v1/querybatch',
 

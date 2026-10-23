@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament\Dashboard;
 
 use App\Constants\SubscriptionStatus;
 use App\Constants\TenancyPermissionConstants;
+use App\Filament\Dashboard\Pages\AuditInsights;
 use App\Filament\Dashboard\Pages\AuditReports;
 use App\Filament\Dashboard\Pages\Dashboard;
 use App\Filament\Dashboard\Pages\GitConnections;
@@ -236,7 +237,7 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $navigation = $this->renderedNavigation();
 
-        $this->assertSame(['Referrals', 'Orders', 'Pricing Settings'], $navigation['Partner'] ?? []);
+        $this->assertSame(['Referrals', 'Orders', 'Pricing Settings', 'Audit Insights'], $navigation['Partner'] ?? []);
         $this->assertSame(['Buy More / Upgrade', 'Orders', 'Subscriptions', 'Payments'], $navigation['Billing'] ?? []);
     }
 
@@ -254,5 +255,6 @@ class DashboardMenuItemsTest extends FeatureTest
 
         $this->get(PartnerPricingSettings::getUrl(tenant: $tenant))->assertSuccessful();
         $this->get(PartnerOrderResource::getUrl(tenant: $tenant))->assertSuccessful();
+        $this->get(AuditInsights::getUrl(tenant: $tenant))->assertSuccessful();
     }
 }
