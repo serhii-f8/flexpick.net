@@ -153,7 +153,7 @@ class AuditEntitlementServiceTest extends FeatureTest
             'funding' => AuditFunding::FREE->value,
         ]);
 
-        $this->assertSame(2, $this->service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(2, $this->service->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
     }
 
     /**
@@ -182,11 +182,11 @@ class AuditEntitlementServiceTest extends FeatureTest
             'tier' => AuditTier::DIAGNOSTIC->value,
             'funding' => AuditFunding::ALLOWANCE->value,
         ]);
-        $this->assertSame(1, $this->service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(1, $this->service->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
 
         $this->service->refund($request);
 
-        $this->assertSame(0, $this->service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(0, $this->service->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
     }
 
     public function test_a_refunded_purchase_returns_a_credit_of_its_tier(): void
@@ -237,9 +237,9 @@ class AuditEntitlementServiceTest extends FeatureTest
             'funding' => AuditFunding::ALLOWANCE->value,
         ]);
 
-        $this->assertSame(1, $this->service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
-        $this->assertSame(3, $this->service->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
-        $this->assertSame(0, $this->service->runsUsedThisMonth($tenant, AuditTier::EXPERT));
+        $this->assertSame(1, $this->service->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(3, $this->service->runsUsedThisPeriod($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(0, $this->service->runsUsedThisPeriod($tenant, AuditTier::EXPERT));
     }
 
     public function test_last_months_runs_do_not_count(): void
@@ -256,7 +256,7 @@ class AuditEntitlementServiceTest extends FeatureTest
             'created_at' => now()->startOfMonth()->subDay(),
         ]);
 
-        $this->assertSame(0, $this->service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(0, $this->service->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
     }
 
     public function test_diagnostic_quota_is_the_lifetime_free_quota(): void
@@ -325,7 +325,7 @@ class AuditEntitlementServiceTest extends FeatureTest
      * off it. Both other quotaFor() tests pass a null tenant, so limit and
      * used are always 0 there; this is the only test that would catch the
      * `limit:`/`used:` named arguments being transposed, or allowance() and
-     * runsUsedThisMonth() being swapped.
+     * runsUsedThisPeriod() being swapped.
      */
     /**
      * A tenant whose plan grants a Diagnostic allowance (every paid plan
@@ -515,7 +515,7 @@ class AuditEntitlementServiceTest extends FeatureTest
         ]);
 
         $this->assertSame(0, $this->service->remainingRuns($first, AuditTier::DEEP_AI));
-        $this->assertSame(0, $this->service->runsUsedThisMonth($second, AuditTier::DEEP_AI));
+        $this->assertSame(0, $this->service->runsUsedThisPeriod($second, AuditTier::DEEP_AI));
     }
 
     public function test_workspace_free_runs_count_claimed_rows_and_ignore_other_workspaces(): void

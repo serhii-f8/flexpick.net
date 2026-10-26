@@ -2,6 +2,7 @@
 
 namespace App\Services\AuditReport;
 
+use App\Console\Commands\RunScheduledAudits;
 use App\Models\AuditSchedule;
 use Illuminate\Support\Carbon;
 
@@ -40,6 +41,12 @@ class ScheduleOccurrenceProjector
         $anchorDay = $schedule->day_of_month ?? ($schedule->last_run_at ?? $schedule->created_at ?? $today)->day;
         $day = min($anchorDay, $monthEnd->day);
         $date = $monthStart->copy()->addDays($day - 1);
+
+        // A quarterly schedule skips the two months after each run.
+        if ($schedule->frequency === 'quarterly' && $schedule->last_run_at !== null
+            && $date->lt($schedule->last_run_at->copy()->startOfDay()->addDays(RunScheduledAudits::QUARTER_MIN_DAYS))) {
+            return [];
+        }
 
         return ($date->gte($today) && $date->lte($monthEnd)) ? [$date] : [];
     }

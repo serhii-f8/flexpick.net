@@ -554,7 +554,7 @@ class AuditReports extends Page
         $entitlements = app(AuditEntitlementService::class);
         $selected = AuditTier::tryFrom($tier ?? AuditTier::DIAGNOSTIC->value) ?? AuditTier::DIAGNOSTIC;
 
-        if ($tenant === null || ! in_array($frequency, ['off', 'weekly', 'monthly'], true)) {
+        if ($tenant === null || ! in_array($frequency, ['off', 'weekly', 'monthly', 'quarterly'], true)) {
             return;
         }
 
@@ -592,9 +592,28 @@ class AuditReports extends Page
                 'frequency' => $frequency,
                 'tier' => $selected->value,
                 'day_of_week' => $frequency === 'weekly' ? ($existing->day_of_week ?? now()->dayOfWeek) : null,
-                'day_of_month' => $frequency === 'monthly' ? ($existing->day_of_month ?? now()->day) : null,
+                'day_of_month' => in_array($frequency, ['monthly', 'quarterly'], true) ? ($existing->day_of_month ?? now()->day) : null,
             ],
         );
+
+        // Saved either way -- an unchanged repository is skipped, so a busy
+        // schedule may fit -- but a schedule that runs more often than the
+        // plan's allowance resets (monthly on a one-per-quarter plan) stops
+        // at "awaiting credit" whenever the repository did change.
+        $allowance = $entitlements->allowance($tenant, $selected);
+
+        if ($allowance > 0 && $entitlements->scheduledRunsPerAllowancePeriod($tenant, $selected, $frequency) > $allowance) {
+            Notification::make()
+                ->title(__('Audits scheduled :frequency', ['frequency' => __($frequency)]))
+                ->body(__('Your plan includes :count :tier per billing period, so some scheduled runs may wait for credit. A less frequent schedule fits your plan.', [
+                    'count' => $allowance,
+                    'tier' => $selected->label(),
+                ]))
+                ->warning()
+                ->send();
+
+            return;
+        }
 
         Notification::make()->title(__('Audits scheduled :frequency', ['frequency' => __($frequency)]))->success()->send();
     }
@@ -631,7 +650,7 @@ class AuditReports extends Page
         AuditSchedule::query()
             ->where('tenant_id', $tenant->id)
             ->where('repo_url', $repoUrl)
-            ->where('frequency', 'monthly')
+            ->whereIn('frequency', ['monthly', 'quarterly'])
             ->update(['day_of_month' => max(1, min(31, $dayOfMonth))]);
     }
 

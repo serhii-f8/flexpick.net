@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\PackagePeriod;
 use Illuminate\Console\Command;
 
 /**
@@ -90,6 +91,8 @@ class ExportPricingCommand extends Command
                 'price_cents' => $package['price'],
                 'price_display' => $this->display($package['price']),
                 'discount_percent' => $package['discount_percent'],
+                'interval_months' => PackagePeriod::months($package),
+                'period' => PackagePeriod::phrase(PackagePeriod::months($package)),
                 'headline' => $tier['headline'],
                 'is_popular' => $package['is_popular'],
             ];

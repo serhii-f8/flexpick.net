@@ -14,7 +14,7 @@
     $exceedsMaxUsers = $plan->max_users_per_tenant > 0 && $tenantUserCount > $plan->max_users_per_tenant;
     $isCurrent = $subscription !== null && $subscription->plan_id === $plan->id;
     $intervalLabel = $plan->interval_count > 1
-        ? __('per :count :interval', ['count' => $plan->interval_count, 'interval' => __(str($plan->interval->name)->plural())])
+        ? __('per :count :interval', ['count' => $plan->interval_count, 'interval' => __((string) str($plan->interval->name)->plural())])
         : __('per :interval', ['interval' => __($plan->interval->name)]);
     if ($plan->type === \App\Constants\PlanType::SEAT_BASED->value) {
         $intervalLabel = __('per seat').' · '.$intervalLabel;

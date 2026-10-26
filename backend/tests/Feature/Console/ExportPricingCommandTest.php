@@ -31,7 +31,10 @@ class ExportPricingCommandTest extends FeatureTest
         // drifts from the figure the backend charges.
         $this->assertSame(11900, $exported['tiers']['audit-deep-ai']['price_cents']);
         $this->assertSame('$119', $exported['tiers']['audit-deep-ai']['price_display']);
-        $this->assertSame('$23,976', $exported['packages']['audit-expert-30']['price_display']);
+        $this->assertSame('$13,486.50', $exported['packages']['audit-expert-15']['price_display']);
+        $this->assertSame(3, $exported['packages']['audit-expert-1']['interval_months']);
+        $this->assertSame('per quarter', $exported['packages']['audit-expert-1']['period']);
+        $this->assertSame(1, $exported['packages']['audit-diagnostic-5']['interval_months']);
         $this->assertSame('$232.75', $exported['packages']['audit-diagnostic-5']['price_display']);
     }
 

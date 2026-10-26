@@ -52,6 +52,7 @@ class PlanUsageWidget extends Widget
                 'label' => $quota->label,
                 'used' => $quota->used,
                 'total' => $quota->limit,
+                'resets_at' => $quota->resetsAt,
             ];
         }
 

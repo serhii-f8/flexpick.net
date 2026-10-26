@@ -107,4 +107,15 @@ class ScheduleOccurrenceProjectorTest extends FeatureTest
 
         $this->assertSame([], $dates);
     }
+
+    public function test_quarterly_schedule_skips_the_two_months_after_a_run(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-01'));
+        $schedule = AuditSchedule::factory()->make(['frequency' => 'quarterly', 'day_of_month' => 15, 'last_run_at' => Carbon::parse('2026-07-15')]);
+        $projector = app(ScheduleOccurrenceProjector::class);
+
+        $this->assertSame([], $projector->upcomingDatesInMonth($schedule, Carbon::parse('2026-08-01')));
+        $this->assertSame([], $projector->upcomingDatesInMonth($schedule, Carbon::parse('2026-09-01')));
+        $this->assertSame(['2026-10-15'], array_map(fn ($d) => $d->toDateString(), $projector->upcomingDatesInMonth($schedule, Carbon::parse('2026-10-01'))));
+    }
 }

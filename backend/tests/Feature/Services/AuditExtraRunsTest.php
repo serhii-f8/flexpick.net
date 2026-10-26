@@ -40,7 +40,7 @@ class AuditExtraRunsTest extends FeatureTest
         $request->refresh();
         $this->assertSame(1, $request->extra_metered_runs);
         $this->assertSame(2, $request->extra_purchased_runs);
-        $this->assertSame(2, $this->service->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(2, $this->service->runsUsedThisPeriod($tenant, AuditTier::DEEP_AI));
         $this->assertSame(3, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 
@@ -95,11 +95,11 @@ class AuditExtraRunsTest extends FeatureTest
         $tenant = $this->tenantWithAllowance(['audit_deep_ai_credits' => 3]);
         $request = $this->request($tenant, AuditFunding::ALLOWANCE);
         $this->service->chargeExtraRuns($request, 2);
-        $this->assertSame(3, $this->service->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(3, $this->service->runsUsedThisPeriod($tenant, AuditTier::DEEP_AI));
 
         $this->service->refund($request->refresh());
 
-        $this->assertSame(0, $this->service->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(0, $this->service->runsUsedThisPeriod($tenant, AuditTier::DEEP_AI));
     }
 
     public function test_refund_returns_purchased_extras_once(): void
@@ -205,8 +205,8 @@ class AuditExtraRunsTest extends FeatureTest
 
         $this->assertSame(1, $request->refresh()->extra_metered_runs);
         $this->assertSame(0, $request->extra_purchased_runs);
-        $this->assertSame(2, $this->service->runsUsedInMonth($tenant, AuditTier::DEEP_AI, Carbon::parse('2026-10-15')));
-        $this->assertSame(2, $this->service->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(2, $this->service->runsUsedInPeriodOf($tenant, AuditTier::DEEP_AI, Carbon::parse('2026-10-15')));
+        $this->assertSame(2, $this->service->runsUsedThisPeriod($tenant, AuditTier::DEEP_AI));
     }
 
     public function test_a_scheduled_request_never_draws_extras_from_purchased_credits(): void
@@ -238,7 +238,7 @@ class AuditExtraRunsTest extends FeatureTest
 
         $this->assertSame(0, $request->refresh()->extra_metered_runs);
         $this->assertSame(0, $request->extra_purchased_runs);
-        $this->assertSame(1, $this->service->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
+        $this->assertSame(1, $this->service->runsUsedThisPeriod($tenant, AuditTier::DEEP_AI));
         $this->assertSame(5, $this->service->purchasedCreditBalance($tenant, AuditTier::DEEP_AI));
     }
 

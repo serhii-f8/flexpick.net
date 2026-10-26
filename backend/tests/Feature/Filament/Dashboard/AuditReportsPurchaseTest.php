@@ -126,7 +126,7 @@ class AuditReportsPurchaseTest extends FeatureTest
         $this->assertSame(
             1,
             app(AuditEntitlementService::class)
-                ->runsUsedThisMonth($tenant, AuditTier::DEEP_AI),
+                ->runsUsedThisPeriod($tenant, AuditTier::DEEP_AI),
         );
     }
 

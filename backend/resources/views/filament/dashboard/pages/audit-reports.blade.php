@@ -163,7 +163,11 @@
                                     @if ($quota->isLifetime)
                                         {{ trans_choice('{1} :count free run left|[2,*] :count free runs left', $quota->remaining(), ['count' => $quota->remaining()]) }}
                                     @else
-                                        {{ __(':remaining of :limit left this month', ['remaining' => $quota->remaining(), 'limit' => $quota->limit]) }}
+                                        @if ($quota->resetsAt)
+                                            {{ __(':remaining of :limit left · resets :date', ['remaining' => $quota->remaining(), 'limit' => $quota->limit, 'date' => $quota->resetsAt->format('M j')]) }}
+                                        @else
+                                            {{ __(':remaining of :limit left', ['remaining' => $quota->remaining(), 'limit' => $quota->limit]) }}
+                                        @endif
                                     @endif
                                 @elseif ($quota->purchasable())
                                     {{ __('No credits left · buy for $:price', ['price' => number_format($quota->priceCents / 100)]) }}
@@ -295,7 +299,7 @@
                         <summary>
                             {{ __('Schedule re-audits') }}
                             @if ($scheduleFrequency !== 'off')
-                                <span class="fp-schedule-state">{{ $scheduleFrequency === 'weekly' ? __('weekly') : __('monthly') }}</span>
+                                <span class="fp-schedule-state">{{ __($scheduleFrequency) }}</span>
                             @endif
                         </summary>
 
@@ -305,7 +309,7 @@
                                     wire:change="setSchedule({!! \Illuminate\Support\Js::from($repoUrl) !!}, $event.target.value, {!! \Illuminate\Support\Js::from($scheduleTier) !!})"
                                     aria-label="{{ __('Audit schedule for :repo', ['repo' => $repoUrl]) }}"
                                 >
-                                    @foreach (['off' => __('No schedule'), 'weekly' => __('Audit weekly'), 'monthly' => __('Audit monthly')] as $value => $optionLabel)
+                                    @foreach (['off' => __('No schedule'), 'weekly' => __('Audit weekly'), 'monthly' => __('Audit monthly'), 'quarterly' => __('Audit quarterly')] as $value => $optionLabel)
                                         <option value="{{ $value }}" @selected($scheduleFrequency === $value)>{{ $optionLabel }}</option>
                                     @endforeach
                                 </x-filament::input.select>
@@ -322,7 +326,7 @@
                                         @endforeach
                                     </x-filament::input.select>
                                 </x-filament::input.wrapper>
-                            @elseif ($scheduleFrequency === 'monthly')
+                            @elseif (in_array($scheduleFrequency, ['monthly', 'quarterly'], true))
                                 <x-filament::input.wrapper>
                                     <x-filament::input.select
                                         wire:change="setScheduleMonthDay({!! \Illuminate\Support\Js::from($repoUrl) !!}, $event.target.value)"

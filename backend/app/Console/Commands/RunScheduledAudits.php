@@ -14,6 +14,9 @@ use Illuminate\Console\Command;
 
 class RunScheduledAudits extends Command
 {
+    /** Shorter than any three calendar months, longer than any two. */
+    public const QUARTER_MIN_DAYS = 80;
+
     protected $signature = 'app:run-scheduled-audits';
 
     protected $description = 'Dispatch dashboard audits for schedules that are due';
@@ -102,6 +105,10 @@ class RunScheduledAudits extends Command
      * schedule created before either column existed (still null) falls back
      * to the original last_run_at + 1 week/month check, so no pre-existing
      * row silently stops firing.
+     *
+     * Quarterly schedules run on their day_of_month once at least
+     * QUARTER_MIN_DAYS have passed since the last run -- every third month,
+     * without a clamped 31st (run Jan 31, due Apr 30) slipping a quarter.
      */
     private function isDue(AuditSchedule $schedule): bool
     {
@@ -111,6 +118,12 @@ class RunScheduledAudits extends Command
 
         if ($schedule->frequency === 'weekly' && $schedule->day_of_week !== null) {
             return now()->dayOfWeek === $schedule->day_of_week && $schedule->last_run_at->isBefore(now()->startOfDay());
+        }
+
+        if ($schedule->frequency === 'quarterly') {
+            $dueDay = min($schedule->day_of_month ?? $schedule->last_run_at->day, now()->daysInMonth);
+
+            return now()->day === $dueDay && $schedule->last_run_at->lte(now()->subDays(self::QUARTER_MIN_DAYS));
         }
 
         if ($schedule->frequency === 'monthly' && $schedule->day_of_month !== null) {

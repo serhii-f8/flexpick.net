@@ -12,6 +12,7 @@ use App\Models\Subscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AuditReport\AuditEntitlementService;
+use Illuminate\Support\Carbon;
 use Tests\Feature\FeatureTest;
 
 class AuditSubscriptionEntitlementTest extends FeatureTest
@@ -62,7 +63,7 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
         ]);
 
         $service = app(AuditEntitlementService::class);
-        $this->assertSame(2, $service->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(2, $service->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
         $this->assertSame(3, $service->remainingRuns($tenant, AuditTier::DIAGNOSTIC));
     }
 
@@ -129,6 +130,58 @@ class AuditSubscriptionEntitlementTest extends FeatureTest
         $this->createActiveSubscriptionFor($tenant, $user, $metadata);
 
         return [$user, $tenant];
+    }
+
+    public function test_a_quarterly_plan_meters_its_allowance_per_billing_quarter(): void
+    {
+        // Fixtures before freezing time (see RunScheduledAuditsTest).
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->travelTo(Carbon::parse('2026-10-20 12:00:00'));
+        // Paid period: 2026-09-01 .. 2026-12-01.
+        $subscription = $this->createActiveSubscriptionFor($tenant, $user, ['audit_expert_credits' => 1]);
+        $subscription->update(['interval_count' => 3, 'ends_at' => Carbon::parse('2026-12-01 00:00:00')]);
+
+        $run = fn (string $at) => AuditRequest::factory()->create([
+            'user_id' => $user->id, 'tenant_id' => $tenant->id,
+            'tier' => AuditTier::EXPERT->value, 'funding' => AuditFunding::ALLOWANCE->value,
+            'created_at' => Carbon::parse($at),
+        ]);
+        $run('2026-09-10 09:00:00');
+        $run('2026-08-25 09:00:00'); // the previous quarter
+
+        $service = app(AuditEntitlementService::class);
+        $quota = $service->quotaFor($tenant, AuditTier::EXPERT);
+
+        // A calendar month would have reset on October 1st.
+        $this->assertSame(1, $service->runsUsedThisPeriod($tenant, AuditTier::EXPERT));
+        $this->assertFalse($quota->hasRuns());
+        $this->assertSame('2026-12-01', $quota->resetsAt->toDateString());
+        $this->assertSame(
+            ['2026-06-01', '2026-09-01'],
+            array_map(fn ($date) => $date->toDateString(), $service->allowancePeriod($tenant, AuditTier::EXPERT, Carbon::parse('2026-08-25'))),
+        );
+        $this->assertSame(1, $service->runsUsedInPeriodOf($tenant, AuditTier::EXPERT, Carbon::parse('2026-08-25')));
+        $this->assertSame(3, $service->scheduledRunsPerAllowancePeriod($tenant, AuditTier::EXPERT, 'monthly'));
+        $this->assertSame(1, $service->scheduledRunsPerAllowancePeriod($tenant, AuditTier::EXPERT, 'quarterly'));
+
+        $this->travelTo(Carbon::parse('2026-12-02 12:00:00'));
+        $subscription->update(['ends_at' => Carbon::parse('2027-03-01 00:00:00')]);
+
+        $this->assertTrue(app(AuditEntitlementService::class)->quotaFor($tenant, AuditTier::EXPERT)->hasRuns());
+    }
+
+    public function test_a_monthly_plan_still_resets_with_the_calendar_month(): void
+    {
+        // Fixtures before freezing time (see RunScheduledAuditsTest).
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $this->travelTo(Carbon::parse('2026-10-20 12:00:00'));
+        $this->createActiveSubscriptionFor($tenant, $user, ['audit_diagnostic_credits' => 1]);
+
+        $quota = app(AuditEntitlementService::class)->quotaFor($tenant, AuditTier::DIAGNOSTIC);
+
+        $this->assertSame('2026-11-01', $quota->resetsAt->toDateString());
     }
 
     private function createTenantFor(User $user): Tenant

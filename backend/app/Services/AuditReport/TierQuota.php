@@ -3,13 +3,14 @@
 namespace App\Services\AuditReport;
 
 use App\Constants\AuditTier;
+use Carbon\CarbonInterface;
 
 /**
  * One tier's quota position for one user: how many runs it allows, how many
  * are spent, and what buying another costs.
  *
  * Diagnostic is backed by the lifetime free-run quota and every other tier by
- * a monthly plan-metadata allowance. Carrying that difference as a flag here
+ * a plan-metadata allowance that resets every allowance period (`resetsAt`). Carrying that difference as a flag here
  * is what lets the selector and PlanUsageWidget loop over tiers instead of
  * branching on which kind of quota backs each one.
  */
@@ -22,6 +23,7 @@ final readonly class TierQuota
         public int $used,
         public bool $isLifetime,
         public ?int $priceCents,
+        public ?CarbonInterface $resetsAt = null,
     ) {}
 
     public function remaining(): int

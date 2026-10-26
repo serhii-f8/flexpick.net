@@ -27,26 +27,74 @@ class ReportPackagesSeederTest extends FeatureTest
         $this->seed(ReportPackagesSeeder::class);
     }
 
-    public function test_seeds_nine_packages_at_the_table_prices(): void
+    public function test_seeds_every_package_at_the_table_prices_and_billing_period(): void
     {
         $this->seedPackages();
 
+        // [plan slug, price in cents, interval_count in months]
         $expected = [
-            'audit-diagnostic-5' => 23275, 'audit-diagnostic-15' => 66150, 'audit-diagnostic-30' => 117600,
-            'audit-deep-ai-5' => 56525, 'audit-deep-ai-15' => 160650, 'audit-deep-ai-30' => 285600,
-            'audit-expert-5' => 474525, 'audit-expert-15' => 1348650, 'audit-expert-30' => 2397600,
+            'audit-diagnostic-1' => ['audit-diagnostic-1-monthly', 4900, 1],
+            'audit-diagnostic-5' => ['audit-diagnostic-5-monthly', 23275, 1],
+            'audit-diagnostic-15' => ['audit-diagnostic-15-monthly', 66150, 1],
+            'audit-deep-ai-1' => ['audit-deep-ai-1-monthly', 11900, 1],
+            'audit-deep-ai-5' => ['audit-deep-ai-5-monthly', 56525, 1],
+            'audit-deep-ai-15' => ['audit-deep-ai-15-monthly', 160650, 1],
+            'audit-expert-1' => ['audit-expert-1-quarterly', 99900, 3],
+            'audit-expert-5' => ['audit-expert-5-monthly', 474525, 1],
+            'audit-expert-15' => ['audit-expert-15-monthly', 1348650, 1],
         ];
 
-        foreach ($expected as $slug => $cents) {
-            $plan = Plan::where('slug', $slug.'-monthly')->first();
+        foreach ($expected as $slug => [$planSlug, $cents, $months]) {
+            $plan = Plan::where('slug', $planSlug)->first();
 
-            $this->assertNotNull($plan, "Missing plan [{$slug}-monthly].");
+            $this->assertNotNull($plan, "Missing plan [{$planSlug}].");
             $this->assertTrue((bool) $plan->is_active);
             $this->assertTrue((bool) $plan->is_visible);
             $this->assertSame('month', $plan->interval->slug);
+            $this->assertSame($months, (int) $plan->interval_count);
             $this->assertSame($cents, (int) $plan->prices()->first()->price);
             $this->assertSame($slug, $plan->product->slug);
         }
+    }
+
+    public function test_the_single_report_plans_never_cost_more_than_buying_one_report(): void
+    {
+        $oneTime = array_column(config('pricing.tiers'), 'price', 'tier');
+
+        foreach (config('pricing.packages') as $slug => $package) {
+            if ($package['actions'] === 1) {
+                $this->assertLessThanOrEqual($oneTime[$package['tier']], $package['price'], "Package [{$slug}] costs more than the one-time report.");
+            }
+        }
+    }
+
+    public function test_the_quarterly_plan_describes_its_period(): void
+    {
+        $this->seedPackages();
+
+        $plan = Plan::where('slug', 'audit-expert-1-quarterly')->firstOrFail();
+
+        $this->assertSame('Expert Audit × 1 Quarterly', $plan->name);
+        $this->assertSame('1 Expert Audit per quarter', $plan->product->features[0]['feature']);
+    }
+
+    public function test_the_thirty_report_packages_are_retired(): void
+    {
+        $product = Product::updateOrCreate(['slug' => 'audit-deep-ai-30'], ['name' => 'Deep AI Code Review × 30']);
+        $legacy = Plan::updateOrCreate(['slug' => 'audit-deep-ai-30-monthly'], [
+            'name' => 'Deep AI Code Review × 30 Monthly',
+            'product_id' => $product->id,
+            'interval_id' => Interval::where('slug', 'month')->firstOrFail()->id,
+            'interval_count' => 1,
+            'is_active' => true,
+            'is_visible' => true,
+        ]);
+
+        $this->seedPackages();
+
+        $this->assertFalse((bool) $legacy->fresh()->is_active);
+        $this->assertFalse((bool) $legacy->fresh()->is_visible);
+        $this->assertArrayNotHasKey('audit-deep-ai-30', config('pricing.packages'));
     }
 
     public function test_every_package_price_matches_unit_times_actions_less_discount(): void
@@ -76,7 +124,8 @@ class ReportPackagesSeederTest extends FeatureTest
         $this->seedPackages();
 
         $this->assertSame(47500, (int) Product::where('slug', 'audit-diagnostic-5')->firstOrFail()->metadata['partner_suggested_price']);
-        $this->assertSame(4080000, (int) Product::where('slug', 'audit-expert-30')->firstOrFail()->metadata['partner_suggested_price']);
+        $this->assertSame(2295000, (int) Product::where('slug', 'audit-expert-15')->firstOrFail()->metadata['partner_suggested_price']);
+        $this->assertSame(170000, (int) Product::where('slug', 'audit-expert-1')->firstOrFail()->metadata['partner_suggested_price']);
     }
 
     public function test_a_package_describes_its_best_use_case_and_features(): void

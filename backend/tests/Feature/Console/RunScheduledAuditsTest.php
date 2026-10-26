@@ -386,4 +386,31 @@ class RunScheduledAuditsTest extends FeatureTest
 
         Carbon::setTestNow();
     }
+
+    public function test_quarterly_schedule_runs_on_its_day_only_every_third_month(): void
+    {
+        Process::fake(['*' => Process::result(exitCode: 1)]);
+        Queue::fake();
+        [$user, $tenant] = $this->userWithAllowance(diagnostic: 5, deepAi: 2);
+
+        Carbon::setTestNow(Carbon::parse('2026-04-30')); // day 31 clamps to April 30th
+
+        foreach (['due' => '2026-01-31', 'too-soon' => '2026-03-31'] as $name => $lastRun) {
+            AuditSchedule::create([
+                'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
+                'repo_url' => "https://github.com/acme/quarterly-{$name}",
+                'frequency' => 'quarterly',
+                'tier' => AuditTier::DEEP_AI->value,
+                'day_of_month' => 31,
+                'last_run_at' => Carbon::parse($lastRun),
+            ]);
+        }
+
+        $this->artisan('app:run-scheduled-audits')->assertSuccessful();
+
+        $this->assertSame(['https://github.com/acme/quarterly-due'], AuditRequest::where('user_id', $user->id)->pluck('repo_url')->all());
+
+        Carbon::setTestNow();
+    }
 }

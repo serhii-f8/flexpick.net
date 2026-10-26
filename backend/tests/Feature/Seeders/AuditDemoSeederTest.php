@@ -44,7 +44,7 @@ class AuditDemoSeederTest extends FeatureTest
 
         // "Reset the limits": the one seeded report is dated last month, so
         // this month's allowance starts fully unused.
-        $this->assertSame(0, $entitlements->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(0, $entitlements->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
 
         // Idempotency: no duplicate users or requests. The seeded run belongs
         // to the demo workspace, not just the demo user -- that is what the

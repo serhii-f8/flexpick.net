@@ -2,7 +2,7 @@
     @php
         $planName = $newPlan->product->name;
         $intervalLabel = $newPlan->interval_count > 1
-            ? __('per :count :interval', ['count' => $newPlan->interval_count, 'interval' => __(str($newPlan->interval->name)->plural())])
+            ? __('per :count :interval', ['count' => $newPlan->interval_count, 'interval' => __((string) str($newPlan->interval->name)->plural())])
             : __('per :interval', ['interval' => __($newPlan->interval->name)]);
         $features = collect($newPlan->product->features ?? [])->pluck('feature')->filter()->values()->all();
     @endphp

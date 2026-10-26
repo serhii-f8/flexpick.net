@@ -119,7 +119,7 @@ class AuditReportsPageTest extends FeatureTest
             ->assertNoRedirect();
 
         $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
-        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
         Queue::assertNotPushed(GenerateAuditReport::class);
     }
 
@@ -149,7 +149,7 @@ class AuditReportsPageTest extends FeatureTest
             ->assertNoRedirect();
 
         $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
-        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
         Queue::assertNotPushed(GenerateAuditReport::class);
     }
 
@@ -181,7 +181,7 @@ class AuditReportsPageTest extends FeatureTest
             ->assertNoRedirect();
 
         $this->assertSame(0, AuditRequest::where('user_id', $user->id)->count());
-        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisMonth($tenant, AuditTier::DIAGNOSTIC));
+        $this->assertSame(0, app(AuditEntitlementService::class)->runsUsedThisPeriod($tenant, AuditTier::DIAGNOSTIC));
         Queue::assertNotPushed(GenerateAuditReport::class);
         $this->assertDatabaseHas('tenant_git_connections', ['tenant_id' => $tenant->id, 'provider' => 'gitlab']);
     }
@@ -702,6 +702,34 @@ class AuditReportsPageTest extends FeatureTest
         );
 
         Carbon::setTestNow();
+    }
+
+    public function test_a_schedule_more_frequent_than_a_quarterly_allowance_is_saved_with_a_warning(): void
+    {
+        $user = User::factory()->create();
+        $tenant = $this->createTenantFor($user);
+        $subscription = $this->createActiveSubscriptionFor($tenant, $user, ['audit_expert_credits' => 1]);
+        $subscription->update(['interval_count' => 3, 'ends_at' => now()->addMonths(2)]);
+
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('dashboard'));
+        Filament::setTenant($tenant);
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setSchedule', 'https://github.com/acme/app', 'monthly', AuditTier::EXPERT->value)
+            ->assertNotified(__('Audits scheduled :frequency', ['frequency' => __('monthly')]));
+
+        $this->assertSame('monthly', AuditSchedule::where('tenant_id', $tenant->id)->value('frequency'));
+
+        Livewire::actingAs($user)
+            ->test(AuditReports::class)
+            ->call('setSchedule', 'https://github.com/acme/app', 'quarterly', AuditTier::EXPERT->value);
+
+        $schedule = AuditSchedule::where('tenant_id', $tenant->id)->firstOrFail();
+        $this->assertSame('quarterly', $schedule->frequency);
+        $this->assertNotNull($schedule->day_of_month);
+        $this->assertSame(1, app(AuditEntitlementService::class)->scheduledRunsPerAllowancePeriod($tenant, AuditTier::EXPERT, 'quarterly'));
     }
 
     public function test_set_schedule_month_day_updates_an_existing_monthly_schedule(): void

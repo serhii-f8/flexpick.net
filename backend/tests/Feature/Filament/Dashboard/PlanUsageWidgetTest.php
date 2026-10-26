@@ -81,7 +81,7 @@ class PlanUsageWidgetTest extends FeatureTest
         Livewire::test(PlanUsageWidget::class)
             ->assertSee(__('Deep AI Code Review'))
             ->assertSee(__(':used of :total used', ['used' => 0, 'total' => 1]))
-            ->assertDontSee(__('No audit credits on this plan. Pick a plan to run audits every month, or buy a single audit when you need one.'));
+            ->assertDontSee(__('No audit credits on this plan. Pick a plan to run audits on a regular schedule, or buy a single audit when you need one.'));
     }
 
     /**
@@ -198,7 +198,7 @@ class PlanUsageWidgetTest extends FeatureTest
         $this->actAsTenantUser($user, $tenant);
 
         Livewire::test(PlanUsageWidget::class)
-            ->assertSee(__('Credits this month'))
+            ->assertSee(__('Audit credits'))
             ->assertSee(__('Change plan'))
             ->assertSeeHtml('/change-plan');
     }

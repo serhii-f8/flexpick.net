@@ -7,10 +7,11 @@ use App\Models\Currency;
 use App\Models\Interval;
 use App\Models\Plan;
 use App\Models\Product;
+use App\Support\PackagePeriod;
 use Illuminate\Database\Seeder;
 
 /**
- * The nine monthly report packages from config('pricing.packages'), safe to
+ * The report packages from config('pricing.packages'), safe to
  * run on a live database at any time:
  *
  *   php artisan db:seed --class=ReportPackagesSeeder
@@ -32,6 +33,8 @@ class ReportPackagesSeeder extends Seeder
 
         foreach (config('pricing.packages') as $slug => $package) {
             $tier = $tiers[$package['tier']];
+            $months = PackagePeriod::months($package);
+            $reports = $package['actions'] === 1 ? $tier['name'] : $tier['plural'];
 
             $credits = array_fill_keys(array_column($tiers, 'credit_key'), 0);
             $credits[$tier['credit_key']] = $package['actions'];
@@ -40,7 +43,7 @@ class ReportPackagesSeeder extends Seeder
                 'name' => $package['name'],
                 'description' => $tier['headline'],
                 'features' => [
-                    ['feature' => "{$package['actions']} {$tier['plural']} per month"],
+                    ['feature' => "{$package['actions']} {$reports} ".PackagePeriod::phrase($months)],
                     ['feature' => 'Full detailed reports'],
                     ['feature' => 'PDF export'],
                 ],
@@ -54,11 +57,11 @@ class ReportPackagesSeeder extends Seeder
                 'reseller_quota_keys' => [],
             ]);
 
-            $plan = Plan::updateOrCreate(['slug' => $slug.'-monthly'], [
-                'name' => $package['name'].' Monthly',
+            $plan = Plan::updateOrCreate(['slug' => $slug.'-'.PackagePeriod::slug($months)], [
+                'name' => $package['name'].' '.PackagePeriod::name($months),
                 'product_id' => $product->id,
                 'interval_id' => $month->id,
-                'interval_count' => 1,
+                'interval_count' => $months,
                 'has_trial' => false,
                 'is_active' => true,
                 'is_visible' => true,

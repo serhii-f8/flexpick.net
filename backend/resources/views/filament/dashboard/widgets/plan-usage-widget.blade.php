@@ -2,7 +2,7 @@
     <x-filament::section>
         <div class="flex items-start justify-between gap-4">
             <div class="min-w-0">
-                <x-fp.label>{{ __('Credits this month') }}</x-fp.label>
+                <x-fp.label>{{ __('Audit credits') }}</x-fp.label>
                 <p class="mt-2 font-heading text-lg font-bold tracking-tight text-gray-950 dark:text-white">{{ $planName }}</p>
                 @if ($renewsAt)
                     <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -29,12 +29,17 @@
                         <div class="fp-usage-track mt-1.5" role="meter" aria-label="{{ $bar['label'] }}" aria-valuenow="{{ $bar['used'] }}" aria-valuemin="0" aria-valuemax="{{ $bar['total'] }}">
                             <div class="fp-usage-fill {{ $left === 0 ? 'fp-usage-exhausted' : '' }}" style="width: {{ $percent }}%"></div>
                         </div>
+                        @if ($bar['resets_at'] ?? null)
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {{ __('Resets :date', ['date' => $bar['resets_at']->format(config('app.date_format', 'd/m/Y'))]) }}
+                            </p>
+                        @endif
                     </div>
                 @endforeach
             </div>
         @else
             <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                {{ __('No audit credits on this plan. Pick a plan to run audits every month, or buy a single audit when you need one.') }}
+                {{ __('No audit credits on this plan. Pick a plan to run audits on a regular schedule, or buy a single audit when you need one.') }}
             </p>
         @endif
 

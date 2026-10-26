@@ -6,6 +6,7 @@ use App\Constants\AuditFunding;
 use App\Constants\AuditTier;
 use App\Models\AuditReport;
 use App\Models\AuditRequest;
+use App\Models\Interval;
 use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Subscription;
@@ -14,13 +15,15 @@ use App\Models\TenantParameter;
 use App\Services\SubscriptionService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Who may run an audit, and out of which pool.
  *
- * Every quota is a *workspace* quota: plan allowance (metered monthly),
+ * Every quota is a *workspace* quota: plan allowance (metered per
+ * allowance period, see allowancePeriod()),
  * purchased one-time credits (never expire) and the lifetime free-run
  * quota all live on the Tenant, so every member draws from the same pool
  * and sees the same remaining counts. The only email-keyed arm left is
@@ -173,30 +176,28 @@ class AuditEntitlementService
     private function planMetadata(Tenant $tenant, string $key): int
     {
         return (int) $this->activeSubscriptionsFor($tenant)
-            ->map(function (Subscription $subscription) use ($key): int {
-                // The snapshot frozen at purchase wins: a partner-granted
-                // override, or the base value as it stood when the customer
-                // bought, must not drift when an admin edits the product
-                // afterwards (spec §6.3).
-                $snapshotValue = data_get($subscription->quota_snapshot, $key);
-
-                if ($snapshotValue !== null) {
-                    return (int) $snapshotValue;
-                }
-
-                /** @var Plan|null $plan */
-                $plan = $subscription->plan;
-
-                if ($plan === null) {
-                    return 0;
-                }
-
-                /** @var Product|null $product */
-                $product = $plan->product;
-
-                return $product === null ? 0 : (int) data_get($product->metadata, $key, 0);
-            })
+            ->map(fn (Subscription $subscription): int => $this->subscriptionAllowance($subscription, $key))
             ->max();
+    }
+
+    private function subscriptionAllowance(Subscription $subscription, string $key): int
+    {
+        // The snapshot frozen at purchase wins: a partner-granted override,
+        // or the base value as it stood when the customer bought, must not
+        // drift when an admin edits the product afterwards (spec §6.3).
+        $snapshotValue = data_get($subscription->quota_snapshot, $key);
+
+        if ($snapshotValue !== null) {
+            return (int) $snapshotValue;
+        }
+
+        /** @var Plan|null $plan */
+        $plan = $subscription->plan;
+
+        /** @var Product|null $product */
+        $product = $plan?->product;
+
+        return $product === null ? 0 : (int) data_get($product->metadata, $key, 0);
     }
 
     /**
@@ -207,31 +208,104 @@ class AuditEntitlementService
         return $this->activeSubscriptions[$tenant->id] ??= $this->subscriptionService->findActiveTenantSubscriptions($tenant);
     }
 
-    /** Runs this calendar month that came out of the plan. */
-    public function runsUsedThisMonth(Tenant $tenant, AuditTier $tier): int
+    /** Runs in the current allowance period that came out of the plan. */
+    public function runsUsedThisPeriod(Tenant $tenant, AuditTier $tier): int
     {
-        return $this->runsUsedInMonth($tenant, $tier, now());
+        return $this->runsUsedInPeriodOf($tenant, $tier, now());
     }
 
     /**
-     * Runs that came out of the plan in the calendar month containing
-     * $month. A request is metered in the month it was created, extras
-     * included, whenever those extras were charged.
+     * Runs that came out of the plan in the allowance period containing
+     * $moment (see allowancePeriod()). A request is metered in the period it
+     * was created in, extras included, whenever those extras were charged.
      *
      * Keyed on `funding`, not `source`: a checkout intent awaiting payment and
      * a purchased run are both dashboard-sourced but neither spends quota.
      */
-    public function runsUsedInMonth(Tenant $tenant, AuditTier $tier, CarbonInterface $month): int
+    public function runsUsedInPeriodOf(Tenant $tenant, AuditTier $tier, CarbonInterface $moment): int
     {
-        $start = $month->copy()->startOfMonth();
+        [$start, $end] = $this->allowancePeriod($tenant, $tier, $moment);
 
         return $this->meteredRuns(AuditRequest::query()
             ->forTenant($tenant)
             ->where('funding', AuditFunding::ALLOWANCE->value)
             ->where('tier', $tier->value)
             ->where('created_at', '>=', $start)
-            ->where('created_at', '<', $start->copy()->addMonth())
+            ->where('created_at', '<', $end)
             ->whereNull('credit_refunded_at'));
+    }
+
+    /**
+     * The window a tier's plan allowance is metered over, as [start, end).
+     *
+     * A monthly plan resets with the calendar month. A plan billed over a
+     * longer period (every 2 months, a quarter) resets with its billing
+     * period instead: metering a "1 Expert Audit per quarter" plan monthly
+     * would hand out three per quarter. The period is the one of the
+     * subscription that grants the allowance, stepped from its `ends_at`
+     * (the end of the paid period) to the period containing $moment.
+     *
+     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     */
+    public function allowancePeriod(Tenant $tenant, AuditTier $tier, CarbonInterface $moment): array
+    {
+        $subscription = $this->grantingSubscription($tenant, $tier);
+        /** @var Interval|null $interval */
+        $interval = $subscription?->interval;
+        $count = max(1, (int) $subscription?->interval_count);
+
+        if ($subscription?->ends_at === null || $interval === null || ($interval->slug === 'month' && $count === 1)) {
+            $start = $moment->copy()->startOfMonth();
+
+            return [$start, $start->copy()->addMonth()];
+        }
+
+        $unit = (string) $interval->date_identifier;
+        $end = Carbon::parse($subscription->ends_at);
+
+        // Bounded: a moment years away from the subscription's period has
+        // nothing metered in it worth walking to.
+        for ($i = 0; $i < 120 && $end->copy()->sub($unit, $count, false)->gt($moment); $i++) {
+            $end = $end->sub($unit, $count, false);
+        }
+        for ($i = 0; $i < 120 && $end->lte($moment); $i++) {
+            $end = $end->add($unit, $count, false);
+        }
+
+        return [$end->copy()->sub($unit, $count, false), $end];
+    }
+
+    /**
+     * How many runs a schedule of $frequency makes within one allowance
+     * period of $tier, at most -- what the allowance must cover for the
+     * schedule never to stall waiting for credit.
+     */
+    public function scheduledRunsPerAllowancePeriod(Tenant $tenant, AuditTier $tier, string $frequency): int
+    {
+        [$start, $end] = $this->allowancePeriod($tenant, $tier, now());
+        $days = (int) round($start->diffInDays($end));
+
+        return match ($frequency) {
+            'weekly' => (int) ceil($days / 7),
+            'monthly' => max(1, (int) round($days / 30)),
+            'quarterly' => max(1, (int) ceil($days / 92)),
+            default => 0,
+        };
+    }
+
+    /** The active subscription whose allowance for $tier is the one applied: the largest. */
+    private function grantingSubscription(Tenant $tenant, AuditTier $tier): ?Subscription
+    {
+        $key = self::QUOTA_KEYS[$tier->value] ?? null;
+
+        if ($key === null) {
+            return null;
+        }
+
+        return $this->activeSubscriptionsFor($tenant)
+            ->filter(fn (Subscription $subscription): bool => $this->subscriptionAllowance($subscription, $key) > 0)
+            ->sortByDesc(fn (Subscription $subscription): int => $this->subscriptionAllowance($subscription, $key))
+            ->first();
     }
 
     public function remainingRuns(Tenant $tenant, AuditTier $tier): int
@@ -258,9 +332,10 @@ class AuditEntitlementService
             // with the calendar -- see consume()/spendPurchasedCredit() for
             // how it's actually drawn down.
             limit: $baseLimit + $this->purchasedCreditBalance($tenant, $tier),
-            used: $isLifetime ? $this->freeRunsUsed($tenant) : $this->runsUsedThisMonth($tenant, $tier),
+            used: $isLifetime ? $this->freeRunsUsed($tenant) : $this->runsUsedThisPeriod($tenant, $tier),
             isLifetime: $isLifetime,
             priceCents: $this->tierPriceCents($tier),
+            resetsAt: $isLifetime ? null : $this->allowancePeriod($tenant, $tier, now())[1],
         );
     }
 
@@ -296,7 +371,7 @@ class AuditEntitlementService
      * it's a purchased credit -- called exactly once, at the moment an
      * AuditRequest is actually created (never merely to check availability;
      * use quotaFor()/TierQuota::hasRuns() for that). Plan allowance is
-     * always drawn first: it resets every month regardless of use, while a
+     * always drawn first: it resets every period regardless of use, while a
      * purchased credit never expires, so spending the credit before the
      * allowance would waste it for nothing.
      *
@@ -328,7 +403,7 @@ class AuditEntitlementService
                 return AuditFunding::FREE;
             }
 
-            if (! $quota->isLifetime && $this->runsUsedThisMonth($tenant, $tier) < $this->allowance($tenant, $tier)) {
+            if (! $quota->isLifetime && $this->runsUsedThisPeriod($tenant, $tier) < $this->allowance($tenant, $tier)) {
                 return AuditFunding::ALLOWANCE;
             }
 
@@ -362,7 +437,7 @@ class AuditEntitlementService
      * Charges the runs a large repository costs beyond the first one, which
      * was already spent when the request started. Drawn from the pool that
      * funded that first run while it lasts (free quota, or the allowance of
-     * the month the request was created in), then from purchased credits of
+     * the period the request was created in), then from purchased credits of
      * the same tier. A scheduled
      * request ran unattended, with nobody to agree to a charge, so it only
      * ever draws from the metered pool.
@@ -432,7 +507,7 @@ class AuditEntitlementService
 
     /**
      * Runs still available in the metered pool the request's first run came
-     * from; for the allowance, that is the month the request was created in.
+     * from; for the allowance, that is the period the request was created in.
      *
      * These are plain COUNT/SUM reads, correct only because the caller runs
      * them after the tenant row lock, in a transaction that made no plain
@@ -444,7 +519,7 @@ class AuditEntitlementService
         return match ($auditRequest->funding) {
             AuditFunding::FREE => max(0, $this->freeRunsLimit($tenant) - $this->freeRunsUsed($tenant)),
             AuditFunding::ALLOWANCE => max(0, $this->allowance($tenant, $tier)
-                - $this->runsUsedInMonth($tenant, $tier, $auditRequest->created_at ?? now())),
+                - $this->runsUsedInPeriodOf($tenant, $tier, $auditRequest->created_at ?? now())),
             default => 0,
         };
     }

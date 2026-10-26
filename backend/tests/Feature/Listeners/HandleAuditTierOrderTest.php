@@ -181,7 +181,7 @@ class HandleAuditTierOrderTest extends FeatureTest
         $this->assertTrue($run->prepaid);
         $this->assertSame(AuditFunding::PURCHASE, $run->funding);
         $this->assertSame(0, app(AuditEntitlementService::class)
-            ->runsUsedThisMonth($tenant, AuditTier::DEEP_AI));
+            ->runsUsedThisPeriod($tenant, AuditTier::DEEP_AI));
         Queue::assertPushed(GenerateAuditReport::class);
     }
 

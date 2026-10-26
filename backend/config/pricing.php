@@ -80,21 +80,27 @@ return [
         ],
     ],
 
-    // Monthly packages: N reports of one tier. `price` is the FlexPick package
-    // price (unit × actions × (1 − discount)); `partner_unit_price` is the
-    // suggested partner selling price per report, which the Pricing Settings
-    // page multiplies by `actions` as the partner's default. A test asserts
-    // the arithmetic so the table cannot drift.
+    // Report packages: N reports of one tier per billing period. `price` is
+    // the FlexPick package price (unit × actions × (1 − discount));
+    // `partner_unit_price` is the suggested partner selling price per report,
+    // which the Pricing Settings page multiplies by `actions` as the
+    // partner's default. A test asserts the arithmetic so the table cannot
+    // drift. `interval_count` is in months (default 1): the allowance resets
+    // with the billing period (AuditEntitlementService::allowancePeriod()).
+    //
+    // The × 1 plans are for a company that audits occasionally: priced at
+    // the one-time report, so subscribing never costs more than buying the
+    // same reports one by one. × 5 and × 15 are the agency volumes.
     'packages' => [
+        'audit-diagnostic-1' => ['tier' => 'diagnostic', 'name' => 'Diagnostic Report × 1', 'actions' => 1, 'unit_price' => 4900, 'price' => 4900, 'discount_percent' => 0, 'partner_unit_price' => 10000, 'is_popular' => false],
         'audit-diagnostic-5' => ['tier' => 'diagnostic', 'name' => 'Diagnostic Report × 5', 'actions' => 5, 'unit_price' => 4900, 'price' => 23275, 'discount_percent' => 5, 'partner_unit_price' => 10000, 'is_popular' => false],
         'audit-diagnostic-15' => ['tier' => 'diagnostic', 'name' => 'Diagnostic Report × 15', 'actions' => 15, 'unit_price' => 4900, 'price' => 66150, 'discount_percent' => 10, 'partner_unit_price' => 10000, 'is_popular' => false],
-        'audit-diagnostic-30' => ['tier' => 'diagnostic', 'name' => 'Diagnostic Report × 30', 'actions' => 30, 'unit_price' => 4900, 'price' => 117600, 'discount_percent' => 20, 'partner_unit_price' => 10000, 'is_popular' => false],
+        'audit-deep-ai-1' => ['tier' => 'deep_ai', 'name' => 'Deep AI Code Review × 1', 'actions' => 1, 'unit_price' => 11900, 'price' => 11900, 'discount_percent' => 0, 'partner_unit_price' => 25000, 'is_popular' => false],
         'audit-deep-ai-5' => ['tier' => 'deep_ai', 'name' => 'Deep AI Code Review × 5', 'actions' => 5, 'unit_price' => 11900, 'price' => 56525, 'discount_percent' => 5, 'partner_unit_price' => 25000, 'is_popular' => false],
         'audit-deep-ai-15' => ['tier' => 'deep_ai', 'name' => 'Deep AI Code Review × 15', 'actions' => 15, 'unit_price' => 11900, 'price' => 160650, 'discount_percent' => 10, 'partner_unit_price' => 25000, 'is_popular' => false],
-        'audit-deep-ai-30' => ['tier' => 'deep_ai', 'name' => 'Deep AI Code Review × 30', 'actions' => 30, 'unit_price' => 11900, 'price' => 285600, 'discount_percent' => 20, 'partner_unit_price' => 25000, 'is_popular' => false],
+        'audit-expert-1' => ['tier' => 'expert', 'name' => 'Expert Audit × 1', 'actions' => 1, 'unit_price' => 99900, 'price' => 99900, 'discount_percent' => 0, 'partner_unit_price' => 170000, 'is_popular' => false, 'interval_count' => 3],
         'audit-expert-5' => ['tier' => 'expert', 'name' => 'Expert Audit × 5', 'actions' => 5, 'unit_price' => 99900, 'price' => 474525, 'discount_percent' => 5, 'partner_unit_price' => 170000, 'is_popular' => false],
         'audit-expert-15' => ['tier' => 'expert', 'name' => 'Expert Audit × 15', 'actions' => 15, 'unit_price' => 99900, 'price' => 1348650, 'discount_percent' => 10, 'partner_unit_price' => 170000, 'is_popular' => false],
-        'audit-expert-30' => ['tier' => 'expert', 'name' => 'Expert Audit × 30', 'actions' => 30, 'unit_price' => 99900, 'price' => 2397600, 'discount_percent' => 20, 'partner_unit_price' => 170000, 'is_popular' => false],
     ],
 
     /**
@@ -134,6 +140,11 @@ return [
             'audit-growth-monthly',
             'audit-agency-monthly',
             'audit-enterprise-monthly',
+            // The × 30 packages, retired 2026-10-23: × 15 covers the agency
+            // volumes. Existing subscribers keep renewing.
+            'audit-diagnostic-30-monthly',
+            'audit-deep-ai-30-monthly',
+            'audit-expert-30-monthly',
         ],
     ],
 ];
